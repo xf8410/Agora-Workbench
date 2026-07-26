@@ -24,6 +24,16 @@ import kotlinx.serialization.json.putJsonArray
 class ShellToolProvider(
     private val sandboxFactory: SandboxManagerFactory? = null
 ) : ToolProvider {
+    private companion object {
+        const val MAX_INLINE_SHELL_OUTPUT_CHARS = 24 * 1024
+        const val OUTPUT_TRUNCATION_MARKER = "
+…[output truncated; redirect command output to a workspace file]"
+    }
+
+    private fun clipShellOutput(value: String): String {
+        if (value.length <= MAX_INLINE_SHELL_OUTPUT_CHARS) return value
+        return value.take(MAX_INLINE_SHELL_OUTPUT_CHARS) + OUTPUT_TRUNCATION_MARKER
+    }
 
     private val sandbox = sandboxFactory?.create()
 
@@ -132,7 +142,7 @@ class ShellToolProvider(
                             when (currentEvent) {
                                 "line" -> {
                                     val text = (dataJson["line"] as? JsonPrimitive)?.content
-                                    if (text != null) output.append(text).append('\n')
+                                    if (text != null && output.length < MAX_INLINE_SHELL_OUTPUT_CHARS) output.append(text).append('\n')
                                 }
                                 "result" -> exitCode = (dataJson["exit_code"] as? JsonPrimitive)?.content?.toIntOrNull()
                                 "error" -> errorMessage = (dataJson["message"] as? JsonPrimitive)?.content
@@ -144,7 +154,7 @@ class ShellToolProvider(
                     put("type", "execute_shell_command"); put("server", deviceName); put("command", cmd)
                     if (errorMessage != null) { put("error", "execution_error"); put("message", errorMessage) }
                     else { put("exit_code", exitCode ?: -1) }
-                    put("output", output.toString().trimEnd())
+                    put("output", clipShellOutput(output.toString().trimEnd()))
                 }.toString()
             } catch (e: Exception) {
                 jsonError("execute_shell_command", e.message ?: "Unknown error", server = deviceName, command = cmd)
@@ -197,7 +207,7 @@ class ShellToolProvider(
                 buildJsonObject {
                     put("type", "execute_shell_command"); put("server", deviceName); put("command", cmd)
                     put("exit_code", result.exitCode)
-                    put("output", (result.stdout + if (result.stderr.isNotBlank()) "\n${result.stderr}" else "").trimEnd())
+                    put("output", clipShellOutput((result.stdout + if (result.stderr.isNotBlank()) "\n${result.stderr}" else "").trimEnd()))
                 }.toString()
             } catch (e: Exception) {
                 jsonError("execute_shell_command", e.message ?: "Unknown error", server = deviceName, command = cmd)
@@ -240,7 +250,7 @@ class ShellToolProvider(
                 buildJsonObject {
                     put("type", "execute_shell_command"); put("server", "Local Sandbox"); put("command", cmd)
                     put("exit_code", result.exitCode)
-                    put("output", (result.stdout + if (result.stderr.isNotBlank()) "\n${result.stderr}" else "").trimEnd())
+                    put("output", clipShellOutput((result.stdout + if (result.stderr.isNotBlank()) "\n${result.stderr}" else "").trimEnd()))
                 }.toString()
             } catch (e: Exception) {
                 jsonError("execute_shell_command", e.message ?: "Unknown error", server = "Local Sandbox", command = cmd)
