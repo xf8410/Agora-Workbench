@@ -1,0 +1,135 @@
+name: Apply Workspace Artifact Pipeline
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Add persistent workspace and local artifact streaming
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s:
+                  if new in s: return
+                  raise SystemExit(f'marker mismatch: {path}: {old[:80]!r}')
+              if s.count(old)!=1: raise SystemExit(f'non-unique marker: {path}')
+              p.write_text(s.replace(old,new))
+
+          iface='app/src/main/java/com/newoether/agora/sandbox/SandboxManager.kt'
+          replace_once(iface, '''    data class SandboxResult(
+              val stdout: String,
+              val stderr: String,
+              val exitCode: Int
+          )''', '''    data class SandboxResult(
+              val stdout: String,
+              val stderr: String,
+              val exitCode: Int,
+              /** Full command output retained on disk when it exceeds the inline preview. */
+              val artifactPath: String? = null,
+              val artifactSizeBytes: Long = 0L,
+          )''')
+
+          proot='app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt'
+          replace_once(proot, '''    private val homeMountDir: File = File(context.filesDir, "sandbox-home")
+              private val homeMountPath = "/home/agora"''', '''    private val homeMountDir: File = File(context.filesDir, "sandbox-home")
+              private val homeMountPath = "/home/agora"
+              /** Large persistent work area backed by the phone's external app storage. */
+              private val workspaceDir: File = (context.getExternalFilesDir("workspace")
+                  ?: File(context.filesDir, "workspace")).apply { mkdirs() }
+              private val workspaceMountPath = "/workspace"
+              private val inlinePreviewBytes = 24 * 1024''')
+          replace_once(proot, '''            "--bind=${homeMountDir.absolutePath}:$homeMountPath",
+              "-w", resolvedWorkdir,''', '''            "--bind=${homeMountDir.absolutePath}:$homeMountPath",
+              "--bind=${workspaceDir.absolutePath}:$workspaceMountPath",
+              "-w", resolvedWorkdir,''')
+          replace_once(proot, '''            val p = pb.start()
+              val out = p.inputStream.bufferedReader().readText()
+              val ok = p.waitFor(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+              if (!ok) { p.destroyForcibly(); SandboxManager.SandboxResult(out, "Timed out", -1) }
+              else SandboxManager.SandboxResult(out, "", p.exitValue())''', '''            val artifactDir = File(workspaceDir, "artifacts").apply { mkdirs() }
+              val artifactFile = File.createTempFile("shell-", ".log", artifactDir)
+              pb.redirectOutput(artifactFile)
+              val p = pb.start()
+              val ok = p.waitFor(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+              if (!ok) {
+                  p.destroyForcibly()
+                  p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+              }
+              val size = artifactFile.length()
+              val previewBytes = ByteArray(minOf(size, inlinePreviewBytes.toLong()).toInt())
+              if (previewBytes.isNotEmpty()) {
+                  artifactFile.inputStream().use { input ->
+                      var offset = 0
+                      while (offset < previewBytes.size) {
+                          val read = input.read(previewBytes, offset, previewBytes.size - offset)
+                          if (read < 0) break
+                          offset += read
+                      }
+                  }
+              }
+              val preview = previewBytes.toString(Charsets.UTF_8)
+              if (size <= inlinePreviewBytes) {
+                  artifactFile.delete()
+                  SandboxManager.SandboxResult(preview, if (ok) "" else "Timed out", if (ok) p.exitValue() else -1)
+              } else {
+                  val virtualPath = "$workspaceMountPath/artifacts/${artifactFile.name}"
+                  SandboxManager.SandboxResult(
+                      preview,
+                      if (ok) "" else "Timed out",
+                      if (ok) p.exitValue() else -1,
+                      artifactPath = virtualPath,
+                      artifactSizeBytes = size,
+                  )
+              }''')
+          replace_once(proot, '''    private fun ensureSandboxMountTargets() {
+              homeMountDir.mkdirs()
+              File(rootfsDir, homeMountPath.trimStart('/')).mkdirs()
+          }''', '''    private fun ensureSandboxMountTargets() {
+              homeMountDir.mkdirs()
+              workspaceDir.mkdirs()
+              listOf("repos", "tasks", "artifacts", "builds", "logs", "cache", "tmp", "memory")
+                  .forEach { File(workspaceDir, it).mkdirs() }
+              File(rootfsDir, homeMountPath.trimStart('/')).mkdirs()
+              File(rootfsDir, workspaceMountPath.trimStart('/')).mkdirs()
+          }''')
+          replace_once(proot, '''        if (normalized == homeMountPath || normalized.startsWith("$homeMountPath/")) {''', '''        if (normalized == workspaceMountPath || normalized.startsWith("$workspaceMountPath/")) {
+              ensureSandboxMountTargets()
+              val root = workspaceDir.canonicalFile
+              val suffix = normalized.removePrefix(workspaceMountPath).trimStart('/')
+              val resolved = File(root, suffix).canonicalFile
+              require(resolved.absolutePath == root.absolutePath || resolved.absolutePath.startsWith(root.absolutePath + File.separator)) {
+                  "Path traversal: $path"
+              }
+              return ResolvedSandboxPath(resolved, root, workspaceMountPath)
+          }
+
+              if (normalized == homeMountPath || normalized.startsWith("$homeMountPath/")) {''')
+
+          shell='app/src/main/java/com/newoether/agora/tool/ShellToolProvider.kt'
+          replace_once(shell, '''                    put("output", clipShellOutput((result.stdout + if (result.stderr.isNotBlank()) "\\n${result.stderr}" else "").trimEnd()))
+              }''', '''                    put("output", clipShellOutput((result.stdout + if (result.stderr.isNotBlank()) "\\n${result.stderr}" else "").trimEnd()))
+                      if (result.artifactPath != null) {
+                          put("artifact_path", result.artifactPath)
+                          put("artifact_size_bytes", result.artifactSizeBytes)
+                          put("output_complete", true)
+                      }
+              }''')
+          PY
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java/com/newoether/agora/sandbox/SandboxManager.kt \
+                  app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt \
+                  app/src/main/java/com/newoether/agora/tool/ShellToolProvider.kt
+          git commit -m 'feat: stream large sandbox output to persistent workspace artifacts'
+          git push origin HEAD:main
