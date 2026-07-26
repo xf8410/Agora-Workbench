@@ -26,8 +26,7 @@ class ShellToolProvider(
 ) : ToolProvider {
     private companion object {
         const val MAX_INLINE_SHELL_OUTPUT_CHARS = 24 * 1024
-        const val OUTPUT_TRUNCATION_MARKER = "
-…[output truncated; redirect command output to a workspace file]"
+        const val OUTPUT_TRUNCATION_MARKER = "\n…[output truncated; redirect command output to a workspace file]"
     }
 
     private fun clipShellOutput(value: String): String {
