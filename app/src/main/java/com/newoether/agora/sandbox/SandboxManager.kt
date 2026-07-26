@@ -127,7 +127,10 @@ interface SandboxManager {
     data class SandboxResult(
         val stdout: String,
         val stderr: String,
-        val exitCode: Int
+        val exitCode: Int,
+        /** Full command output retained on disk when it exceeds the inline preview. */
+        val artifactPath: String? = null,
+        val artifactSizeBytes: Long = 0L,
     )
 
     data class GrepMatch(

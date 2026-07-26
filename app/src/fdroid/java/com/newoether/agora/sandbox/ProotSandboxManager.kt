@@ -57,7 +57,12 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
 
     private val rootfsDir: File = File(context.filesDir, "alpine-rootfs")
     private val homeMountDir: File = File(context.filesDir, "sandbox-home")
-    private val homeMountPath = "/home/agora"
+        private val homeMountPath = "/home/agora"
+        /** Large persistent work area backed by the phone's external app storage. */
+        private val workspaceDir: File = (context.getExternalFilesDir("workspace")
+            ?: File(context.filesDir, "workspace")).apply { mkdirs() }
+        private val workspaceMountPath = "/workspace"
+        private val inlinePreviewBytes = 24 * 1024
     private val metadataDir: File = File(rootfsDir, "etc/agora")
     private val baseWorldFile: File = File(metadataDir, "base-world")
     private val explicitPackagesFile: File = File(metadataDir, "explicit-packages")
@@ -341,7 +346,8 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
             "--bind=/dev", "--bind=/proc", "--bind=/sys",
             "--bind=/dev/urandom:/dev/random",
             "--bind=${homeMountDir.absolutePath}:$homeMountPath",
-            "-w", resolvedWorkdir,
+        "--bind=${workspaceDir.absolutePath}:$workspaceMountPath",
+        "-w", resolvedWorkdir,
             "-0", "--link2symlink", "--kill-on-exit", "-L",
             "/bin/sh", "-c", command
         )
@@ -355,11 +361,43 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
             pb.environment()["PROOT_TMP_DIR"] = tmpDir
             pb.environment()["HOME"] = homeMountPath
             pb.environment()["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            val p = pb.start()
-            val out = p.inputStream.bufferedReader().readText()
-            val ok = p.waitFor(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
-            if (!ok) { p.destroyForcibly(); SandboxManager.SandboxResult(out, "Timed out", -1) }
-            else SandboxManager.SandboxResult(out, "", p.exitValue())
+            val artifactDir = File(workspaceDir, "artifacts").apply { mkdirs() }
+        val artifactFile = File.createTempFile("shell-", ".log", artifactDir)
+        pb.redirectOutput(artifactFile)
+        val p = pb.start()
+        val ok = p.waitFor(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+        if (!ok) {
+            p.destroyForcibly()
+            p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        }
+        val size = artifactFile.length()
+        val previewSize = minOf(size, inlinePreviewBytes.toLong()).toInt()
+        val previewBytes = ByteArray(previewSize)
+        if (previewSize > 0) {
+            artifactFile.inputStream().use { input ->
+                var offset = 0
+                while (offset < previewBytes.size) {
+                    val read = input.read(previewBytes, offset, previewBytes.size - offset)
+                    if (read < 0) break
+                    offset += read
+                }
+            }
+        }
+        val preview = previewBytes.toString(Charsets.UTF_8)
+        if (size <= inlinePreviewBytes) {
+            artifactFile.delete()
+            SandboxManager.SandboxResult(
+                preview, if (ok) "" else "Timed out", if (ok) p.exitValue() else -1
+            )
+        } else {
+            SandboxManager.SandboxResult(
+                stdout = preview,
+                stderr = if (ok) "" else "Timed out",
+                exitCode = if (ok) p.exitValue() else -1,
+                artifactPath = "$workspaceMountPath/artifacts/${artifactFile.name}",
+                artifactSizeBytes = size,
+            )
+        }
         } catch (e: Throwable) { SandboxManager.SandboxResult("", e.message ?: "proot failed", -1) }
     }
 
@@ -1007,7 +1045,11 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
 
     private fun ensureSandboxMountTargets() {
         homeMountDir.mkdirs()
+        workspaceDir.mkdirs()
+        listOf("repos", "tasks", "artifacts", "builds", "logs", "cache", "tmp", "memory")
+            .forEach { File(workspaceDir, it).mkdirs() }
         File(rootfsDir, homeMountPath.trimStart('/')).mkdirs()
+        File(rootfsDir, workspaceMountPath.trimStart('/')).mkdirs()
     }
 
     private fun normalizeVirtualPath(path: String): String {
@@ -1019,6 +1061,17 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
 
     private fun resolveSandboxPath(path: String): ResolvedSandboxPath {
         val normalized = normalizeVirtualPath(path)
+        if (normalized == workspaceMountPath || normalized.startsWith("$workspaceMountPath/")) {
+        ensureSandboxMountTargets()
+        val root = workspaceDir.canonicalFile
+        val suffix = normalized.removePrefix(workspaceMountPath).trimStart('/')
+        val resolved = File(root, suffix).canonicalFile
+        require(resolved.absolutePath == root.absolutePath || resolved.absolutePath.startsWith(root.absolutePath + File.separator)) {
+            "Path traversal: $path"
+        }
+        return ResolvedSandboxPath(resolved, root, workspaceMountPath)
+    }
+
         if (normalized == homeMountPath || normalized.startsWith("$homeMountPath/")) {
             ensureSandboxMountTargets()
             val root = homeMountDir.canonicalFile
