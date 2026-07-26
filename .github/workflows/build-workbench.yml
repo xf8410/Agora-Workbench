@@ -1,0 +1,36 @@
+name: Build Agora Workbench APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;28.2.13676358'
+      - name: Build F-Droid debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace assembleFdroidDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Agora-Workbench-fdroid-debug
+          path: app/build/outputs/apk/fdroid/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
