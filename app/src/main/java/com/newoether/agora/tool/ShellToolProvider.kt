@@ -250,6 +250,11 @@ class ShellToolProvider(
                     put("type", "execute_shell_command"); put("server", "Local Sandbox"); put("command", cmd)
                     put("exit_code", result.exitCode)
                     put("output", clipShellOutput((result.stdout + if (result.stderr.isNotBlank()) "\n${result.stderr}" else "").trimEnd()))
+                    if (result.artifactPath != null) {
+                        put("artifact_path", result.artifactPath)
+                        put("artifact_size_bytes", result.artifactSizeBytes)
+                        put("output_complete", true)
+                    }
                 }.toString()
             } catch (e: Exception) {
                 jsonError("execute_shell_command", e.message ?: "Unknown error", server = "Local Sandbox", command = cmd)
