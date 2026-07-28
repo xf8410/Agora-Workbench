@@ -38,7 +38,7 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
                         Text("Sign in without placing credentials in chat, shell commands, URLs, or memory files.")
                     }
                 }
-            })))
+            }))
 
             if (session == null) {
                 SettingsGroup(title = "GitHub Device Flow", items = listOf({
@@ -71,7 +71,7 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
                             Text(it.verificationUri)
                         }
                     }
-                })))
+                }))
 
                 SettingsGroup(title = "Fine-grained token (fallback)", items = listOf({
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -94,7 +94,7 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
                             }
                         }) { Text("Validate and save") }
                     }
-                })))
+                }))
             }
 
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
