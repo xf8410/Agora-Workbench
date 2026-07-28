@@ -13,6 +13,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
+import kotlinx.serialization.encodeToString
 import java.io.BufferedOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
@@ -24,6 +25,10 @@ class DataExporter(
     private val settingsManager: SettingsManager,
     private val memoryManager: MemoryManager
 ) {
+    private companion object {
+        const val EXPORT_PAGE_SIZE = 100
+    }
+
     enum class ExportCategory(val manifestKey: String) {
         CONVERSATIONS("conversations"),
         MEMORIES("memories"),
@@ -213,11 +218,14 @@ class DataExporter(
 
             // Conversations
             if (ExportCategory.CONVERSATIONS in categories) {
-                val allMessages = chatDao.getAllMessagesList()
                 val imageMap = mutableMapOf<String, List<String>>() // messageId -> list of image URIs to keep
 
-                // Export image files alongside the JSON
-                for (msg in allMessages) {
+                // Export media page by page; never load every message body into the Java heap.
+                var mediaOffset = 0
+                while (true) {
+                    val mediaPage = chatDao.getMessagesPage(EXPORT_PAGE_SIZE, mediaOffset)
+                    if (mediaPage.isEmpty()) break
+                    for (msg in mediaPage) {
                     if (msg.images.isEmpty()) continue
                     val surviving = mutableListOf<String>()
                     for ((idx, imgUri) in msg.images.withIndex()) {
@@ -265,6 +273,9 @@ class DataExporter(
                             }
                         }
                     }
+                    }
+                    mediaOffset += mediaPage.size
+                    if (mediaPage.size < EXPORT_PAGE_SIZE) break
                 }
 
                 val conversations = chatDao.getAllConversationsList().map { c ->
@@ -279,13 +290,6 @@ class DataExporter(
                         origin = c.origin,
                         graduated = c.graduated
                     )
-                }
-                val messages = allMessages.map { m ->
-                    // Only include images that were successfully exported
-                    val exportedImages = imageMap[m.id] ?: emptyList()
-                    ExportMessageEntity(m.id, m.conversationId, m.parentId, m.text, exportedImages,
-                        m.thoughts, m.thoughtTitle, m.tokenCount, m.status.name, m.participant.name,
-                        m.timestamp, m.thoughtTimeMs, m.modelName, m.toolCallJson, m.attachmentMeta)
                 }
                 val tasks = chatDao.getAllTasksList().map { task ->
                     ExportTaskEntity(
@@ -315,7 +319,33 @@ class DataExporter(
                     )
                 }
                 zip.putNextEntry(ZipEntry("conversations.json"))
-                Json.encodeToStream(ExportConversations(conversations, messages, tasks, loops), zip)
+                fun writeJson(value: String) = zip.write(value.toByteArray(Charsets.UTF_8))
+                writeJson("{\"conversations\":")
+                writeJson(Json.encodeToString(conversations))
+                writeJson(",\"messages\":[")
+                var messageOffset = 0
+                var firstMessage = true
+                while (true) {
+                    val page = chatDao.getMessagesPage(EXPORT_PAGE_SIZE, messageOffset)
+                    if (page.isEmpty()) break
+                    for (m in page) {
+                        if (!firstMessage) writeJson(",")
+                        firstMessage = false
+                        val exportedImages = imageMap[m.id] ?: emptyList()
+                        val exported = ExportMessageEntity(m.id, m.conversationId, m.parentId, m.text,
+                            exportedImages, m.thoughts, m.thoughtTitle, m.tokenCount, m.status.name,
+                            m.participant.name, m.timestamp, m.thoughtTimeMs, m.modelName,
+                            m.toolCallJson, m.attachmentMeta)
+                        writeJson(Json.encodeToString(exported))
+                    }
+                    messageOffset += page.size
+                    if (page.size < EXPORT_PAGE_SIZE) break
+                }
+                writeJson("],\"tasks\":")
+                writeJson(Json.encodeToString(tasks))
+                writeJson(",\"loops\":")
+                writeJson(Json.encodeToString(loops))
+                writeJson("}")
                 zip.closeEntry()
                 step()
             }

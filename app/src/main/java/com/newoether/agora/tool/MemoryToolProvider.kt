@@ -18,6 +18,13 @@ import kotlinx.serialization.json.putJsonArray
 class MemoryToolProvider(
     private val memoryManager: MemoryManager
 ) : ToolProvider {
+    private fun boundedRead(name: String): String {
+        val value = memoryManager.readFile(name)
+        val maxChars = 32 * 1024
+        return if (value.length <= maxChars) value
+        else value.take(maxChars) + "\n…[memory file truncated; split it into smaller Markdown files]"
+    }
+
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
         if (!ctx.accessSavedMemories && !ctx.accessActiveMemory) return emptyList()
@@ -179,10 +186,10 @@ class MemoryToolProvider(
                         (it as? JsonPrimitive)?.content ?: ""
                     }.filter { it.isNotEmpty() }
                     names.joinToString("\n\n") { name ->
-                        "--- $name ---\n${memoryManager.readFile(name)}"
+                        "--- $name ---\n${boundedRead(name)}"
                     }
                 } else if (singleName.isNotEmpty()) {
-                    memoryManager.readFile(singleName)
+                    boundedRead(singleName)
                 } else {
                     "Error: No file name provided. Use 'name' for a single file or 'names' for multiple files."
                 }

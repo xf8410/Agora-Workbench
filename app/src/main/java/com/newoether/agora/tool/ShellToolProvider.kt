@@ -25,7 +25,9 @@ class ShellToolProvider(
     private val sandboxFactory: SandboxManagerFactory? = null
 ) : ToolProvider {
     private companion object {
-        const val MAX_INLINE_SHELL_OUTPUT_CHARS = 24 * 1024
+        const val MAX_INLINE_SHELL_OUTPUT_CHARS = 8 * 1024
+        const val DEFAULT_FILE_READ_BYTES = 8 * 1024L
+        const val MAX_FILE_READ_BYTES = 32 * 1024L
         const val OUTPUT_TRUNCATION_MARKER = "\n…[output truncated; redirect command output to a workspace file]"
     }
 
@@ -502,7 +504,8 @@ class ShellToolProvider(
         if (path.isBlank()) return jsonError("file_read", "path is required")
         val serverName = arg(args, "server")
         val offset = arg(args, "offset").toLongOrNull() ?: 0L
-        val limit = arg(args, "limit").toLongOrNull() ?: 0L
+        val requestedLimit = arg(args, "limit").toLongOrNull() ?: DEFAULT_FILE_READ_BYTES
+        val limit = requestedLimit.coerceIn(1L, MAX_FILE_READ_BYTES)
 
         val backend = getBackend(serverName, ctx)
             ?: return jsonError("file_read", serverNotFoundMessage(serverName, ctx))

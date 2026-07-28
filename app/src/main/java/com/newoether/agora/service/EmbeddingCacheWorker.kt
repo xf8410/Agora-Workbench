@@ -66,15 +66,14 @@ class EmbeddingCacheWorker(
         // Check cancellation
         if (isStopped) return@withContext Result.failure()
 
-        val allMessages = chatDao.getAllMessagesForIndexing().filter { it.text.isNotBlank() }
-        val total = allMessages.size
+        val total = chatDao.getIndexableMessageCount()
         if (total == 0) {
             return@withContext Result.success(Data.Builder()
                 .putInt(KEY_CACHED, 0).putInt(KEY_TOTAL, 0).putInt(KEY_FAILED, 0).build())
         }
 
-        val existingIds = chatDao.getEmbeddedMessageIdsByModel(modelId).toSet()
-        val toProcess = allMessages.filter { it.id !in existingIds }
+        // Process a bounded page per worker run; never load every message body into memory.
+        val toProcess = chatDao.getUnembeddedMessagesPage(modelId, 200)
         if (toProcess.isEmpty()) {
             return@withContext Result.success(Data.Builder()
                 .putInt(KEY_CACHED, total).putInt(KEY_TOTAL, total).putInt(KEY_FAILED, 0).build())

@@ -184,11 +184,14 @@ class ConversationRepository(
 
     suspend fun getAllMessageImages() = chatDao.getAllMessageImages()
 
-    suspend fun getAllMessagesList(): List<MessageEntity> =
-        chatDao.getAllMessagesList()
+    suspend fun getMessagesPage(limit: Int = 100, offset: Int = 0): List<MessageEntity> =
+        chatDao.getMessagesPage(limit.coerceIn(1, 200), offset.coerceAtLeast(0))
 
-    suspend fun getAllMessagesForIndexing(): List<MessageEntity> =
-        chatDao.getAllMessagesForIndexing()
+    suspend fun getMessagesForIndexingPage(limit: Int = 100, offset: Int = 0): List<MessageEntity> =
+        chatDao.getMessagesForIndexingPage(limit.coerceIn(1, 200), offset.coerceAtLeast(0))
+
+    suspend fun getUnembeddedMessagesPage(modelId: String, limit: Int = 200): List<MessageEntity> =
+        chatDao.getUnembeddedMessagesPage(modelId, limit.coerceIn(1, 200))
 
     /** Persists the composer draft (text + serialized attachments) for a conversation. */
     suspend fun updateDraft(conversationId: String, draftText: String, draftAttachments: String?) {

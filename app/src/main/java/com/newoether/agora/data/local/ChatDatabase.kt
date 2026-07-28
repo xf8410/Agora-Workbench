@@ -188,8 +188,8 @@ interface ChatDao {
     @Query("SELECT * FROM conversations WHERE id = :conversationId")
     fun observeConversation(conversationId: String): Flow<ChatEntity?>
 
-    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
-    fun getMessagesForConversation(conversationId: String): Flow<List<MessageEntity>>
+    @Query("SELECT * FROM (SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT :limit) ORDER BY timestamp ASC")
+    fun getMessagesForConversation(conversationId: String, limit: Int = 200): Flow<List<MessageEntity>>
 
     @Upsert
     suspend fun upsertConversation(conversation: ChatEntity)
@@ -248,8 +248,11 @@ interface ChatDao {
     @Query("SELECT e.messageId FROM embeddings e INNER JOIN messages m ON e.messageId = m.id INNER JOIN conversations c ON m.conversationId = c.id WHERE e.modelId = :modelId AND (c.taskId IS NULL OR c.graduated = 1) AND m.participant IN ('USER', 'MODEL') AND m.text != '' AND m.id NOT LIKE 'tool_%' AND m.id NOT LIKE 'result_%'")
     suspend fun getEmbeddedMessageIdsByModel(modelId: String): List<String>
 
-    @Query("SELECT m.* FROM messages m INNER JOIN conversations c ON m.conversationId = c.id WHERE (c.taskId IS NULL OR c.graduated = 1) AND m.participant IN ('USER', 'MODEL') AND m.text != '' AND m.id NOT LIKE 'tool_%' AND m.id NOT LIKE 'result_%'")
-    suspend fun getAllMessagesForIndexing(): List<MessageEntity>
+    @Query("SELECT m.* FROM messages m INNER JOIN conversations c ON m.conversationId = c.id WHERE (c.taskId IS NULL OR c.graduated = 1) AND m.participant IN ('USER', 'MODEL') AND m.text != '' AND m.id NOT LIKE 'tool_%' AND m.id NOT LIKE 'result_%' ORDER BY m.timestamp ASC LIMIT :limit OFFSET :offset")
+    suspend fun getMessagesForIndexingPage(limit: Int, offset: Int): List<MessageEntity>
+
+    @Query("SELECT m.* FROM messages m INNER JOIN conversations c ON m.conversationId = c.id WHERE (c.taskId IS NULL OR c.graduated = 1) AND m.participant IN ('USER', 'MODEL') AND m.text != '' AND m.id NOT LIKE 'tool_%' AND m.id NOT LIKE 'result_%' AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.messageId = m.id AND e.modelId = :modelId) ORDER BY m.timestamp ASC LIMIT :limit")
+    suspend fun getUnembeddedMessagesPage(modelId: String, limit: Int): List<MessageEntity>
 
     @Query("SELECT COUNT(*) FROM messages m INNER JOIN conversations c ON m.conversationId = c.id WHERE (c.taskId IS NULL OR c.graduated = 1) AND m.participant IN ('USER', 'MODEL') AND m.text != '' AND m.id NOT LIKE 'tool_%' AND m.id NOT LIKE 'result_%'")
     suspend fun getIndexableMessageCount(): Int
@@ -291,8 +294,8 @@ interface ChatDao {
     @Query("SELECT images FROM messages WHERE images != ''")
     suspend fun getAllMessageImages(): List<MessageImagesProjection>
 
-    @Query("SELECT * FROM messages")
-    suspend fun getAllMessagesList(): List<MessageEntity>
+    @Query("SELECT * FROM messages ORDER BY timestamp ASC LIMIT :limit OFFSET :offset")
+    suspend fun getMessagesPage(limit: Int, offset: Int): List<MessageEntity>
 
     @Query("DELETE FROM conversations")
     suspend fun deleteAllConversations()

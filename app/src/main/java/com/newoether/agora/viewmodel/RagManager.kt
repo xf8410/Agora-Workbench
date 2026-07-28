@@ -158,7 +158,7 @@ class RagManager(
         scope.launch(Dispatchers.IO) {
             settings.setActiveEmbeddingModelId(id)
             val model = settings.embeddingModels.value.find { it.id == id } ?: return@launch
-            val total = conversations.getAllMessagesForIndexing().count { it.text.isNotBlank() }
+            val total = conversations.getIndexableMessageCount()
             val cached = conversations.getEmbeddingCountByModel(id)
             val notCached = (total - cached).coerceAtLeast(0)
             if (notCached > 0) {
@@ -198,15 +198,13 @@ class RagManager(
                 if (recache) {
                     conversations.deleteEmbeddingsByModel(modelId)
                 }
-                val allMessages = conversations.getAllMessagesForIndexing().filter { it.text.isNotBlank() }
-                val total = allMessages.size
+                val total = conversations.getIndexableMessageCount()
+                val toProcess = conversations.getUnembeddedMessagesPage(modelId, 200)
                 if (total == 0) {
                     if (!silent) emitSnackbar(SnackbarEvent(appContext.getString(R.string.no_messages_to_cache)))
                     refreshCacheCounts()
                     return@launch
                 }
-                val existingIds = conversations.getEmbeddedMessageIdsByModel(modelId).toSet()
-                val toProcess = allMessages.filter { it.id !in existingIds }
                 if (toProcess.isEmpty()) {
                     if (!silent) emitSnackbar(SnackbarEvent(appContext.getString(R.string.all_messages_already_cached, total)))
                     refreshCacheCounts()
