@@ -80,6 +80,17 @@ class ConversationUiStateTest {
     }
 
     @Test
+    fun boundedWindow_withoutRoot_startsAtEarliestLoadedOrphan() {
+        val msgs = listOf(
+            msg(u50, missing-parent, q50),
+            msg(m50, u50, a50, Participant.MODEL),
+            msg(u51, m50, q51)
+        )
+        val path = ConversationUiState.resolvePath(msgs, null, emptyMap())
+        assertEquals(listOf(u50, m50, u51), path.map { it.id })
+    }
+
+    @Test
     fun streamingMessage_substitutesMatchingId() {
         val dbMsgs = listOf(
             msg("u1", null, "q1"),

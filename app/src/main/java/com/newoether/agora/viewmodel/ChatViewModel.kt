@@ -96,6 +96,10 @@ class ChatViewModel(
 ) : AndroidViewModel(application) {
 
     companion object {
+        private const val INITIAL_MESSAGE_WINDOW = 100
+        private const val MESSAGE_WINDOW_STEP = 100
+        private const val MAX_MESSAGE_WINDOW = 500
+
         /** Overlay fade duration for conversation-switch transitions. */
         private const val SWITCH_OVERLAY_FADE_MS = 200L
         /** Auto-delete period tiers in hours: 7 days, 30 days, 365 days. */
@@ -401,6 +405,16 @@ class ChatViewModel(
     private val _allMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val allMessages: StateFlow<List<ChatMessage>> = _allMessages.asStateFlow()
 
+    private val messageWindowSize = MutableStateFlow(INITIAL_MESSAGE_WINDOW)
+    private val _hasOlderMessages = MutableStateFlow(false)
+    val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
+
+    /** Load one older bounded window. The hard cap prevents a long scroll from rebuilding
+     * the original unbounded Room/Compose heap pressure on Android OEM builds. */
+    fun loadOlderMessages() {
+        messageWindowSize.update { (it + MESSAGE_WINDOW_STEP).coerceAtMost(MAX_MESSAGE_WINDOW) }
+    }
+
     private val _isSyncingModels = MutableStateFlow(false)
     val isSyncingModels: StateFlow<Boolean> = _isSyncingModels.asStateFlow()
 
@@ -663,7 +677,13 @@ class ChatViewModel(
                         }
 
                         var generationMirrorStarted = false
-                        convRepo.getMessagesForConversation(id).collect { entities ->
+                        combine(
+                            messageWindowSize.flatMapLatest { limit ->
+                                convRepo.getMessagesForConversation(id, limit)
+                            },
+                            convRepo.getMessageCountForConversation(id)
+                        ) { entities, total -> entities to total }.collect { (entities, total) ->
+                            _hasOlderMessages.value = entities.size < total && messageWindowSize.value < MAX_MESSAGE_WINDOW
                             val mapped = entities.map {
                                 ChatMessage(
                                     id = it.id,
@@ -721,6 +741,7 @@ class ChatViewModel(
                     }
                 } else {
                     _allMessages.value = emptyList()
+                    _hasOlderMessages.value = false
                     _selectedChildren.value = emptyMap()
                     _streamingMessage.value = null
                     _isLoading.value = false
@@ -919,6 +940,7 @@ class ChatViewModel(
             kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS) // Allow overlay to fade in
             _isNewChatMode.value = false
             _branchSwitchTrigger.value = null
+            messageWindowSize.value = INITIAL_MESSAGE_WINDOW
             _currentConversationId.value = id
             val conversation = convRepo.getConversation(id)
             _currentActiveModel.value = conversation?.modelId

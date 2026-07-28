@@ -22,7 +22,13 @@ data class ConversationUiState(
             val path = mutableListOf<ChatMessage>()
             val messagesByParent = allMessages.groupBy { it.parentId }
                 .mapValues { (_, list) -> list.sortedBy { it.timestamp } }
-            var cursor: String? = null
+            // A bounded DB window may start in the middle of a long branch. Start from the
+            // earliest loaded orphan instead of requiring the root message to be resident.
+            val loadedIds = allMessages.asSequence().map { it.id }.toHashSet()
+            var cursor: String? = allMessages
+                .filter { it.parentId != null && it.parentId !in loadedIds }
+                .minByOrNull { it.timestamp }
+                ?.parentId
 
             while (true) {
                 val siblings = messagesByParent[cursor] ?: break

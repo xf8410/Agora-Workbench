@@ -191,6 +191,9 @@ interface ChatDao {
     @Query("SELECT * FROM (SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT :limit) ORDER BY timestamp ASC")
     fun getMessagesForConversation(conversationId: String, limit: Int = 200): Flow<List<MessageEntity>>
 
+    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
+    fun getMessageCountForConversation(conversationId: String): Flow<Int>
+
     @Upsert
     suspend fun upsertConversation(conversation: ChatEntity)
 

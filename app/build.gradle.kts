@@ -27,8 +27,8 @@ android {
         applicationId = "com.newoether.agora"
         minSdk = 24
         targetSdk = 36
-        versionCode = 26
-        versionName = "1.3.8-workbench"
+        versionCode = 27
+        versionName = "1.3.9-workbench"
 
 
         ndk {

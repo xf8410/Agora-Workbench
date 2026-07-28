@@ -112,6 +112,7 @@ fun ChatApp(
     val conversations by viewModel.conversations.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val allMessages by viewModel.allMessages.collectAsState()
+    val hasOlderMessages by viewModel.hasOlderMessages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val queuedSends by viewModel.queuedSends.collectAsState()
     val currentConversationId by viewModel.currentConversationId.collectAsState()
@@ -566,7 +567,7 @@ fun ChatApp(
                         modifier = Modifier.fillMaxSize()
                     ) { (targetNewChat, targetShowLaunch) ->
                         if (!targetNewChat) {
-                            val messageListModifier = if (blurEffectsEnabled) {
+                            val messageListModifier = if (blurEffectsEnabled && !isLoading) {
                                 Modifier.fillMaxSize().gradientBlur(blurAtTopDp = 8f, blurAtBottomDp = 0f)
                             } else {
                                 Modifier.fillMaxSize()
@@ -618,6 +619,8 @@ fun ChatApp(
                                 onFileContentClick = onFileContentClick,
                                 onPdfPagesClick = { pages, idx -> haptics.action(); onPdfPagesClick?.invoke(pages, idx) },
                                 thoughtExpandedStates = thoughtExpandedStates,
+                                hasOlderMessages = hasOlderMessages,
+                                onLoadOlder = viewModel::loadOlderMessages,
                                 contentPadding = PaddingValues(
                                     start = 8.dp,
                                     end = 8.dp,

@@ -12,11 +12,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -53,10 +56,18 @@ fun MessageList(
     onMediaClick: (List<String>, Int) -> Unit = { _, _ -> },
     onFileContentClick: ((fileName: String, content: String) -> Unit)? = null,
     onPdfPagesClick: ((pages: List<String>, startIndex: Int) -> Unit)? = null,
-    thoughtExpandedStates: SnapshotStateMap<String, Boolean> = remember { mutableStateMapOf() }
+    thoughtExpandedStates: SnapshotStateMap<String, Boolean> = remember { mutableStateMapOf() },
+    hasOlderMessages: Boolean = false,
+    onLoadOlder: () -> Unit = {}
 ) {
     var editingMessageId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(isLoading) { if (isLoading) editingMessageId = null }
+    LaunchedEffect(state, hasOlderMessages) {
+        snapshotFlow { state.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .filter { it <= 2 && hasOlderMessages }
+            .collect { onLoadOlder() }
+    }
     val density = androidx.compose.ui.platform.LocalDensity.current
 
     val currentPath = messages.list.filter { it.participant != Participant.ERROR }
@@ -108,7 +119,7 @@ fun MessageList(
 
                 // Fade newly-appended messages in. Placement/fade-out left off so this
                 // doesn't fight the manual height/scroll padding management below.
-                Box(modifier = Modifier.animateItem(fadeInSpec = tween(400), placementSpec = null, fadeOutSpec = null)) {
+                Box(modifier = if (isLoading) Modifier else Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = null)) {
                 MessageItem(
                     message = message,
                     onEdit = { id, text ->

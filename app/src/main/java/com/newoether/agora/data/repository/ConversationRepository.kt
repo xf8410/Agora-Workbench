@@ -71,8 +71,11 @@ class ConversationRepository(
 
     // ── Messages ──────────────────────────────────────────────
 
-    fun getMessagesForConversation(conversationId: String): Flow<List<MessageEntity>> =
-        chatDao.getMessagesForConversation(conversationId)
+    fun getMessagesForConversation(conversationId: String, limit: Int = 100): Flow<List<MessageEntity>> =
+        chatDao.getMessagesForConversation(conversationId, limit.coerceIn(1, 500))
+
+    fun getMessageCountForConversation(conversationId: String): Flow<Int> =
+        chatDao.getMessageCountForConversation(conversationId)
 
     suspend fun getMessagesForConversationSnapshot(conversationId: String): List<MessageEntity> =
         chatDao.getMessagesForConversation(conversationId).first()
