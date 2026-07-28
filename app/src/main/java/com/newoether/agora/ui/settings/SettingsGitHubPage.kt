@@ -27,7 +27,7 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
 
     CollapsingSettingsScaffold(title = "GitHub Workbench", onBack = onBack) {
         SettingsGroupColumn {
-            SettingsGroup(title = "Account", items = listOf {
+            SettingsGroup(title = "Account", items = listOf({
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     if (session != null) {
                         Text("Signed in as ${session!!.login}", style = MaterialTheme.typography.titleMedium)
@@ -38,10 +38,10 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
                         Text("Sign in without placing credentials in chat, shell commands, URLs, or memory files.")
                     }
                 }
-            }))
+            })))
 
             if (session == null) {
-                SettingsGroup(title = "GitHub Device Flow", items = listOf {
+                SettingsGroup(title = "GitHub Device Flow", items = listOf({
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
                         OutlinedTextField(
                             value = clientId,
@@ -71,9 +71,9 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
                             Text(it.verificationUri)
                         }
                     }
-                }))
+                })))
 
-                SettingsGroup(title = "Fine-grained token (fallback)", items = listOf {
+                SettingsGroup(title = "Fine-grained token (fallback)", items = listOf({
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
                         OutlinedTextField(
                             value = token,
@@ -94,7 +94,7 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
                             }
                         }) { Text("Validate and save") }
                     }
-                }))
+                })))
             }
 
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
