@@ -24,11 +24,7 @@ class GitHubApiClient(context: Context) {
 
     fun isSignedIn(): Boolean = auth.loadSession() != null
 
-    suspend fun request(
-        method: String,
-        path: String,
-        body: JsonElement? = null,
-    ): GitHubApiResponse = withContext(Dispatchers.IO) {
+    suspend fun request(method: String, path: String, body: JsonElement? = null): GitHubApiResponse = withContext(Dispatchers.IO) {
         val session = auth.loadSession() ?: error("GitHub is not signed in")
         val connection = URL("https://api.github.com$path").openConnection() as HttpURLConnection
         try {
@@ -46,69 +42,48 @@ class GitHubApiClient(context: Context) {
             }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            GitHubApiResponse(code, text)
-        } finally {
-            connection.disconnect()
-        }
+            GitHubApiResponse(code, stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        } finally { connection.disconnect() }
     }
 
     suspend fun createBranch(repo: String, branch: String, base: String): String {
         val ref = request("GET", "/repos/$repo/git/ref/heads/${encodeSegment(base)}")
         requireSuccess(ref)
-        val sha = json.parseToJsonElement(ref.body).jsonObject
-            .getValue("object").jsonObject.getValue("sha").jsonPrimitive.content
-        val created = request("POST", "/repos/$repo/git/refs", buildJsonObject {
-            put("ref", "refs/heads/$branch")
-            put("sha", sha)
-        })
+        val sha = json.parseToJsonElement(ref.body).jsonObject.getValue("object").jsonObject.getValue("sha").jsonPrimitive.content
+        val created = request("POST", "/repos/$repo/git/refs", buildJsonObject { put("ref", "refs/heads/$branch"); put("sha", sha) })
         if (created.code == 422 && created.body.contains("Reference already exists")) return branch
         requireSuccess(created)
         return branch
     }
 
-    suspend fun readFile(repo: String, path: String, ref: String): JsonObject {
+    /** GitHub Contents API returns JsonObject for a file and JsonArray for a directory. */
+    suspend fun readContent(repo: String, path: String, ref: String): JsonElement {
         val response = request("GET", "/repos/$repo/contents/${encodePath(path)}?ref=${encodeSegment(ref)}")
         requireSuccess(response)
-        return json.parseToJsonElement(response.body).jsonObject
+        return json.parseToJsonElement(response.body)
     }
 
-    suspend fun writeFile(
-        repo: String,
-        path: String,
-        branch: String,
-        message: String,
-        content: String,
-    ): String {
+    /** Compatibility helper for callers that explicitly require a single file. */
+    suspend fun readFile(repo: String, path: String, ref: String): JsonObject =
+        readContent(repo, path, ref) as? JsonObject ?: error("Expected a GitHub file response, but path is a directory")
+
+    suspend fun writeFile(repo: String, path: String, branch: String, message: String, content: String): String {
         val existing = request("GET", "/repos/$repo/contents/${encodePath(path)}?ref=${encodeSegment(branch)}")
-        val sha = if (existing.code in 200..299) {
-            json.parseToJsonElement(existing.body).jsonObject["sha"]?.jsonPrimitive?.content
-        } else null
+        val sha = if (existing.code in 200..299) (json.parseToJsonElement(existing.body) as? JsonObject)?.get("sha")?.jsonPrimitive?.content else null
         val encoded = Base64.encodeToString(content.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        val body = buildJsonObject {
-            put("message", message)
-            put("content", encoded)
-            put("branch", branch)
-            if (sha != null) put("sha", sha)
-        }
+        val body = buildJsonObject { put("message", message); put("content", encoded); put("branch", branch); if (sha != null) put("sha", sha) }
         val response = request("PUT", "/repos/$repo/contents/${encodePath(path)}", body)
         requireSuccess(response)
-        return json.parseToJsonElement(response.body).jsonObject
-            .getValue("commit").jsonObject.getValue("sha").jsonPrimitive.content
+        return json.parseToJsonElement(response.body).jsonObject.getValue("commit").jsonObject.getValue("sha").jsonPrimitive.content
     }
 
     private fun requireSuccess(response: GitHubApiResponse) {
         if (response.code !in 200..299) {
-            val message = runCatching {
-                json.parseToJsonElement(response.body).jsonObject["message"]?.jsonPrimitive?.content
-            }.getOrNull() ?: "GitHub API error"
+            val message = runCatching { json.parseToJsonElement(response.body).jsonObject["message"]?.jsonPrimitive?.content }.getOrNull() ?: "GitHub API error"
             error("$message (HTTP ${response.code})")
         }
     }
 
-    private fun encodeSegment(value: String): String =
-        URLEncoder.encode(value, "UTF-8").replace("+", "%20")
-
-    private fun encodePath(value: String): String =
-        value.trim('/').split('/').joinToString("/") { encodeSegment(it) }
+    private fun encodeSegment(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    private fun encodePath(value: String): String = value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { encodeSegment(it) }
 }
