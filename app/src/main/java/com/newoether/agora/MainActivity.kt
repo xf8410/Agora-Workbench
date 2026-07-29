@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -465,76 +464,6 @@ fun MainNavigation(
     )
     val focusManager = LocalFocusManager.current
     val ratingScope = rememberCoroutineScope()
-
-    // Update dialog
-    val updateDialogData by viewModel.updateDialogData.collectAsState()
-    if (updateDialogData != null) {
-        val info = updateDialogData!!
-        val ctx = LocalContext.current
-        AlertDialog(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            onDismissRequest = { viewModel.dismissUpdateDialog() },
-            icon = { Icon(Icons.Default.Download, null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary) },
-            title = {
-                Text(
-                    text = stringResource(R.string.about_update_available, info.version),
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
-                    Text(
-                        stringResource(R.string.about_available_body),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (info.body.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Column {
-                            // Lightweight markdown render of the release notes, kept on the
-                            // shared type scale: '## ' → bold section label, '- ' → indented
-                            // bullet, blank line → vertical gap, everything else → paragraph.
-                            info.body.split("\n").forEach { line ->
-                                when {
-                                    line.startsWith("## ") -> Text(
-                                        text = line.removePrefix("## "),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.padding(top = 14.dp, bottom = 2.dp)
-                                    )
-                                    line.startsWith("- ") -> Text(
-                                        text = "•  ${line.removePrefix("- ")}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 3.dp, start = 2.dp)
-                                    )
-                                    line.isBlank() -> Spacer(modifier = Modifier.height(4.dp))
-                                    else -> Text(
-                                        text = line,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 3.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.url)))
-                    viewModel.dismissUpdateDialog()
-                }) { Text(stringResource(R.string.about_view_release)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                    Text(stringResource(R.string.about_later))
-                }
-            }
-        )
-    }
 
     // Remote shell action confirmation gate
     val pendingShellCommand by viewModel.pendingShellCommand.collectAsState()
