@@ -52,8 +52,6 @@ import com.newoether.agora.util.PdfPageRenderer
 import com.newoether.agora.util.SearchResultFormatter
 import com.newoether.agora.util.SnackbarEvent
 import com.newoether.agora.util.SshClient
-import com.newoether.agora.util.UpdateChecker
-import com.newoether.agora.util.UpdateInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -185,20 +183,8 @@ class ChatViewModel(
             )
             kotlinx.coroutines.flow.combine(proxyFlows) { it }.collect { applyProxy() }
         }
-        // Auto-check for updates on launch (at most once per day)
-        viewModelScope.launch(Dispatchers.IO) {
-            if (settings.getAutoUpdateCheck()) {
-                val lastCheck = settings.getLastUpdateCheckTime()
-                val now = System.currentTimeMillis()
-                if (now - lastCheck > 24 * 60 * 60 * 1000L) {
-                    settings.saveLastUpdateCheckTime(now)
-                    val info = UpdateChecker.check(getCurrentVersion())
-                    if (info != null) {
-                        _updateDialogData.value = info
-                    }
-                }
-            }
-        }
+        // Agora Workbench is independently maintained. Never check or offer
+        // upstream Agora releases, because those APKs use a different package/product.
         viewModelScope.launch(Dispatchers.IO) {
             val models = settings.getEmbeddingModels()
             val activeId = settings.getActiveEmbeddingModelId()
@@ -424,10 +410,6 @@ class ChatViewModel(
         viewModelScope.launch { _snackbarMessage.emit(SnackbarEvent(message, actionLabel, onAction)) }
     }
 
-    private val _updateDialogData = MutableStateFlow<UpdateInfo?>(null)
-    val updateDialogData: StateFlow<UpdateInfo?> = _updateDialogData.asStateFlow()
-    fun dismissUpdateDialog() { _updateDialogData.value = null }
-    fun showUpdateDialog(info: UpdateInfo) { _updateDialogData.value = info }
 
     /** PDF / text-file preview state (see [MediaPreviewState]). */
     private val mediaPreview = MediaPreviewState()
@@ -773,10 +755,6 @@ class ChatViewModel(
 
     fun getCurrentVersion(): String {
         return try { appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" }
-    }
-    suspend fun checkForUpdates(): UpdateInfo? {
-        val current = getCurrentVersion()
-        return UpdateChecker.check(current)
     }
     fun addEmbeddingModel(config: EmbeddingModelConfig) = ragManager.addEmbeddingModel(config)
     fun deleteEmbeddingModel(id: String) = ragManager.deleteEmbeddingModel(id)
