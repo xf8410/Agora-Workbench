@@ -22,6 +22,9 @@ import kotlinx.serialization.json.putJsonArray
 
 class GitHubToolProvider(context: Context) : ToolProvider {
     private val client = GitHubApiClient(context.applicationContext)
+
+    /** Required confirmation gate for GitHub mutations. Null fails closed. */
+    var confirm: (suspend (repository: String, summary: String) -> Boolean)? = null
     private val json = Json { ignoreUnknownKeys = true }
     private val names = setOf(
         "github_list_repositories", "github_read_file", "github_create_branch",
@@ -71,18 +74,35 @@ class GitHubToolProvider(context: Context) : ToolProvider {
             when (name) {
                 "github_list_repositories" -> listRepositories()
                 "github_read_file" -> readFile(arg("repo"), arg("path"), arg("ref", "main"))
-                "github_create_branch" -> buildJsonObject {
-                    put("branch", client.createBranch(arg("repo"), arg("branch"), arg("base", "main")))
-                    put("ok", true)
-                }.toString()
-                "github_write_file" -> buildJsonObject {
-                    put("commit_sha", client.writeFile(
-                        arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content")
-                    ))
-                    put("ok", true)
-                }.toString()
+                "github_create_branch" -> {
+                    val repo = arg("repo")
+                    val branch = arg("branch")
+                    if (!confirmMutation(repo, "Create branch $branch from ${arg("base", "main")}")) deniedJson()
+                    else buildJsonObject {
+                        put("branch", client.createBranch(repo, branch, arg("base", "main")))
+                        put("ok", true)
+                    }.toString()
+                }
+                "github_write_file" -> {
+                    val repo = arg("repo")
+                    val path = arg("path")
+                    val branch = arg("branch")
+                    if (!confirmMutation(repo, "Write $path on $branch\nCommit: ${arg("message")}")) deniedJson()
+                    else buildJsonObject {
+                        put("commit_sha", client.writeFile(
+                            repo, path, branch, arg("message"), arg("content")
+                        ))
+                        put("ok", true)
+                    }.toString()
+                }
                 "github_get_workflow_runs" -> workflowRuns(arg("repo"), arg("limit", "10").toIntOrNull() ?: 10)
-                "github_dispatch_workflow" -> dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))
+                "github_dispatch_workflow" -> {
+                    val repo = arg("repo")
+                    val workflow = arg("workflow")
+                    val ref = arg("ref", "main")
+                    if (!confirmMutation(repo, "Dispatch workflow $workflow on $ref")) deniedJson()
+                    else dispatch(repo, workflow, ref)
+                }
                 else -> errorJson("Unknown GitHub tool")
             }
         }.getOrElse { errorJson(it.message ?: "GitHub operation failed") }
@@ -155,6 +175,14 @@ class GitHubToolProvider(context: Context) : ToolProvider {
             description = description,
             parameters = ToolParameters(properties = properties, required = required),
         ))
+
+    private suspend fun confirmMutation(repository: String, summary: String): Boolean =
+        confirm?.invoke(repository, summary) ?: false
+
+    private fun deniedJson() = buildJsonObject {
+        put("ok", false)
+        put("error", "GitHub action denied or confirmation unavailable")
+    }.toString()
 
     private fun errorJson(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
 

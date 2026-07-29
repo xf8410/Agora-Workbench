@@ -268,6 +268,7 @@ class ChatViewModel(
                 }
             }
             gm.onConfirmShellCommand = { server, summary -> shellConfirmation.confirm(server, summary) }
+            gm.onConfirmGitHubAction = { repository, summary -> githubConfirmation.confirm(repository, summary) }
         }
     }
 
@@ -333,6 +334,13 @@ class ChatViewModel(
         shellConfirmation.resolve(allow, alwaysAllowServer)
 
     fun setShellConfirmEnabled(enabled: Boolean) = shellConfirmation.setEnabled(enabled)
+
+    // ── GitHub mutation confirmation gate ────────────────────────
+    private val githubConfirmation = GitHubConfirmationController()
+    val pendingGitHubAction: StateFlow<GitHubConfirmationController.PendingGitHubAction?>
+        get() = githubConfirmation.pendingAction
+
+    fun resolveGitHubConfirmation(allow: Boolean) = githubConfirmation.resolve(allow)
 
     // ── Tasks (automation) ────────────────────────────────────
     /** Saved automation tasks; CRUD + run-now delegate to the app-scoped [taskManager]. */

@@ -1001,6 +1001,9 @@
     <string name="shell_ssh_verifying">正在连接…</string>
     <string name="shell_ssh_unpin">移除已固定的密钥</string>
     <!-- Remote shell confirmation gate -->
+    <string name="github_confirm_title">允许修改 GitHub 仓库“%1$s”？</string>
+    <string name="github_confirm_allow">允许一次</string>
+    <string name="github_confirm_deny">拒绝</string>
     <string name="shell_confirm_title">允许在 \"%1$s\" 上执行操作？</string>
     <string name="shell_confirm_allow">允许一次</string>
     <string name="shell_confirm_always">总是允许此服务器</string>

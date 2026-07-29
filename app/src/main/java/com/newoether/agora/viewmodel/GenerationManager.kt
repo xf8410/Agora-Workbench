@@ -162,11 +162,18 @@ class GenerationManager(
      *  Returns true to proceed, false to deny. */
     var onConfirmShellCommand: (suspend (server: String, summary: String) -> Boolean)? = null
 
+    /** User-confirmation gate for every GitHub mutation. Null fails closed. */
+    var onConfirmGitHubAction: (suspend (repository: String, summary: String) -> Boolean)? = null
+
     private val memoryToolProvider = MemoryToolProvider(memoryManager)
     private val webSearchToolProvider = WebSearchToolProvider()
     private val ragToolProvider = RagToolProvider(conversations)
     private val imageGenToolProvider = ImageGenToolProvider(app)
-    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)
+    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { gtp ->
+        gtp.confirm = { repository, summary ->
+            onConfirmGitHubAction?.invoke(repository, summary) ?: false
+        }
+    }
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
         // Forward to the ViewModel-provided gate at call time (read the var lazily).
         stp.confirm = { server, summary -> onConfirmShellCommand?.invoke(server, summary) ?: true }

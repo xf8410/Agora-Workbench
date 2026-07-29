@@ -926,6 +926,9 @@
     <string name="shell_ssh_verifying">Connecting…</string>
     <string name="shell_ssh_unpin">Remove pinned key</string>
     <!-- Remote shell confirmation gate -->
+    <string name="github_confirm_title">Allow GitHub change in \"%1$s\"?</string>
+    <string name="github_confirm_allow">Allow once</string>
+    <string name="github_confirm_deny">Deny</string>
     <string name="shell_confirm_title">Allow action on \"%1$s\"?</string>
     <string name="shell_confirm_allow">Allow once</string>
     <string name="shell_confirm_always">Always allow this server</string>
