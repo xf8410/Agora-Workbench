@@ -11,8 +11,8 @@ import com.newoether.agora.viewmodel.GenerationContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -29,61 +29,41 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     )
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
-        // Always expose GitHub tool definitions so they appear in the model's tool list.
-        // Sign-in check is deferred to execute() for a clear error message instead of
-        // silently hiding tools (which can happen if SharedPreferences/SecretCrypto
-        // reads fail in the generation pipeline despite a valid login).
         fun string(description: String) = ToolProperty("string", description)
         return listOf(
             tool("github_list_repositories", "List repositories accessible to the signed-in GitHub account.", emptyMap()),
-            tool("github_read_file", "Read a UTF-8 text file from a GitHub repository.", mapOf(
+            tool("github_read_file", "Read a UTF-8 text file or list a directory in a GitHub repository.", mapOf(
                 "repo" to string("Repository in owner/name form."),
-                "path" to string("Repository-relative file path."),
+                "path" to string("Repository-relative file or directory path. Use an empty string for the root directory."),
                 "ref" to string("Branch, tag, or commit. Defaults to main."),
             ), listOf("repo", "path")),
             tool("github_create_branch", "Create a branch for changes. Prefer workbench/<task> branches instead of modifying main directly.", mapOf(
-                "repo" to string("Repository in owner/name form."),
-                "branch" to string("New branch name."),
-                "base" to string("Base branch. Defaults to main."),
-            ), listOf("repo", "branch")),
+                "repo" to string("Repository in owner/name form."), "branch" to string("New branch name."),
+                "base" to string("Base branch. Defaults to main.")), listOf("repo", "branch")),
             tool("github_write_file", "Create or update one UTF-8 text file and commit it to an existing branch.", mapOf(
-                "repo" to string("Repository in owner/name form."),
-                "path" to string("Repository-relative file path."),
-                "branch" to string("Target branch. Use a workbench branch by default."),
-                "message" to string("Commit message."),
-                "content" to string("Complete new UTF-8 file content."),
-            ), listOf("repo", "path", "branch", "message", "content")),
+                "repo" to string("Repository in owner/name form."), "path" to string("Repository-relative file path."),
+                "branch" to string("Target branch. Use a workbench branch by default."), "message" to string("Commit message."),
+                "content" to string("Complete new UTF-8 file content.")), listOf("repo", "path", "branch", "message", "content")),
             tool("github_get_workflow_runs", "Get recent GitHub Actions workflow runs for a repository.", mapOf(
-                "repo" to string("Repository in owner/name form."),
-                "limit" to ToolProperty("integer", "Maximum runs, 1-20."),
-            ), listOf("repo")),
+                "repo" to string("Repository in owner/name form."), "limit" to ToolProperty("integer", "Maximum runs, 1-20.")), listOf("repo")),
             tool("github_dispatch_workflow", "Trigger a workflow_dispatch workflow.", mapOf(
-                "repo" to string("Repository in owner/name form."),
-                "workflow" to string("Workflow file name or numeric ID."),
-                "ref" to string("Git ref. Defaults to main."),
-            ), listOf("repo", "workflow")),
+                "repo" to string("Repository in owner/name form."), "workflow" to string("Workflow file name or numeric ID."),
+                "ref" to string("Git ref. Defaults to main.")), listOf("repo", "workflow")),
         )
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
         if (!client.isSignedIn()) return errorJson("GitHub is not signed in. Go to Settings → GitHub Workbench to sign in with a token or Device Flow.")
-        val args = runCatching {
-            json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
-        }.getOrElse { return errorJson("Invalid tool arguments") }
+        val args = runCatching { json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" }) }
+            .getOrElse { return errorJson("Invalid tool arguments") }
         fun arg(key: String, default: String = "") = (args[key] as? JsonPrimitive)?.content ?: default
         return runCatching {
             when (name) {
                 "github_list_repositories" -> listRepositories()
-                "github_read_file" -> readFile(arg("repo"), arg("path"), arg("ref", "main"))
-                "github_create_branch" -> buildJsonObject {
-                    put("branch", client.createBranch(arg("repo"), arg("branch"), arg("base", "main")))
-                    put("ok", true)
-                }.toString()
+                "github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))
+                "github_create_branch" -> buildJsonObject { put("branch", client.createBranch(arg("repo"), arg("branch"), arg("base", "main"))); put("ok", true) }.toString()
                 "github_write_file" -> buildJsonObject {
-                    put("commit_sha", client.writeFile(
-                        arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content")
-                    ))
-                    put("ok", true)
+                    put("commit_sha", client.writeFile(arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content"))); put("ok", true)
                 }.toString()
                 "github_get_workflow_runs" -> workflowRuns(arg("repo"), arg("limit", "10").toIntOrNull() ?: 10)
                 "github_dispatch_workflow" -> dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))
@@ -96,33 +76,45 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         val response = client.request("GET", "/user/repos?visibility=all&affiliation=owner,collaborator,organization_member&sort=updated&per_page=50")
         if (response.code !in 200..299) error("GitHub returned HTTP ${response.code}")
         val repos = json.parseToJsonElement(response.body).jsonArray
-        return buildJsonObject {
-            putJsonArray("repositories") {
-                repos.forEach { item ->
-                    val obj = item.jsonObject
-                    add(buildJsonObject {
-                        put("full_name", obj["full_name"]?.jsonPrimitive?.content ?: "")
-                        put("private", obj["private"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false)
-                        put("default_branch", obj["default_branch"]?.jsonPrimitive?.content ?: "main")
-                    })
-                }
-            }
-        }.toString()
+        return buildJsonObject { putJsonArray("repositories") { repos.forEach { item ->
+            val obj = item.jsonObject
+            add(buildJsonObject {
+                put("full_name", obj.string("full_name")); put("private", obj.string("private").toBooleanStrictOrNull() ?: false)
+                put("default_branch", obj.string("default_branch", "main"))
+            })
+        } } }.toString()
     }
 
-    private suspend fun readFile(repo: String, path: String, ref: String): String {
-        val obj = client.readFile(repo, path, ref)
-        val raw = obj["content"]?.jsonPrimitive?.content?.replace("\n", "") ?: ""
-        val bytes = Base64.decode(raw, Base64.DEFAULT)
-        val text = bytes.toString(Charsets.UTF_8)
-        val max = 100_000
-        return buildJsonObject {
-            put("repo", repo); put("path", path); put("ref", ref)
-            put("sha", obj["sha"]?.jsonPrimitive?.content ?: "")
-            put("size", obj["size"]?.jsonPrimitive?.content?.toLongOrNull() ?: bytes.size.toLong())
-            put("content", if (text.length <= max) text else text.take(max) + "\n…[GitHub file preview truncated]")
-            put("truncated", text.length > max)
-        }.toString()
+    private suspend fun readFileOrDirectory(repo: String, path: String, ref: String): String {
+        val payload: JsonElement = client.readContent(repo, path, ref)
+        return when (payload) {
+            is JsonArray -> buildJsonObject {
+                put("repo", repo); put("path", path); put("ref", ref); put("type", "dir")
+                putJsonArray("entries") {
+                    payload.forEach { element ->
+                        val item = element as? JsonObject ?: return@forEach
+                        add(buildJsonObject {
+                            put("name", item.string("name")); put("path", item.string("path")); put("type", item.string("type"))
+                            put("sha", item.string("sha")); item["size"]?.jsonPrimitive?.content?.toLongOrNull()?.let { put("size", it) }
+                        })
+                    }
+                }
+            }.toString()
+            is JsonObject -> {
+                if (payload.string("type") != "file") error("Unsupported GitHub content type: ${payload.string("type", "unknown")}")
+                val raw = payload["content"]?.jsonPrimitive?.content?.replace("\n", "") ?: ""
+                val bytes = Base64.decode(raw, Base64.DEFAULT)
+                val text = bytes.toString(Charsets.UTF_8)
+                val max = 100_000
+                buildJsonObject {
+                    put("repo", repo); put("path", path); put("ref", ref); put("type", "file")
+                    put("sha", payload.string("sha")); put("size", payload["size"]?.jsonPrimitive?.content?.toLongOrNull() ?: bytes.size.toLong())
+                    put("content", if (text.length <= max) text else text.take(max) + "\n…[GitHub file preview truncated]")
+                    put("truncated", text.length > max)
+                }.toString()
+            }
+            else -> error("GitHub Contents API returned neither an object nor an array")
+        }
     }
 
     private suspend fun workflowRuns(repo: String, requested: Int): String {
@@ -130,21 +122,13 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         val response = client.request("GET", "/repos/$repo/actions/runs?per_page=$limit")
         if (response.code !in 200..299) error("GitHub returned HTTP ${response.code}")
         val runs = json.parseToJsonElement(response.body).jsonObject["workflow_runs"]?.jsonArray ?: JsonArray(emptyList())
-        return buildJsonObject {
-            putJsonArray("runs") {
-                runs.forEach { item ->
-                    val obj = item.jsonObject
-                    add(buildJsonObject {
-                        put("id", obj["id"]?.jsonPrimitive?.content ?: "")
-                        put("name", obj["name"]?.jsonPrimitive?.content ?: "")
-                        put("status", obj["status"]?.jsonPrimitive?.content ?: "")
-                        put("conclusion", obj["conclusion"]?.jsonPrimitive?.content ?: "")
-                        put("head_sha", obj["head_sha"]?.jsonPrimitive?.content ?: "")
-                        put("html_url", obj["html_url"]?.jsonPrimitive?.content ?: "")
-                    })
-                }
-            }
-        }.toString()
+        return buildJsonObject { putJsonArray("runs") { runs.forEach { item ->
+            val obj = item.jsonObject
+            add(buildJsonObject {
+                put("id", obj.string("id")); put("name", obj.string("name")); put("status", obj.string("status"))
+                put("conclusion", obj.string("conclusion")); put("head_sha", obj.string("head_sha")); put("html_url", obj.string("html_url"))
+            })
+        } } }.toString()
     }
 
     private suspend fun dispatch(repo: String, workflow: String, ref: String): String {
@@ -153,14 +137,9 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         return buildJsonObject { put("ok", true); put("workflow", workflow); put("ref", ref) }.toString()
     }
 
+    private fun JsonObject.string(key: String, default: String = ""): String = this[key]?.jsonPrimitive?.content ?: default
     private fun tool(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String> = emptyList()) =
-        ToolDefinition(function = ToolFunction(
-            name = name,
-            description = description,
-            parameters = ToolParameters(properties = properties, required = required),
-        ))
-
+        ToolDefinition(function = ToolFunction(name = name, description = description, parameters = ToolParameters(properties = properties, required = required)))
     private fun errorJson(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
-
     override fun handles(name: String): Boolean = name in names
 }
