@@ -471,7 +471,7 @@ fun MainNavigation(
         AlertDialog(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             onDismissRequest = { viewModel.resolveGitHubConfirmation(allow = false) },
-            icon = { Icon(Icons.Default.Security, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary) },
+            icon = { Icon(Icons.Default.Lock, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary) },
             title = { Text(stringResource(R.string.github_confirm_title, pending.repository), fontWeight = FontWeight.Bold) },
             text = {
                 Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
