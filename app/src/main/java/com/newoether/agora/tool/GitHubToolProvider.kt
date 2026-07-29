@@ -150,7 +150,11 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     }
 
     private fun tool(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String> = emptyList()) =
-        ToolDefinition(function = ToolFunction(name = name, description = description, parameters = ToolParameters(properties, required)))
+        ToolDefinition(function = ToolFunction(
+            name = name,
+            description = description,
+            parameters = ToolParameters(properties = properties, required = required),
+        ))
 
     private fun errorJson(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
 
