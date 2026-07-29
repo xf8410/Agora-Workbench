@@ -1,0 +1,89 @@
+name: Apply GitHub Write Confirmation
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Add confirmation to GitHub mutations
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def one(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s:
+                  if new in s: return
+                  raise SystemExit(f'marker mismatch: {path}: {old[:100]!r}')
+              if s.count(old) != 1: raise SystemExit(f'non-unique marker: {path}')
+              p.write_text(s.replace(old,new))
+
+          p='app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt'
+          one(p,
+              '''class GitHubToolProvider(context: Context) : ToolProvider {
+              private val client = GitHubApiClient(context.applicationContext)''',
+              '''class GitHubToolProvider(context: Context) : ToolProvider {
+                  private val client = GitHubApiClient(context.applicationContext)
+                  /** Reuses the app's existing confirmation dialog; null keeps headless tests usable. */
+                  var confirm: (suspend (summary: String) -> Boolean)? = null''')
+          one(p,
+              '''                "github_create_branch" -> buildJsonObject {
+                          put("branch", client.createBranch(arg("repo"), arg("branch"), arg("base", "main")))
+                          put("ok", true)
+                      }.toString()''',
+              '''                "github_create_branch" -> {
+                          checkConfirmed("Create GitHub branch ${arg("repo")}:${arg("branch")}")
+                          buildJsonObject {
+                              put("branch", client.createBranch(arg("repo"), arg("branch"), arg("base", "main")))
+                              put("ok", true)
+                          }.toString()
+                      }''')
+          one(p,
+              '''                "github_write_file" -> buildJsonObject {
+                          put("commit_sha", client.writeFile(
+                              arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content")
+                          ))
+                          put("ok", true)
+                      }.toString()''',
+              '''                "github_write_file" -> {
+                          checkConfirmed("Commit ${arg("repo")}:${arg("branch")}/${arg("path")}")
+                          buildJsonObject {
+                              put("commit_sha", client.writeFile(
+                                  arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content")
+                              ))
+                              put("ok", true)
+                          }.toString()
+                      }''')
+          one(p,
+              '''                "github_dispatch_workflow" -> dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))''',
+              '''                "github_dispatch_workflow" -> {
+                          checkConfirmed("Dispatch ${arg("repo")} workflow ${arg("workflow")}")
+                          dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))
+                      }''')
+          one(p,
+              '''    private suspend fun listRepositories(): String {''',
+              '''    private suspend fun checkConfirmed(summary: String) {
+                  if (confirm?.invoke(summary) == false) error("Denied by user")
+              }
+
+              private suspend fun listRepositories(): String {''')
+
+          p='app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt'
+          one(p,
+              '''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)''',
+              '''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
+                  provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: true }
+              }''')
+          PY
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt \
+                  app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          git commit -m 'feat: confirm GitHub repository mutations'
+          git push origin HEAD:main
