@@ -1,0 +1,125 @@
+name: Publish Workbench Latest Release
+
+on:
+  workflow_run:
+    workflows: ["Build Agora Workbench APK"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful Build Agora Workbench APK run ID (leave empty to use latest successful main run)"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-workbench-latest
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve source build
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          EVENT_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            run_id="$EVENT_RUN_ID"
+            head_sha="$EVENT_HEAD_SHA"
+          elif [[ -n "${INPUT_RUN_ID:-}" ]]; then
+            run_id="$INPUT_RUN_ID"
+            run_json="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
+            conclusion="$(jq -r '.conclusion' <<<"$run_json")"
+            head_branch="$(jq -r '.head_branch' <<<"$run_json")"
+            head_sha="$(jq -r '.head_sha' <<<"$run_json")"
+            [[ "$conclusion" == "success" ]] || { echo "Run $run_id is not successful" >&2; exit 1; }
+            [[ "$head_branch" == "main" ]] || { echo "Run $run_id is not from main" >&2; exit 1; }
+          else
+            run_json="$(gh api --paginate "repos/$REPOSITORY/actions/workflows/build.yml/runs?branch=main&status=success&per_page=1" 2>/dev/null || true)"
+            run_id="$(jq -r '.workflow_runs[0].id // empty' <<<"$run_json" 2>/dev/null || true)"
+            head_sha="$(jq -r '.workflow_runs[0].head_sha // empty' <<<"$run_json" 2>/dev/null || true)"
+
+            if [[ -z "$run_id" ]]; then
+              run_json="$(gh api "repos/$REPOSITORY/actions/runs?branch=main&status=success&per_page=50")"
+              run_id="$(jq -r '.workflow_runs[] | select(.name == "Build Agora Workbench APK") | .id' <<<"$run_json" | head -n1)"
+              head_sha="$(jq -r '.workflow_runs[] | select(.name == "Build Agora Workbench APK") | .head_sha' <<<"$run_json" | head -n1)"
+            fi
+          fi
+
+          [[ -n "$run_id" && -n "$head_sha" ]] || { echo "No successful main build found" >&2; exit 1; }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download "$RUN_ID" --repo "$REPOSITORY" --name "Agora-Workbench-fdroid-debug" --dir dist
+          apk="$(find dist -type f -name '*.apk' -print -quit)"
+          [[ -n "$apk" ]] || { echo "Artifact contains no APK" >&2; exit 1; }
+          mv "$apk" dist/Agora-Workbench-latest.apk
+          find dist -type f ! -name 'Agora-Workbench-latest.apk' -delete
+          sha256sum dist/Agora-Workbench-latest.apk | tee dist/Agora-Workbench-latest.apk.sha256
+
+      - name: Create or update rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.source.outputs.head_sha }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="workbench-latest"
+          notes_file="$(mktemp)"
+          cat > "$notes_file" <<EOF
+          Latest successful Agora Workbench APK built from the main branch.
+
+          Commit: $HEAD_SHA
+          Actions run: https://github.com/$REPOSITORY/actions/runs/$RUN_ID
+
+          This is a rolling development release. The APK asset is replaced after every successful main build.
+          Package: com.newoether.agora.workbench
+          EOF
+
+          if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" --repo "$REPOSITORY" \
+              --title "Agora Workbench — Latest main build" \
+              --notes-file "$notes_file" \
+              --target "$HEAD_SHA" \
+              --latest
+          else
+            gh release create "$tag" --repo "$REPOSITORY" \
+              --target "$HEAD_SHA" \
+              --title "Agora Workbench — Latest main build" \
+              --notes-file "$notes_file" \
+              --latest
+          fi
+
+          gh release upload "$tag" \
+            dist/Agora-Workbench-latest.apk \
+            dist/Agora-Workbench-latest.apk.sha256 \
+            --repo "$REPOSITORY" \
+            --clobber
