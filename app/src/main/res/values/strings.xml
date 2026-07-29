@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Agora</string>
+    <string name="app_name">Agora Workbench</string>
     <string name="agora_responded">Agora responded</string>
 
     <!-- Chat Bottom Bar -->

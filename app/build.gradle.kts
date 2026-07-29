@@ -24,7 +24,7 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "com.newoether.agora"
+        applicationId = "com.newoether.agora.workbench"
         minSdk = 24
         targetSdk = 36
         versionCode = 27
