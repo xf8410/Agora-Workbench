@@ -717,17 +717,6 @@
     <string name="about_version">Версия</string>
     <string name="about_rating">Оценить приложение</string>
     <string name="about_rating_desc">Этот проект разработан одним человеком. Я искренне ценю ваши отзывы.</string>
-    <string name="about_updates">Обновления</string>
-    <string name="about_check_updates">Проверить обновления</string>
-    <string name="about_check_updates_desc">Проверить последнюю версию на GitHub</string>
-    <string name="about_auto_update">Автоматически проверять обновления</string>
-    <string name="about_auto_update_desc">Проверять при запуске приложения (не чаще раза в день)</string>
-    <string name="about_update_available">Доступно обновление: v%1$s</string>
-    <string name="about_up_to_date">У вас последняя версия (v%1$s)</string>
-    <string name="about_checking">Проверка...</string>
-    <string name="about_available_body">На GitHub доступна новая версия Agora.</string>
-    <string name="about_view_release">Посмотреть выпуск</string>
-    <string name="about_later">Позже</string>
     <string name="rating_title">Оценить Agora</string>
     <string name="rating_star">%1$d звёзд</string>
     <string name="rating_your_name">Ваше имя (необязательно)</string>

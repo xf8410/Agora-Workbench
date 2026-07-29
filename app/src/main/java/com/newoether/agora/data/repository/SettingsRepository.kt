@@ -103,8 +103,6 @@ class SettingsRepository(
     val accessActiveMemory: StateFlow<Boolean> = hot(settingsManager.accessActiveMemory, true)
     val ragSearchEnabled: StateFlow<Boolean> = hot(settingsManager.ragSearchEnabled, false)
     val autoCacheEnabled: StateFlow<Boolean> = hot(settingsManager.autoCacheEnabled, true)
-    val autoUpdateCheck: StateFlow<Boolean> = hot(settingsManager.autoUpdateCheck, true)
-    val lastUpdateCheckTime: StateFlow<Long> = hot(settingsManager.lastUpdateCheckTime, 0L)
     val modelSearchMethod: StateFlow<String> = hot(settingsManager.modelSearchMethod, "keyword")
     val manualSearchMethod: StateFlow<String> = hot(settingsManager.manualSearchMethod, "keyword")
     val embeddingModels: StateFlow<List<EmbeddingModelConfig>> = hot(settingsManager.embeddingModels, emptyList())
@@ -349,8 +347,6 @@ class SettingsRepository(
     fun setAccessActiveMemory(enabled: Boolean) = scope.launch { settingsManager.saveAccessActiveMemory(enabled) }
     fun setRagSearchEnabled(enabled: Boolean) = scope.launch { settingsManager.saveRagSearchEnabled(enabled) }
     fun setAutoCacheEnabled(enabled: Boolean) = scope.launch { settingsManager.saveAutoCacheEnabled(enabled) }
-    fun setAutoUpdateCheck(enabled: Boolean) = scope.launch { settingsManager.saveAutoUpdateCheck(enabled) }
-    fun setLastUpdateCheckTime(time: Long) = scope.launch { settingsManager.saveLastUpdateCheckTime(time) }
     fun setModelSearchMethod(method: String) = scope.launch { settingsManager.saveModelSearchMethod(method) }
     fun setManualSearchMethod(method: String) = scope.launch { settingsManager.saveManualSearchMethod(method) }
     fun setAppLanguage(language: String) = scope.launch { settingsManager.saveAppLanguage(language) }
@@ -431,8 +427,6 @@ class SettingsRepository(
     // read-after-write semantics. They keep [SettingsManager] encapsulated as an internal
     // detail of this repository — the single owner of the settings surface.
 
-    suspend fun getAutoUpdateCheck(): Boolean = settingsManager.autoUpdateCheck.first()
-    suspend fun getLastUpdateCheckTime(): Long = settingsManager.lastUpdateCheckTime.first()
     suspend fun getEmbeddingModels(): List<EmbeddingModelConfig> = settingsManager.embeddingModels.first()
     suspend fun getActiveEmbeddingModelId(): String = settingsManager.activeEmbeddingModelId.first()
     suspend fun getModelAliases(): Map<String, String> = settingsManager.modelAliases.first()
@@ -442,7 +436,6 @@ class SettingsRepository(
 
     suspend fun saveAvailableModels(provider: String, models: List<String>) = settingsManager.saveAvailableModels(provider, models)
     suspend fun saveModelAliases(aliases: Map<String, String>) = settingsManager.saveModelAliases(aliases)
-    suspend fun saveLastUpdateCheckTime(time: Long) = settingsManager.saveLastUpdateCheckTime(time)
     suspend fun saveLastModelsFetchFingerprint(fingerprint: String) = settingsManager.saveLastModelsFetchFingerprint(fingerprint)
     suspend fun incrementMessagesSent() = settingsManager.incrementMessagesSent()
     suspend fun saveLocalChatModels(models: List<LocalChatModelConfig>) = settingsManager.saveLocalChatModels(models)

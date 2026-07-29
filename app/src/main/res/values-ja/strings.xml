@@ -717,17 +717,6 @@
     <string name="about_version">バージョン</string>
     <string name="about_rating">アプリを評価</string>
     <string name="about_rating_desc">このプロジェクトは一人で開発しています。フィードバックを心より感謝します。</string>
-    <string name="about_updates">アップデート</string>
-    <string name="about_check_updates">アップデートを確認</string>
-    <string name="about_check_updates_desc">GitHub で最新リリースを確認</string>
-    <string name="about_auto_update">アップデートを自動確認</string>
-    <string name="about_auto_update_desc">アプリ起動時に確認（1 日に最大 1 回）</string>
-    <string name="about_update_available">アップデートが利用可能: v%1$s</string>
-    <string name="about_up_to_date">最新の状態です（v%1$s）</string>
-    <string name="about_checking">確認中...</string>
-    <string name="about_available_body">Agora の新しいバージョンが GitHub で利用可能です。</string>
-    <string name="about_view_release">リリースを表示</string>
-    <string name="about_later">後で</string>
     <string name="rating_title">Agora を評価</string>
     <string name="rating_star">%1$d 個の星</string>
     <string name="rating_your_name">お名前（任意）</string>

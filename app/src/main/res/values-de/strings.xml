@@ -717,17 +717,6 @@
     <string name="about_version">Version</string>
     <string name="about_rating">App bewerten</string>
     <string name="about_rating_desc">Dieses Projekt wurde von einer einzelnen Person entwickelt. Ich schätze dein Feedback sehr.</string>
-    <string name="about_updates">Updates</string>
-    <string name="about_check_updates">Nach Updates suchen</string>
-    <string name="about_check_updates_desc">GitHub auf die neueste Version prüfen</string>
-    <string name="about_auto_update">Automatisch nach Updates suchen</string>
-    <string name="about_auto_update_desc">Beim App-Start prüfen (höchstens einmal täglich)</string>
-    <string name="about_update_available">Update verfügbar: v%1$s</string>
-    <string name="about_up_to_date">Du bist auf dem neuesten Stand (v%1$s)</string>
-    <string name="about_checking">Wird geprüft...</string>
-    <string name="about_available_body">Eine neue Version von Agora ist auf GitHub verfügbar.</string>
-    <string name="about_view_release">Release ansehen</string>
-    <string name="about_later">Später</string>
     <string name="rating_title">Agora bewerten</string>
     <string name="rating_star">%1$d Stern(e)</string>
     <string name="rating_your_name">Dein Name (optional)</string>

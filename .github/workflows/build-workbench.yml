@@ -23,6 +23,8 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
+      - name: Build proot native binaries
+        run: bash build-proot.sh
       - name: Build F-Droid debug APK
         run: |
           chmod +x gradlew

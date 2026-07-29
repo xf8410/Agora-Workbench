@@ -717,17 +717,6 @@
     <string name="about_version">الإصدار</string>
     <string name="about_rating">قيّم التطبيق</string>
     <string name="about_rating_desc">طُوِّر هذا المشروع بواسطة شخص واحد. أقدّر ملاحظاتك حقًا.</string>
-    <string name="about_updates">التحديثات</string>
-    <string name="about_check_updates">التحقق من التحديثات</string>
-    <string name="about_check_updates_desc">تحقق من أحدث إصدار على GitHub</string>
-    <string name="about_auto_update">التحقق من التحديثات تلقائيًا</string>
-    <string name="about_auto_update_desc">التحقق عند تشغيل التطبيق (مرة واحدة يوميًا كحد أقصى)</string>
-    <string name="about_update_available">يتوفر تحديث: v%1$s</string>
-    <string name="about_up_to_date">أنت محدّث (v%1$s)</string>
-    <string name="about_checking">جارٍ التحقق...</string>
-    <string name="about_available_body">يتوفر إصدار جديد من Agora على GitHub.</string>
-    <string name="about_view_release">عرض الإصدار</string>
-    <string name="about_later">لاحقًا</string>
     <string name="rating_title">قيّم Agora</string>
     <string name="rating_star">%1$d نجمة</string>
     <string name="rating_your_name">اسمك (اختياري)</string>

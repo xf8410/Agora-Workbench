@@ -741,17 +741,6 @@
     <string name="about_version">版本</string>
     <string name="about_rating">評價應用程式</string>
     <string name="about_rating_desc">這個專案由一個人獨立開發。真誠地感謝您的回饋。</string>
-    <string name="about_updates">更新</string>
-    <string name="about_check_updates">檢查更新</string>
-    <string name="about_check_updates_desc">檢查 GitHub 上的最新版本</string>
-    <string name="about_auto_update">自動檢查更新</string>
-    <string name="about_auto_update_desc">啟動時檢查（每天最多一次）</string>
-    <string name="about_update_available">有新版本：v%1$s</string>
-    <string name="about_up_to_date">已是最新版本 (v%1$s)</string>
-    <string name="about_checking">檢查中…</string>
-    <string name="about_available_body">Agora 的新版本已在 GitHub 上發布。</string>
-    <string name="about_view_release">檢視版本</string>
-    <string name="about_later">稍後</string>
     <string name="rating_title">評價 Agora</string>
     <string name="rating_star">%1$d 星</string>
     <string name="rating_your_name">您的姓名（選用）</string>

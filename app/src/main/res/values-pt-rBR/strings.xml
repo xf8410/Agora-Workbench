@@ -717,17 +717,6 @@
     <string name="about_version">Versão</string>
     <string name="about_rating">Avaliar o app</string>
     <string name="about_rating_desc">Este projeto foi desenvolvido por uma única pessoa. Agradeço muito o seu feedback.</string>
-    <string name="about_updates">Atualizações</string>
-    <string name="about_check_updates">Verificar atualizações</string>
-    <string name="about_check_updates_desc">Verificar a versão mais recente no GitHub</string>
-    <string name="about_auto_update">Verificar atualizações automaticamente</string>
-    <string name="about_auto_update_desc">Verificar ao abrir o app (no máximo uma vez por dia)</string>
-    <string name="about_update_available">Atualização disponível: v%1$s</string>
-    <string name="about_up_to_date">Você está atualizado (v%1$s)</string>
-    <string name="about_checking">Verificando...</string>
-    <string name="about_available_body">Uma nova versão do Agora está disponível no GitHub.</string>
-    <string name="about_view_release">Ver versão</string>
-    <string name="about_later">Mais tarde</string>
     <string name="rating_title">Avaliar o Agora</string>
     <string name="rating_star">%1$d estrela(s)</string>
     <string name="rating_your_name">Seu nome (opcional)</string>
