@@ -29,7 +29,10 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     )
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
-        if (!client.isSignedIn()) return emptyList()
+        // Always expose GitHub tool definitions so they appear in the model's tool list.
+        // Sign-in check is deferred to execute() for a clear error message instead of
+        // silently hiding tools (which can happen if SharedPreferences/SecretCrypto
+        // reads fail in the generation pipeline despite a valid login).
         fun string(description: String) = ToolProperty("string", description)
         return listOf(
             tool("github_list_repositories", "List repositories accessible to the signed-in GitHub account.", emptyMap()),
@@ -63,6 +66,7 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
+        if (!client.isSignedIn()) return errorJson("GitHub is not signed in. Go to Settings → GitHub Workbench to sign in with a token or Device Flow.")
         val args = runCatching {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
         }.getOrElse { return errorJson("Invalid tool arguments") }
