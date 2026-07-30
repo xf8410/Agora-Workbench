@@ -36,144 +36,28 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
 
-      - name: Restore or create the persistent Workbench signing key
-        id: signing
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
+      - name: Diagnose unit-test build
+        id: diagnose
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          signing_dir="$RUNNER_TEMP/workbench-signing"
-          mkdir -p "$signing_dir"
-          cd "$signing_dir"
-
-          # Keep one private upload key as assets on a dedicated prerelease. Unlike the
-          # runner's ~/.android/debug.keystore, these assets survive runner replacement.
-          if gh release view workbench-signing-key --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release download workbench-signing-key --repo "$REPOSITORY" \
-              --pattern 'workbench-upload.jks' --pattern 'signing.env' --dir .
-          else
-            store_password="$(openssl rand -hex 24)"
-            key_password="$(openssl rand -hex 24)"
-            keytool -genkeypair -v \
-              -keystore workbench-upload.jks \
-              -storepass "$store_password" \
-              -alias workbench \
-              -keypass "$key_password" \
-              -keyalg RSA -keysize 4096 -validity 10000 \
-              -dname 'CN=Agora Workbench, OU=Workbench, O=Agora Workbench, L=Unknown, ST=Unknown, C=US'
-            {
-              echo "KEYSTORE_PASSWORD=$store_password"
-              echo "KEY_PASSWORD=$key_password"
-            } > signing.env
-            chmod 600 workbench-upload.jks signing.env
-            gh release create workbench-signing-key \
-              workbench-upload.jks signing.env \
-              --repo "$REPOSITORY" \
-              --title 'Agora Workbench signing key (CI internal)' \
-              --notes 'Persistent CI upload key. Do not delete: deleting it breaks APK upgrade compatibility.' \
-              --prerelease
-          fi
-
-          test -s workbench-upload.jks
-          test -s signing.env
-          source signing.env
-          test -n "$KEYSTORE_PASSWORD"
-          test -n "$KEY_PASSWORD"
-          keytool -list -keystore workbench-upload.jks -storepass "$KEYSTORE_PASSWORD" -alias workbench >/dev/null
-
-          {
-            echo "storeFile=$signing_dir/workbench-upload.jks"
-            echo "storePassword=$KEYSTORE_PASSWORD"
-            echo "keyAlias=workbench"
-            echo "keyPassword=$KEY_PASSWORD"
-          } > "$GITHUB_WORKSPACE/local.properties"
-
-          cert_sha256="$(keytool -list -v -keystore workbench-upload.jks \
-            -storepass "$KEYSTORE_PASSWORD" -alias workbench | \
-            sed -n 's/.*SHA256: //p' | head -n1)"
-          echo "cert_sha256=$cert_sha256" >> "$GITHUB_OUTPUT"
-
-      - name: Build proot native binaries
-        run: bash build-proot.sh
-
-      - name: Test and build signed release APK
-        shell: bash
-        run: |
-          set -euo pipefail
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidRelease
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee ci-diagnostic.log
 
-      - name: Prepare rolling release files
-        id: package
+      - name: Commit diagnostic log after failure
+        if: steps.diagnose.outcome == 'failure'
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p dist
-          apk="$(find app/build/outputs/apk/fdroid/release -type f -name '*.apk' -print -quit)"
-          test -n "$apk"
-          cp "$apk" dist/Agora-Workbench-latest.apk
-          sha256sum dist/Agora-Workbench-latest.apk | tee dist/Agora-Workbench-latest.apk.sha256
-          version="$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'actions@github.com'
+          git add -f ci-diagnostic.log
+          git commit -m 'Record failing Gradle diagnostic'
+          git push origin HEAD:${GITHUB_REF_NAME}
 
-      - name: Verify APK signature
-        shell: bash
-        run: |
-          set -euo pipefail
-          apksigner verify --verbose --print-certs dist/Agora-Workbench-latest.apk | tee dist/signature.txt
-          grep -F '${{ steps.signing.outputs.cert_sha256 }}' dist/signature.txt >/dev/null
+      - name: Fail after saving diagnostic
+        if: steps.diagnose.outcome == 'failure'
+        run: exit 1
 
-      - name: Upload signed APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Agora-Workbench-fdroid-release
-          path: |
-            dist/Agora-Workbench-latest.apk
-            dist/Agora-Workbench-latest.apk.sha256
-            dist/signature.txt
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Create or update the rolling latest release
-        if: github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.sha }}
-          VERSION: ${{ steps.package.outputs.version }}
-          CERT_SHA256: ${{ steps.signing.outputs.cert_sha256 }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag='workbench-latest'
-          notes_file="$(mktemp)"
-          cat > "$notes_file" <<EOF
-          Latest successful, stably signed Agora Workbench APK built from main.
-
-          Version: $VERSION
-          Commit: $HEAD_SHA
-          Signing certificate SHA-256: $CERT_SHA256
-          Actions run: https://github.com/$REPOSITORY/actions/runs/$GITHUB_RUN_ID
-
-          Download **Agora-Workbench-latest.apk** below. The asset is replaced after every successful main build.
-          Package: com.newoether.agora.workbench
-          EOF
-
-          if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$tag" --repo "$REPOSITORY" \
-              --title 'Agora Workbench — Latest main build' \
-              --notes-file "$notes_file" --target "$HEAD_SHA" --latest
-          else
-            gh release create "$tag" --repo "$REPOSITORY" \
-              --target "$HEAD_SHA" \
-              --title 'Agora Workbench — Latest main build' \
-              --notes-file "$notes_file" --latest
-          fi
-
-          gh release upload "$tag" \
-            dist/Agora-Workbench-latest.apk \
-            dist/Agora-Workbench-latest.apk.sha256 \
-            dist/signature.txt \
-            --repo "$REPOSITORY" --clobber
+      - name: Unit tests passed
+        run: echo 'Unit-test build passed; restore the release workflow after diagnosis.'
