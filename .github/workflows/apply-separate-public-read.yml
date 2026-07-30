@@ -28,19 +28,40 @@ jobs:
           new='''        // github_read_file supports anonymous public repositories; authenticated
         // listing and mutations remain guarded inside GitHubApiClient.request().
         val args = runCatching'''
-          if old in s: s=s.replace(old,new,1)
-          elif new not in s: raise SystemExit('global auth marker mismatch')
-          s=s.replace('Read a UTF-8 text file or list a directory in a GitHub repository.','Read a UTF-8 text file or list a directory. Public repositories work without login; private repositories require the signed-in account.',1)
-          s=s.replace('"ref" to string("Branch, tag, or commit. Defaults to main.")','"ref" to string("Branch, tag, or commit. Empty means the repository default branch.")',1)
-          s=s.replace('"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))','"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref"))',1)
+          if old in s:
+              s=s.replace(old,new,1)
+          elif new not in s:
+              raise SystemExit('global auth marker mismatch')
+          old_description='Read a UTF-8 text file or list a directory in a GitHub repository.'
+          new_description='Read a UTF-8 text file or list a directory. Public repositories work without login; private repositories require the signed-in account.'
+          if old_description in s:
+              s=s.replace(old_description,new_description,1)
+          elif new_description not in s:
+              raise SystemExit('description marker mismatch')
+          old_ref='"ref" to string("Branch, tag, or commit. Defaults to main.")'
+          new_ref='"ref" to string("Branch, tag, or commit. Empty means the repository default branch.")'
+          if old_ref in s:
+              s=s.replace(old_ref,new_ref,1)
+          elif new_ref not in s:
+              raise SystemExit('ref marker mismatch')
+          old_dispatch='"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))'
+          new_dispatch='"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref"))'
+          if old_dispatch in s:
+              s=s.replace(old_dispatch,new_dispatch,1)
+          elif new_dispatch not in s:
+              raise SystemExit('dispatch marker mismatch')
           p.write_text(s)
           PY
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
           git add app/src/main/java/com/newoether/agora/github/GitHubApiClient.kt app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt
           git diff --cached --check
-          git commit -m 'feat: read public repositories without GitHub login'
-          git push origin HEAD:workbench/separate-public-repo-read
+          if ! git diff --cached --quiet; then
+            git commit -m 'feat: read public repositories without GitHub login'
+            git push origin HEAD:workbench/separate-public-repo-read
+          else
+            echo 'Public repository read patch is already applied.'
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
