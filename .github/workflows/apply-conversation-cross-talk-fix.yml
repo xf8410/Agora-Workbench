@@ -1,13 +1,9 @@
 name: Apply conversation cross-talk fix
-
 on:
   push:
-    branches:
-      - workbench/fix-conversation-cross-talk
-
+    branches: [workbench/fix-conversation-cross-talk]
 permissions:
   contents: write
-
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -20,42 +16,18 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f"{path}: expected one match, got {count}")
-              p.write_text(text.replace(old, new, 1))
+          def sub(path, pattern, replacement):
+              p = Path(path); text = p.read_text()
+              new, n = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if n != 1: raise RuntimeError(f"{path}: pattern not found: {pattern[:80]}")
+              p.write_text(new)
 
           vm = "app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt"
-          replace_once(vm, '''    fun createNewChat() {
-              // Already on the new-chat screen: ignore (both the drawer and the top-bar capsule route
-              // here; behaviour must be identical and a no-op when there's nothing to reset).
-              if (_isNewChatMode.value) return
-              switchingJob?.cancel()
-              if (!_isNewChatMode.value) {
-                  _pendingSystemPromptId.value = null
-              }
-              _isNewChatMode.value = true
-              _isTransitioningToNewChat.value = true
-              _isSwitching.value = true
-              switchingJob = viewModelScope.launch {
-                  kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS) // Allow overlay to fade in
-                  _currentConversationId.value = null
-                  _currentActiveModel.value = null
-                  _pendingConversationSettings.value = null
-                  _allMessages.value = emptyList()
-                  _selectedChildren.value = emptyMap()
-                  _branchSwitchTrigger.value = null
-                  _isSwitching.value = false
-                  _isTransitioningToNewChat.value = false
-              }
-          }
-          ''', '''    fun createNewChat() {
-              // Already on the new-chat screen: ignore (both the drawer and the top-bar capsule route
-              // here; behaviour must be identical and a no-op when there's nothing to reset).
+          sub(vm,
+              r'    fun createNewChat\(\) \{.*?\n    \}\n\n    fun selectConversation',
+              '''    fun createNewChat() {
               if (_isNewChatMode.value) return
               switchingJob?.cancel()
               _pendingSystemPromptId.value = null
@@ -63,10 +35,8 @@ jobs:
               _isTransitioningToNewChat.value = true
               _isSwitching.value = true
 
-              // Conversation identity must change synchronously. Delaying this reset for the fade
-              // animation allowed a fast first Send to create a conversation, after which the old
-              // transition job cleared its id and visible tree, making the UI appear to cross-wire
-              // the new message into another conversation.
+              // Identity changes are synchronous. A delayed reset could otherwise clear the id
+              // of a conversation created by a fast first Send during the fade animation.
               _currentConversationId.value = null
               _currentActiveModel.value = null
               _pendingConversationSettings.value = null
@@ -74,79 +44,55 @@ jobs:
               _selectedChildren.value = emptyMap()
               _branchSwitchTrigger.value = null
 
-              // Only the cosmetic end of the transition is delayed.
               switchingJob = viewModelScope.launch {
                   kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS)
                   _isSwitching.value = false
                   _isTransitioningToNewChat.value = false
               }
           }
-          ''')
 
-          replace_once(vm, '''        
-              viewModelScope.launch {
-                  _selectedChildren.collect { childrenMap ->
-                      val id = _currentConversationId.value
-                      if (id != null) {
-                          persistSelectedChildren(id, childrenMap)
-                      }
-                  }
-              }
-          }
-          ''', '''        
-          }
-          ''')
+          fun selectConversation''')
 
-          replace_once(vm, '''    fun switchBranch(parentId: String?, currentMessageId: String, direction: Int) {
-              if (_isLoading.value && _generatingInConversationId.value == _currentConversationId.value) return
-          ''', '''    fun switchBranch(parentId: String?, currentMessageId: String, direction: Int) {
+          # Remove the unsafe global branch-map writer. Mutation sites persist with an explicit id.
+          sub(vm,
+              r'\n        viewModelScope\.launch \{\n            _selectedChildren\.collect \{ childrenMap ->.*?\n        \}\n',
+              '\n')
+
+          sub(vm,
+              r'    fun switchBranch\(parentId: String\?, currentMessageId: String, direction: Int\) \{\n        if \(_isLoading\.value && _generatingInConversationId\.value == _currentConversationId\.value\) return',
+              '''    fun switchBranch(parentId: String?, currentMessageId: String, direction: Int) {
               val conversationId = _currentConversationId.value ?: return
-              if (_isLoading.value && _generatingInConversationId.value == conversationId) return
-          ''')
-
-          replace_once(vm, '''            newMap[parentId] = targetMessage.id
-              _selectedChildren.value = newMap
-              
-              _branchSwitchTrigger.value = null
-          ''', '''            newMap[parentId] = targetMessage.id
-              // Persist against the id captured when the branch action began. Never re-read the
-              // globally open id after the transition delay, or A's branch map can be written to B.
+              if (_isLoading.value && _generatingInConversationId.value == conversationId) return''')
+          sub(vm,
+              r'            newMap\[parentId\] = targetMessage\.id\n            _selectedChildren\.value = newMap',
+              '''            newMap[parentId] = targetMessage.id
+              // Bind persistence to the conversation where the action started.
               persistSelectedChildren(conversationId, newMap)
               if (_currentConversationId.value != conversationId) {
                   _isSwitching.value = false
                   return@launch
               }
-              _selectedChildren.value = newMap
-              
-              _branchSwitchTrigger.value = null
-          ''')
+              _selectedChildren.value = newMap''')
 
           drawer = "app/src/main/java/com/newoether/agora/ui/chat/ChatDrawerContent.kt"
-          replace_once(drawer, '''                    items(grouped.entries.toList()) { (convId, entries) ->
-          ''', '''                    items(grouped.entries.toList(), key = { it.key }) { (convId, entries) ->
-          ''')
-          replace_once(drawer, '''                    items(conversations) { conversation ->
-          ''', '''                    items(conversations, key = { it.id }) { conversation ->
-          ''')
+          sub(drawer, r'items\(grouped\.entries\.toList\(\)\)', 'items(grouped.entries.toList(), key = { it.key })')
+          sub(drawer, r'items\(conversations\)', 'items(conversations, key = { it.id })')
 
           db = "app/src/main/java/com/newoether/agora/data/local/ChatDatabase.kt"
-          replace_once(db, '''    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
-              fun getMessageCountForConversation(conversationId: String): Flow<Int>
-          ''', '''    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
-              fun getMessageCountForConversation(conversationId: String): Flow<Int>
-
-              /** Complete tree snapshot for business operations. UI rendering remains windowed. */
+          sub(db,
+              r'(    fun getMessageCountForConversation\(conversationId: String\): Flow<Int>\n)',
+              r'''\1
+              /** Complete tree snapshot for business operations; UI rendering remains windowed. */
               @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
               suspend fun getAllMessagesForConversation(conversationId: String): List<MessageEntity>
           ''')
 
           repo = "app/src/main/java/com/newoether/agora/data/repository/ConversationRepository.kt"
-          replace_once(repo, '''    suspend fun getMessagesForConversationSnapshot(conversationId: String): List<MessageEntity> =
-              chatDao.getMessagesForConversation(conversationId).first()
-          ''', '''    /** Complete message tree used for parent/leaf resolution and mutations. */
+          sub(repo,
+              r'    suspend fun getMessagesForConversationSnapshot\(conversationId: String\): List<MessageEntity> =\n        chatDao\.getMessagesForConversation\(conversationId\)\.first\(\)',
+              '''    /** Complete tree used for parent/leaf resolution and mutations. */
               suspend fun getMessagesForConversationSnapshot(conversationId: String): List<MessageEntity> =
-                  chatDao.getAllMessagesForConversation(conversationId)
-          ''')
+                  chatDao.getAllMessagesForConversation(conversationId)''')
 
           Path(".github/workflows/apply-conversation-cross-talk-fix.yml").unlink()
       - name: Commit fixes
