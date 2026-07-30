@@ -1,9 +1,0 @@
-name: Apply separate public repository read
-
-on: [workflow_dispatch]
-
-jobs:
-  notice:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo retired

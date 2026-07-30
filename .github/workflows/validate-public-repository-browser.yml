@@ -1,9 +1,0 @@
-name: Validate public repository browser
-
-on: [workflow_dispatch]
-
-jobs:
-  notice:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo retired
