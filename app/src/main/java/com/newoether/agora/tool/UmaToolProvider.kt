@@ -4,6 +4,7 @@ import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.api.ToolFunction
 import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
+import com.newoether.agora.uma.UmaRuntimeState
 import com.newoether.agora.viewmodel.GenerationContext
 import java.net.HttpURLConnection
 import java.net.URLEncoder
@@ -16,19 +17,15 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Guarded tools for the hlpatch server injected into the foreground game process.
- *
- * This deliberately does not expose arbitrary URLs or paths. Runtime-wide class scans,
- * recursive dumps and raw sniff payloads are excluded: only small, targeted endpoints are
- * available and every response has a hard byte/character limit.
- */
+/** Guarded tools for the hlpatch server injected into the foreground game process. */
 class UmaToolProvider : ToolProvider {
     private val json = Json { ignoreUnknownKeys = true }
     private val base = "http://127.0.0.1:18765"
     private val names = setOf(
-        "uma_health", "uma_status", "uma_summary", "uma_event_choices",
-        "uma_event_observations", "uma_search_classes", "uma_get_fields",
-        "uma_get_methods", "uma_find_method"
+        "uma_health", "uma_status", "uma_summary", "uma_get_snapshot", "uma_get_changes",
+        "uma_event_choices", "uma_event_observations", "uma_hook_diagnostics",
+        "uma_event_reward_targets", "uma_ramen_transitions", "uma_search_classes",
+        "uma_get_fields", "uma_get_methods", "uma_find_method"
     )
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
@@ -38,9 +35,14 @@ class UmaToolProvider : ToolProvider {
             tool("uma_health", "Check the local hlpatch SO version and health.", emptyMap()),
             tool("uma_status", "Read the small local hlpatch initialization/status snapshot.", emptyMap()),
             tool("uma_summary", "Read the current bounded Uma training state from the local SO.", emptyMap()),
+            tool("uma_get_snapshot", "Read the last coherent summary captured by the Agora overlay monitor together with its structural change list.", emptyMap()),
+            tool("uma_get_changes", "Read only the compact structural changes detected between the last two captured summaries.", emptyMap()),
             tool("uma_event_choices", "Read the current event-choice snapshot.", emptyMap()),
             tool("uma_event_observations", "Read completed event observations after an observation id.", mapOf(
                 "after_id" to integer("Only return observations newer than this id; defaults to 0."))),
+            tool("uma_hook_diagnostics", "Read the bounded hlpatch hook diagnostic endpoint.", emptyMap()),
+            tool("uma_event_reward_targets", "Read the whitelisted event reward target diagnostics.", emptyMap()),
+            tool("uma_ramen_transitions", "Read the bounded recent Ramen transition observations. Use only for a Ramen investigation.", emptyMap()),
             tool("uma_search_classes", "Targeted IL2CPP class-name search. Never performs a full class scan.", mapOf(
                 "keyword" to string("Specific class-name keyword, 2-80 characters.")), listOf("keyword")),
             tool("uma_get_fields", "Read fields for one explicitly named IL2CPP class.", mapOf(
@@ -54,6 +56,8 @@ class UmaToolProvider : ToolProvider {
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
         if (name !in names) return error("Unknown Uma tool")
+        if (name == "uma_get_snapshot") return UmaRuntimeState.snapshotJson()
+        if (name == "uma_get_changes") return UmaRuntimeState.changesJson()
         val args = runCatching {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
         }.getOrElse { return error("Invalid tool arguments") }
@@ -73,6 +77,9 @@ class UmaToolProvider : ToolProvider {
                     val after = text("after_id").toLongOrNull()?.coerceAtLeast(0L) ?: 0L
                     "/api/event/observations?after_id=$after"
                 }
+                "uma_hook_diagnostics" -> "/debug/hookdiag"
+                "uma_event_reward_targets" -> "/debug/event_reward_targets"
+                "uma_ramen_transitions" -> "/debug/ramen_transition"
                 "uma_search_classes" -> "/classes/search/${safeSegment(text("keyword"), 2, 80, "keyword")}"
                 "uma_get_fields" -> "/fields/${safeSegment(text("class_name"), 1, 160, "class_name")}"
                 "uma_get_methods" -> "/methods/${safeSegment(text("class_name"), 1, 160, "class_name")}"
@@ -100,36 +107,20 @@ class UmaToolProvider : ToolProvider {
                 while (true) {
                     val count = it.read(chunk)
                     if (count < 0) break
-                    if (out.length + count > maxChars) {
-                        throw IllegalStateException("hlpatch response exceeded the safe ${maxChars / 1024} KiB limit")
-                    }
+                    if (out.length + count > maxChars) throw IllegalStateException(
+                        "hlpatch response exceeded the safe ${maxChars / 1024} KiB limit")
                     out.append(chunk, 0, count)
                 }
                 if (code !in 200..299) throw IllegalStateException("hlpatch HTTP $code: ${out.take(300)}")
                 out.toString()
             }
-        } finally {
-            connection.disconnect()
-        }
+        } finally { connection.disconnect() }
     }
 
-    private fun tool(
-        name: String,
-        description: String,
-        properties: Map<String, ToolProperty>,
-        required: List<String> = emptyList(),
-    ) = ToolDefinition(
-        function = ToolFunction(
-            name = name,
-            description = description,
-            parameters = ToolParameters(properties = properties, required = required),
-        )
-    )
+    private fun tool(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String> = emptyList()) =
+        ToolDefinition(function = ToolFunction(name = name, description = description,
+            parameters = ToolParameters(properties = properties, required = required)))
 
-    private fun error(message: String) = buildJsonObject {
-        put("ok", false)
-        put("error", message)
-    }.toString()
-
+    private fun error(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
     override fun handles(name: String): Boolean = name in names
 }
