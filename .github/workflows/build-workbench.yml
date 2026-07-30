@@ -53,38 +53,44 @@ jobs:
           test -s signing.env
           source signing.env
 
-          # `keytool -list` only checks the store password. AGP must also decrypt the
-          # private key, whose password can differ. Validate that now by exporting the
-          # alias to a temporary PKCS12 store, and tolerate old keys that use the store
-          # password for both layers.
           keytool -list -keystore workbench-upload.jks \
             -storepass "$KEYSTORE_PASSWORD" -alias workbench
-          validate_key_password() {
+
+          # Export the private key into a fresh PKCS12 store with a known simple
+          # password. Gradle signs with this normalized temporary store instead of
+          # reopening the legacy JKS, avoiding JKS provider/password compatibility
+          # problems and local.properties escaping of the original passwords.
+          normalized_store="$signing_dir/workbench-normalized.p12"
+          normalized_password='agora-ci-normalized-2026'
+          normalize_key() {
             local candidate="$1"
-            rm -f key-password-check.p12
+            rm -f "$normalized_store"
             keytool -importkeystore -noprompt \
-              -srckeystore workbench-upload.jks -srcstorepass "$KEYSTORE_PASSWORD" \
-              -srcalias workbench -srckeypass "$candidate" \
-              -destkeystore key-password-check.p12 -deststoretype PKCS12 \
-              -deststorepass 'temporary-check-password' \
-              -destkeypass 'temporary-check-password' >/dev/null 2>&1
+              -srckeystore workbench-upload.jks \
+              -srcstorepass "$KEYSTORE_PASSWORD" \
+              -srcalias workbench \
+              -srckeypass "$candidate" \
+              -destkeystore "$normalized_store" \
+              -deststoretype PKCS12 \
+              -deststorepass "$normalized_password" \
+              -destkeypass "$normalized_password" >/dev/null 2>&1
+            keytool -list -keystore "$normalized_store" \
+              -storepass "$normalized_password" -alias workbench >/dev/null
           }
-          if validate_key_password "$KEY_PASSWORD"; then
-            effective_key_password="$KEY_PASSWORD"
-            echo 'Private-key password validated from KEY_PASSWORD.'
-          elif validate_key_password "$KEYSTORE_PASSWORD"; then
-            effective_key_password="$KEYSTORE_PASSWORD"
-            echo 'KEY_PASSWORD was stale; using the validated store password for the private key.'
+          if normalize_key "$KEY_PASSWORD"; then
+            echo 'Private key normalized using KEY_PASSWORD.'
+          elif normalize_key "$KEYSTORE_PASSWORD"; then
+            echo 'Private key normalized using KEYSTORE_PASSWORD.'
           else
-            echo 'Neither KEY_PASSWORD nor KEYSTORE_PASSWORD can decrypt alias workbench.' >&2
+            echo 'Unable to decrypt and normalize private key alias workbench.' >&2
             exit 1
           fi
-          rm -f key-password-check.p12
+
           {
-            echo "storeFile=$signing_dir/workbench-upload.jks"
-            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "storeFile=$normalized_store"
+            echo "storePassword=$normalized_password"
             echo "keyAlias=workbench"
-            echo "keyPassword=$effective_key_password"
+            echo "keyPassword=$normalized_password"
           } > "$GITHUB_WORKSPACE/local.properties"
 
       - name: Diagnose proot build
