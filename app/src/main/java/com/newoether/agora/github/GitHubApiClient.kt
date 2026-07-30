@@ -56,14 +56,13 @@ class GitHubApiClient(context: Context) {
         return branch
     }
 
-    /** GitHub Contents API returns JsonObject for a file and JsonArray for a directory. */
     suspend fun readContent(repo: String, path: String, ref: String): JsonElement {
-        val response = request("GET", "/repos/$repo/contents/${encodePath(path)}?ref=${encodeSegment(ref)}")
+        val suffix = encodePath(path).let { if (it.isEmpty()) "" else "/$it" }
+        val response = request("GET", "/repos/$repo/contents$suffix?ref=${encodeSegment(ref)}")
         requireSuccess(response)
         return json.parseToJsonElement(response.body)
     }
 
-    /** Compatibility helper for callers that explicitly require a single file. */
     suspend fun readFile(repo: String, path: String, ref: String): JsonObject =
         readContent(repo, path, ref) as? JsonObject ?: error("Expected a GitHub file response, but path is a directory")
 
@@ -77,13 +76,24 @@ class GitHubApiClient(context: Context) {
         return json.parseToJsonElement(response.body).jsonObject.getValue("commit").jsonObject.getValue("sha").jsonPrimitive.content
     }
 
-    private fun requireSuccess(response: GitHubApiResponse) {
+    suspend fun deleteFile(repo: String, path: String, branch: String, message: String): String {
+        val existing = request("GET", "/repos/$repo/contents/${encodePath(path)}?ref=${encodeSegment(branch)}")
+        requireSuccess(existing)
+        val sha = json.parseToJsonElement(existing.body).jsonObject.getValue("sha").jsonPrimitive.content
+        val response = request("DELETE", "/repos/$repo/contents/${encodePath(path)}", buildJsonObject {
+            put("message", message); put("sha", sha); put("branch", branch)
+        })
+        requireSuccess(response)
+        return json.parseToJsonElement(response.body).jsonObject.getValue("commit").jsonObject.getValue("sha").jsonPrimitive.content
+    }
+
+    fun requireSuccess(response: GitHubApiResponse) {
         if (response.code !in 200..299) {
             val message = runCatching { json.parseToJsonElement(response.body).jsonObject["message"]?.jsonPrimitive?.content }.getOrNull() ?: "GitHub API error"
             error("$message (HTTP ${response.code})")
         }
     }
 
-    private fun encodeSegment(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
-    private fun encodePath(value: String): String = value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { encodeSegment(it) }
+    fun encodeSegment(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    fun encodePath(value: String): String = value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { encodeSegment(it) }
 }
