@@ -1,0 +1,4 @@
+ndk=success
+signing=success
+proot=success
+gradle=failure

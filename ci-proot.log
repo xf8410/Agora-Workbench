@@ -1,0 +1,244 @@
+=== build-proot.sh: NDK=/usr/local/lib/android/sdk/ndk/27.3.13750724 ===
+  (first build, no hash file)
+=== build-proot.sh: Building proot binaries ===
+  [1/4] Building libtalloc.so...
+talloc.c:436:2: warning: "No __attribute__((constructor)) support found on this platform, additional talloc security measures not available" [-W#warnings]
+  436 | #warning "No __attribute__((constructor)) support found on this platform, additional talloc security measures not available"
+      |  ^
+talloc.c:2582:9: warning: 'va_copy' macro redefined [-Wmacro-redefined]
+ 2582 | #define va_copy(dest, src) (dest) = (src)
+      |         ^
+/usr/local/lib/android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/18/include/__stdarg_va_copy.h:11:9: note: previous definition is here
+   11 | #define va_copy(dest, src) __builtin_va_copy(dest, src)
+      |         ^
+2 warnings generated.
+  [1/4] Done: 41608 bytes
+  [2/4] Building proot (GNUmakefile)...
+  GEN	build.h
+  CC	cli/cli.o
+./cli/cli.c:572:14: warning: unused variable 'pointers' [-Wunused-variable]
+  572 |         void *const pointers[] = { this_function, call_site };
+      |                     ^~~~~~~~
+1 warning generated.
+  CC	cli/proot.o
+  CC	cli/note.o
+  CC	execve/enter.o
+  CC	execve/exit.o
+  CC	execve/shebang.o
+  CC	execve/elf.o
+  CC	execve/ldso.o
+./execve/ldso.c:108:8: warning: variable 'is_known' set but not used [-Wunused-but-set-variable]
+  108 |                 bool is_known = false;
+      |                      ^
+1 warning generated.
+  CC	execve/auxv.o
+  CC	execve/aoxp.o
+  CC	path/binding.o
+  CC	path/glue.o
+./path/glue.c:76:14: warning: 'talloc_autofree_context' is deprecated [-Wdeprecated-declarations]
+   76 |         autofreed = talloc_autofree_context();
+      |                     ^
+/home/runner/work/Agora-Workbench/Agora-Workbench/.build-proot/sysroot/arm64-v8a/include/talloc.h:1084:46: note: 'talloc_autofree_context' has been explicitly marked deprecated here
+ 1084 | _PUBLIC_ void *talloc_autofree_context(void) _DEPRECATED_;
+      |                                              ^
+/home/runner/work/Agora-Workbench/Agora-Workbench/.build-proot/sysroot/arm64-v8a/include/talloc.h:119:38: note: expanded from macro '_DEPRECATED_'
+  119 | #define _DEPRECATED_ __attribute__ ((deprecated))
+      |                                      ^
+1 warning generated.
+  CC	path/canon.o
+  CC	path/f2fs-bug.o
+  CC	path/path.o
+  CC	path/proc.o
+  CC	path/temp.o
+./path/temp.c:37:33: warning: 'talloc_autofree_context' is deprecated [-Wdeprecated-declarations]
+   37 |         temp_directory = talloc_strdup(talloc_autofree_context(), tmp);
+      |                                        ^
+/home/runner/work/Agora-Workbench/Agora-Workbench/.build-proot/sysroot/arm64-v8a/include/talloc.h:1084:46: note: 'talloc_autofree_context' has been explicitly marked deprecated here
+ 1084 | _PUBLIC_ void *talloc_autofree_context(void) _DEPRECATED_;
+      |                                              ^
+/home/runner/work/Agora-Workbench/Agora-Workbench/.build-proot/sysroot/arm64-v8a/include/talloc.h:119:38: note: expanded from macro '_DEPRECATED_'
+  119 | #define _DEPRECATED_ __attribute__ ((deprecated))
+      |                                      ^
+./path/temp.c:273:13: warning: 'talloc_autofree_context' is deprecated [-Wdeprecated-declarations]
+  273 |                 context = talloc_autofree_context();
+      |                           ^
+/home/runner/work/Agora-Workbench/Agora-Workbench/.build-proot/sysroot/arm64-v8a/include/talloc.h:1084:46: note: 'talloc_autofree_context' has been explicitly marked deprecated here
+ 1084 | _PUBLIC_ void *talloc_autofree_context(void) _DEPRECATED_;
+      |                                              ^
+/home/runner/work/Agora-Workbench/Agora-Workbench/.build-proot/sysroot/arm64-v8a/include/talloc.h:119:38: note: expanded from macro '_DEPRECATED_'
+  119 | #define _DEPRECATED_ __attribute__ ((deprecated))
+      |                                      ^
+2 warnings generated.
+  CC	syscall/seccomp.o
+  CC	syscall/syscall.o
+  CC	syscall/chain.o
+  CC	syscall/enter.o
+  CC	syscall/exit.o
+  CC	syscall/sysnum.o
+  CC	syscall/socket.o
+./syscall/socket.c:123:10: warning: 'mktemp' is deprecated: mktemp is unsafe, use mkstemp or tmpfile instead [-Wdeprecated-declarations]
+  123 |                 (void) mktemp(shorter_host_path);
+      |                        ^
+/usr/local/lib/android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin/../sysroot/usr/include/stdlib.h:60:66: note: 'mktemp' has been explicitly marked deprecated here
+   60 | char* _Nullable mktemp(char* _Nonnull __template) __attribute__((__deprecated__("mktemp is unsafe, use mkstemp or tmpfile instead")));
+      |                                                                  ^
+1 warning generated.
+  CC	syscall/heap.o
+  CC	syscall/rlimit.o
+  CC	tracee/tracee.o
+  CC	tracee/mem.o
+  CC	tracee/reg.o
+  CC	tracee/event.o
+./tracee/event.c:699:95: warning: comparison of integers of different signs: 'int' and 'word_t' (aka 'unsigned long') [-Wsign-compare]
+  699 |                                 if (tracee->skip_next_seccomp_signal || (seccomp_after_ptrace_enter && siginfo.si_syscall == SYSCALL_AVOIDER)) {
+      |                                                                                                        ~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~
+1 warning generated.
+  CC	tracee/seccomp.o
+./tracee/seccomp.c:296:7: warning: variable 'status' set but not used [-Wunused-but-set-variable]
+  296 |                 int status;
+      |                     ^
+./tracee/seccomp.c:604:29: warning: comparison of integers of different signs: 'gid_t' (aka 'unsigned int') and 'int' [-Wsign-compare]
+  604 |                 if (rxid != rxid_ && rxid != -1)
+      |                                      ~~~~ ^  ~~
+./tracee/seccomp.c:606:29: warning: comparison of integers of different signs: 'gid_t' (aka 'unsigned int') and 'int' [-Wsign-compare]
+  606 |                 if (exid != exid_ && exid != -1)
+      |                                      ~~~~ ^  ~~
+./tracee/seccomp.c:608:29: warning: comparison of integers of different signs: 'gid_t' (aka 'unsigned int') and 'int' [-Wsign-compare]
+  608 |                 if (sxid != sxid_ && sxid != -1)
+      |                                      ~~~~ ^  ~~
+./tracee/seccomp.c:597:12: warning: variable 'ret' is used uninitialized whenever 'if' condition is false [-Wsometimes-uninitialized]
+  597 |                 else if (sysnum == PR_setresgid)
+      |                          ^~~~~~~~~~~~~~~~~~~~~~
+./tracee/seccomp.c:599:7: note: uninitialized use occurs here
+  599 |                 if (ret) {  // EFAULT = address outside address space
+      |                     ^~~
+./tracee/seccomp.c:597:8: note: remove the 'if' if its condition is always true
+  597 |                 else if (sysnum == PR_setresgid)
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+  598 |                         ret = getresgid(&rxid_, &exid_, &sxid_);
+./tracee/seccomp.c:120:9: note: initialize the variable 'ret' to silence this warning
+  120 |         int ret;
+      |                ^
+      |                 = 0
+5 warnings generated.
+  CC	tracee/statx.o
+  CC	ptrace/ptrace.o
+  CC	ptrace/user.o
+  CC	ptrace/wait.o
+  CC	extension/extension.o
+  CC	extension/ashmem_memfd/ashmem_memfd.o
+./extension/ashmem_memfd/ashmem_memfd.c:171:96: warning: unused parameter 'data2' [-Wunused-parameter]
+  171 | int ashmem_memfd_callback(Extension *extension, ExtensionEvent event, intptr_t data1, intptr_t data2)
+      |                                                                                                ^
+1 warning generated.
+  CC	extension/kompat/kompat.o
+  CC	extension/fake_id0/chown.o
+  CC	extension/fake_id0/chroot.o
+./extension/fake_id0/chroot.c:54:2: warning: ignoring return value of function declared with 'warn_unused_result' attribute [-Wunused-result]
+   54 |         realpath(path, path_host_absolute);
+      |         ^~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+  CC	extension/fake_id0/getsockopt.o
+  CC	extension/fake_id0/sendmsg.o
+  CC	extension/fake_id0/socket.o
+  CC	extension/fake_id0/open.o
+  CC	extension/fake_id0/unlink.o
+  CC	extension/fake_id0/rename.o
+  CC	extension/fake_id0/chmod.o
+  CC	extension/fake_id0/utimensat.o
+  CC	extension/fake_id0/access.o
+  CC	extension/fake_id0/exec.o
+  CC	extension/fake_id0/link.o
+  CC	extension/fake_id0/symlink.o
+  CC	extension/fake_id0/mk.o
+  CC	extension/fake_id0/stat.o
+  CC	extension/fake_id0/helper_functions.o
+./extension/fake_id0/helper_functions.c:185:3: warning: misleading indentation; statement is not part of the previous 'else' [-Wmisleading-indentation]
+  185 |                 emulated_gid = config->egid;
+      |                 ^
+./extension/fake_id0/helper_functions.c:183:2: note: previous statement is here
+  183 |         else
+      |         ^
+1 warning generated.
+  CC	extension/fake_id0/fake_id0.o
+  CC	extension/hidden_files/hidden_files.o
+  CC	extension/mountinfo/mountinfo.o
+  CC	extension/port_switch/port_switch.o
+./extension/port_switch/port_switch.c:174:100: warning: sizeof on array function parameter will return size of 'long *' instead of 'long[]' [-Wsizeof-array-argument]
+  174 |                     write_data(tracee, peek_reg(tracee, CURRENT, SYSARG_2), socketcall_arg2, sizeof(socketcall_arg2));
+      |                                                                                                    ^
+./extension/port_switch/port_switch.c:145:121: note: declared here
+  145 | void mod_port(Tracee *tracee, bool is_socketcall, bool is_bind, bool is_udp, struct sockaddr_storage *my_sockaddr, long socketcall_arg2[]) {   
+      |                                                                                                                         ^
+./extension/port_switch/port_switch.c:182:100: warning: sizeof on array function parameter will return size of 'long *' instead of 'long[]' [-Wsizeof-array-argument]
+  182 |                     write_data(tracee, peek_reg(tracee, CURRENT, SYSARG_2), socketcall_arg2, sizeof(socketcall_arg2));
+      |                                                                                                    ^
+./extension/port_switch/port_switch.c:145:121: note: declared here
+  145 | void mod_port(Tracee *tracee, bool is_socketcall, bool is_bind, bool is_udp, struct sockaddr_storage *my_sockaddr, long socketcall_arg2[]) {   
+      |                                                                                                                         ^
+./extension/port_switch/port_switch.c:204:100: warning: sizeof on array function parameter will return size of 'long *' instead of 'long[]' [-Wsizeof-array-argument]
+  204 |                     write_data(tracee, peek_reg(tracee, CURRENT, SYSARG_2), socketcall_arg2, sizeof(socketcall_arg2));
+      |                                                                                                    ^
+./extension/port_switch/port_switch.c:145:121: note: declared here
+  145 | void mod_port(Tracee *tracee, bool is_socketcall, bool is_bind, bool is_udp, struct sockaddr_storage *my_sockaddr, long socketcall_arg2[]) {   
+      |                                                                                                                         ^
+./extension/port_switch/port_switch.c:212:100: warning: sizeof on array function parameter will return size of 'long *' instead of 'long[]' [-Wsizeof-array-argument]
+  212 |                     write_data(tracee, peek_reg(tracee, CURRENT, SYSARG_2), socketcall_arg2, sizeof(socketcall_arg2));
+      |                                                                                                    ^
+./extension/port_switch/port_switch.c:145:121: note: declared here
+  145 | void mod_port(Tracee *tracee, bool is_socketcall, bool is_bind, bool is_udp, struct sockaddr_storage *my_sockaddr, long socketcall_arg2[]) {   
+      |                                                                                                                         ^
+4 warnings generated.
+  CC	extension/sysvipc/sysvipc.o
+  CC	extension/sysvipc/sysvipc_msg.o
+  CC	extension/sysvipc/sysvipc_sem.o
+  CC	extension/sysvipc/sysvipc_shm.o
+./extension/sysvipc/sysvipc_shm.c:814:10: warning: 'mktemp' is deprecated: mktemp is unsafe, use mkstemp or tmpfile instead [-Wdeprecated-declarations]
+  814 |                 (void) mktemp(path);
+      |                        ^
+/usr/local/lib/android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin/../sysroot/usr/include/stdlib.h:60:66: note: 'mktemp' has been explicitly marked deprecated here
+   60 | char* _Nullable mktemp(char* _Nonnull __template) __attribute__((__deprecated__("mktemp is unsafe, use mkstemp or tmpfile instead")));
+      |                                                                  ^
+1 warning generated.
+  CC	extension/link2symlink/link2symlink.o
+  CC	extension/fix_symlink_size/fix_symlink_size.o
+  CC	loader/loader.o
+./loader/loader.c:253:5: warning: inline asm clobber list contains reserved registers: SP [-Winline-asm]
+  253 |                                 BRANCH(stmt->start.stack_pointer, stmt->start.entry_point);
+      |                                 ^
+./loader/assembly-arm64.h:32:3: note: expanded from macro 'BRANCH'
+   32 |                 "// Restore initial stack pointer.      \n\t"   \
+      |                 ^
+./loader/loader.c:253:5: note: Reserved registers on the clobber list may not be preserved across the asm statement, and clobbering them may lead to undefined behaviour.
+./loader/assembly-arm64.h:32:3: note: expanded from macro 'BRANCH'
+   32 |                 "// Restore initial stack pointer.      \n\t"   \
+      |                 ^
+1 warning generated.
+  CC	loader/assembly.o
+  LD	loader/loader
+readelf -s loader/loader | awk -f loader/loader-info.awk > loader/loader-info.c
+  CC	loader/loader-info.o
+  CC	loader/loader-m32.o
+./loader/loader.c:253:5: warning: inline asm clobber list contains reserved registers: SP, PC [-Winline-asm]
+  253 |                                 BRANCH(stmt->start.stack_pointer, stmt->start.entry_point);
+      |                                 ^
+./loader/assembly-arm.h:32:3: note: expanded from macro 'BRANCH'
+   32 |                 "// Restore initial stack pointer.      \n\t"   \
+      |                 ^
+./loader/loader.c:253:5: note: Reserved registers on the clobber list may not be preserved across the asm statement, and clobbering them may lead to undefined behaviour.
+./loader/assembly-arm.h:32:3: note: expanded from macro 'BRANCH'
+   32 |                 "// Restore initial stack pointer.      \n\t"   \
+      |                 ^
+1 warning generated.
+  CC	loader/assembly-m32.o
+  LD	loader/loader-m32
+  LD	proot
+rm .check_seccomp_filter.o .check_process_vm.o .check_seccomp_filter .check_process_vm
+  [2/4] Done: 260320 bytes
+  [3/4] Stripping and deploying...
+  [3/4] Binaries deployed:
+    228064 bytes  libproot_exec.so
+    6008 bytes  libproot_loader.so
+    35208 bytes  libtalloc.so
+  [4/4] Syncing to fdroid jniLibs...
+=== build-proot.sh: Complete ===
