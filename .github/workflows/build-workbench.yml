@@ -36,76 +36,25 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
 
-      - name: Restore or create the persistent Workbench signing key
-        id: signing
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        shell: bash
+      - name: Use ephemeral CI signing
         run: |
-          set -euo pipefail
-          signing_dir="$RUNNER_TEMP/workbench-signing"
-          mkdir -p "$signing_dir"
-          cd "$signing_dir"
-
-          # Keep one private upload key as assets on a dedicated prerelease. Unlike the
-          # runner's ~/.android/debug.keystore, these assets survive runner replacement.
-          if gh release view workbench-signing-key --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release download workbench-signing-key --repo "$REPOSITORY" \
-              --pattern 'workbench-upload.jks' --pattern 'signing.env' --dir .
-          else
-            store_password="$(openssl rand -hex 24)"
-            key_password="$(openssl rand -hex 24)"
-            keytool -genkeypair -v \
-              -keystore workbench-upload.jks \
-              -storepass "$store_password" \
-              -alias workbench \
-              -keypass "$key_password" \
-              -keyalg RSA -keysize 4096 -validity 10000 \
-              -dname 'CN=Agora Workbench, OU=Workbench, O=Agora Workbench, L=Unknown, ST=Unknown, C=US'
-            {
-              echo "KEYSTORE_PASSWORD=$store_password"
-              echo "KEY_PASSWORD=$key_password"
-            } > signing.env
-            chmod 600 workbench-upload.jks signing.env
-            gh release create workbench-signing-key \
-              workbench-upload.jks signing.env \
-              --repo "$REPOSITORY" \
-              --title 'Agora Workbench signing key (CI internal)' \
-              --notes 'Persistent CI upload key. Do not delete: deleting it breaks APK upgrade compatibility.' \
-              --prerelease
-          fi
-
-          test -s workbench-upload.jks
-          test -s signing.env
-          source signing.env
-          test -n "$KEYSTORE_PASSWORD"
-          test -n "$KEY_PASSWORD"
-          keytool -list -keystore workbench-upload.jks -storepass "$KEYSTORE_PASSWORD" -alias workbench >/dev/null
-
-          {
-            echo "storeFile=$signing_dir/workbench-upload.jks"
-            echo "storePassword=$KEYSTORE_PASSWORD"
-            echo "keyAlias=workbench"
-            echo "keyPassword=$KEY_PASSWORD"
-          } > "$GITHUB_WORKSPACE/local.properties"
-
-          cert_sha256="$(keytool -list -v -keystore workbench-upload.jks \
-            -storepass "$KEYSTORE_PASSWORD" -alias workbench | \
-            sed -n 's/.*SHA256: //p' | head -n1)"
-          echo "cert_sha256=$cert_sha256" >> "$GITHUB_OUTPUT"
+          # With no release keystore in local.properties, app/build.gradle.kts uses
+          # Android's runner-local debug key for the release APK.
+          rm -f local.properties
+          echo 'Using ephemeral debug signing. Uninstall an older build before installing this APK.'
 
       - name: Build proot native binaries
         run: bash build-proot.sh
 
-      - name: Test and build signed release APK
+      - name: Test and build installable release APK
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidRelease
+          ./gradlew --no-daemon --stacktrace \
+            testFdroidDebugUnitTest assembleFdroidRelease
 
-      - name: Prepare rolling release files
+      - name: Prepare release files
         id: package
         shell: bash
         run: |
@@ -118,14 +67,15 @@ jobs:
           version="$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Verify APK signature
+      - name: Verify APK signature and installability
         shell: bash
         run: |
           set -euo pipefail
-          apksigner verify --verbose --print-certs dist/Agora-Workbench-latest.apk | tee dist/signature.txt
-          grep -F '${{ steps.signing.outputs.cert_sha256 }}' dist/signature.txt >/dev/null
+          build_tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$build_tools/apksigner" verify --verbose --print-certs \
+            dist/Agora-Workbench-latest.apk | tee dist/signature.txt
 
-      - name: Upload signed APK artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Agora-Workbench-fdroid-release
@@ -136,28 +86,27 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Create or update the rolling latest release
+      - name: Create or update rolling latest release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.sha }}
           VERSION: ${{ steps.package.outputs.version }}
-          CERT_SHA256: ${{ steps.signing.outputs.cert_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
           tag='workbench-latest'
           notes_file="$(mktemp)"
           cat > "$notes_file" <<EOF
-          Latest successful, stably signed Agora Workbench APK built from main.
+          Latest successful Agora Workbench APK built from main.
 
           Version: $VERSION
           Commit: $HEAD_SHA
-          Signing certificate SHA-256: $CERT_SHA256
           Actions run: https://github.com/$REPOSITORY/actions/runs/$GITHUB_RUN_ID
 
-          Download **Agora-Workbench-latest.apk** below. The asset is replaced after every successful main build.
+          This recovery build uses ephemeral CI/debug signing. Uninstall any older
+          Agora Workbench installation before installing this APK.
           Package: com.newoether.agora.workbench
           EOF
 
