@@ -361,11 +361,11 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 > Task :app:compileFdroidReleaseArtProfile SKIPPED
 > Task :app:processFdroidReleaseJavaRes
 > Task :app:mergeFdroidReleaseJavaResource
-> Task :app:lintVitalAnalyzeFdroidRelease
 > Task :app:optimizeFdroidReleaseResources
 > Task :app:validateSigningFdroidRelease
 > Task :app:writeFdroidReleaseAppMetadata
 > Task :app:writeFdroidReleaseSigningConfigVersions
+> Task :app:lintVitalAnalyzeFdroidRelease
 > Task :app:lintVitalReportFdroidRelease
 > Task :app:lintVitalFdroidRelease
 > Task :app:packageFdroidRelease FAILED
@@ -606,5 +606,5 @@ Caused by: javax.crypto.BadPaddingException: Given final block not properly padd
 	... 39 more
 
 
-BUILD FAILED in 13m 40s
+BUILD FAILED in 10m 37s
 79 actionable tasks: 79 executed
