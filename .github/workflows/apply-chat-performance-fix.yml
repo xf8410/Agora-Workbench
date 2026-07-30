@@ -1,0 +1,261 @@
+name: Apply chat history performance fix
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch chat loading and large JSON rendering
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          def one(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s:
+                  if new in s: return
+                  raise SystemExit(f'marker mismatch: {path}: {old[:100]!r}')
+              if s.count(old)!=1: raise SystemExit(f'non-unique marker: {path}')
+              p.write_text(s.replace(old,new))
+
+          db='app/src/main/java/com/newoether/agora/data/local/ChatDatabase.kt'
+          one(db,'@Entity(\n    tableName = "messages",\n    indices = [Index(value = ["conversationId"])],','@Entity(\n    tableName = "messages",\n    indices = [\n        Index(value = ["conversationId"]),\n        Index(value = ["conversationId", "timestamp"]),\n    ],')
+          one(db,'    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")\n    fun getMessageCountForConversation(conversationId: String): Flow<Int>\n','''    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
+    fun getMessageCountForConversation(conversationId: String): Flow<Int>
+
+    /** Marks abandoned generation rows without loading large message bodies. */
+    @Query("""
+        UPDATE messages SET status = 'STOPPED'
+        WHERE conversationId = :conversationId
+          AND status IN ('SENDING', 'THINKING', 'TOOL_CALLING', 'TRANSCRIBING')
+    """)
+    suspend fun stopStuckMessages(conversationId: String)
+''')
+          one(db,'        const val CURRENT_VERSION = 15','        const val CURRENT_VERSION = 16')
+          one(db,'''            object : Migration(14, 15) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN draftText TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN draftAttachments TEXT")
+                }
+            }
+''','''            object : Migration(14, 15) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN draftText TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE conversations ADD COLUMN draftAttachments TEXT")
+                }
+            },
+            object : Migration(15, 16) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationId_timestamp ON messages (conversationId, timestamp)")
+                }
+            }
+''')
+          repo='app/src/main/java/com/newoether/agora/data/repository/ConversationRepository.kt'
+          one(repo,'''    suspend fun fixStuckMessages(conversationId: String) {
+        val stuckMessages = chatDao.getMessagesForConversation(conversationId).first()
+            .filter {
+                it.status == MessageStatus.SENDING ||
+                it.status == MessageStatus.THINKING ||
+                it.status == MessageStatus.TOOL_CALLING ||
+                it.status == MessageStatus.TRANSCRIBING
+            }
+        stuckMessages.forEach { msg ->
+            chatDao.upsertMessage(msg.copy(status = MessageStatus.STOPPED))
+        }
+    }
+''','''    suspend fun fixStuckMessages(conversationId: String) {
+        chatDao.stopStuckMessages(conversationId)
+    }
+''')
+          vm='app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt'
+          one(vm,'        private const val INITIAL_MESSAGE_WINDOW = 100\n        private const val MESSAGE_WINDOW_STEP = 100','        private const val INITIAL_MESSAGE_WINDOW = 40\n        private const val MESSAGE_WINDOW_STEP = 40')
+          one(vm,'''                        if (!state.generating.value) {
+                            val stuckMessages = convRepo.getMessagesForConversation(id).first()
+                                .filter { it.status == MessageStatus.SENDING || it.status == MessageStatus.THINKING || it.status == MessageStatus.TOOL_CALLING || it.status == MessageStatus.TRANSCRIBING }
+
+                            stuckMessages.forEach { msg ->
+                                convRepo.upsertMessage(msg.copy(status = MessageStatus.STOPPED))
+                            }
+                        }
+''','''                        if (!state.generating.value) {
+                            convRepo.fixStuckMessages(id)
+                        }
+''')
+          old='''                            val mapped = entities.map {
+                                ChatMessage(
+                                    id = it.id,
+                                    parentId = it.parentId,
+                                    text = SearchResultFormatter.format(it.text, appContext),
+                                    images = it.images,
+                                    thoughts = it.thoughts,
+                                    thoughtTitle = it.thoughtTitle,
+                                    tokenCount = it.tokenCount,
+                                    status = it.status,
+                                    participant = it.participant,
+                                    timestamp = it.timestamp,
+                                    thoughtTimeMs = it.thoughtTimeMs,
+                                    modelName = it.modelName,
+                                    segments = it.toolCallJson?.let { json ->
+                                        try { Json.decodeFromString<List<MessageSegment>>(json) } catch (_: Exception) { null }
+                                    } ?: it.thoughts?.takeIf { t -> t.isNotBlank() }?.let { listOf(MessageSegment(type = "thought", content = it)) },
+                                    toolCall = it.toolCallJson?.let { json ->
+                                        try {
+                                            val segs = Json.decodeFromString<List<MessageSegment>>(json)
+                                            segs.lastOrNull { s -> s.type == "tool" }?.let { s ->
+                                                val rawResult = s.toolResult ?: ""
+                                                ToolCallData(s.toolName ?: "", s.toolArgs ?: "{}", SearchResultFormatter.format(rawResult, appContext))
+                                            }
+                                        } catch (_: Exception) { null }
+                                    },
+                                    attachmentMeta = it.attachmentMeta?.let { json ->
+                                        try { Json.decodeFromString<AttachmentMeta>(json) } catch (_: Exception) { null }
+                                    }
+                                )
+                            }
+                            // Backfill toolCall for old result_ messages persisted without toolCallJson.
+                            // They inherit the parent tool_ message's ToolCallData so the provider can
+                            // format them as proper "tool" role messages with matching tool_call_id.
+                            _allMessages.value = mapped.map { msg ->
+                                if (msg.id.startsWith(Constants.RESULT_MSG_PREFIX) && msg.toolCall == null) {
+                                    val parentTool = mapped.find { it.id == msg.parentId }
+                                    if (parentTool != null && parentTool.toolCall != null) {
+                                        msg.copy(toolCall = parentTool.toolCall)
+                                    } else msg
+                                } else msg
+                            }
+'''
+          new='''                            val mapped = withContext(Dispatchers.Default) {
+                                entities.map { entity ->
+                                    val decodedSegments = entity.toolCallJson?.let { json ->
+                                        try { Json.decodeFromString<List<MessageSegment>>(json) } catch (_: Exception) { null }
+                                    }
+                                    ChatMessage(
+                                        id = entity.id, parentId = entity.parentId,
+                                        text = SearchResultFormatter.format(entity.text, appContext), images = entity.images,
+                                        thoughts = entity.thoughts, thoughtTitle = entity.thoughtTitle,
+                                        tokenCount = entity.tokenCount, status = entity.status,
+                                        participant = entity.participant, timestamp = entity.timestamp,
+                                        thoughtTimeMs = entity.thoughtTimeMs, modelName = entity.modelName,
+                                        segments = decodedSegments ?: entity.thoughts?.takeIf { it.isNotBlank() }?.let { listOf(MessageSegment(type = "thought", content = it)) },
+                                        toolCall = decodedSegments?.lastOrNull { it.type == "tool" }?.let { segment ->
+                                            ToolCallData(segment.toolName.orEmpty(), segment.toolArgs ?: "{}", SearchResultFormatter.format(segment.toolResult.orEmpty(), appContext))
+                                        },
+                                        attachmentMeta = entity.attachmentMeta?.let { json ->
+                                            try { Json.decodeFromString<AttachmentMeta>(json) } catch (_: Exception) { null }
+                                        }
+                                    )
+                                }
+                            }
+                            val mappedById = mapped.associateBy { it.id }
+                            _allMessages.value = mapped.map { msg ->
+                                if (msg.id.startsWith(Constants.RESULT_MSG_PREFIX) && msg.toolCall == null)
+                                    mappedById[msg.parentId]?.toolCall?.let { msg.copy(toolCall = it) } ?: msg
+                                else msg
+                            }
+'''
+          one(vm,old,new)
+          one(vm,'''        switchingJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS) // Allow overlay to fade in
+            _isNewChatMode.value = false
+            _branchSwitchTrigger.value = null
+            messageWindowSize.value = INITIAL_MESSAGE_WINDOW
+            _currentConversationId.value = id
+            val conversation = convRepo.getConversation(id)
+            _currentActiveModel.value = conversation?.modelId
+            triggerScrollToMessage()
+        }
+''','''        _isNewChatMode.value = false
+        _branchSwitchTrigger.value = null
+        messageWindowSize.value = INITIAL_MESSAGE_WINDOW
+        _currentConversationId.value = id
+        switchingJob = viewModelScope.launch {
+            val conversation = convRepo.getConversation(id)
+            _currentActiveModel.value = conversation?.modelId
+            triggerScrollToMessage()
+        }
+''')
+          chat='app/src/main/java/com/newoether/agora/ui/chat/ChatApp.kt'
+          one(chat,'                            delay(500)\n                            this@withTimeout.cancel()','                            delay(32)\n                            this@withTimeout.cancel()')
+          ml='app/src/main/java/com/newoether/agora/ui/chat/MessageList.kt'
+          one(ml,'''    val currentPath = messages.list.filter { it.participant != Participant.ERROR }
+    val contextStartIndex = if (currentPath.size > maxContextWindow) currentPath.size - maxContextWindow else 0
+    val inContextIds = currentPath.drop(contextStartIndex).map { it.id }.toSet()
+
+    val lastUserMessageIndex = messages.list.indexOfLast { it.participant == Participant.USER }
+''','''    val inContextIds = remember(messages, maxContextWindow) {
+        messages.list.filter { it.participant != Participant.ERROR }
+            .takeLast(maxContextWindow.coerceAtLeast(0)).mapTo(HashSet()) { it.id }
+    }
+    val lastUserMessageIndex = remember(messages) {
+        messages.list.indexOfLast { it.participant == Participant.USER }
+    }
+''')
+          safe='app/src/main/java/com/newoether/agora/ui/chat/message/RecomposeSafeMarkdown.kt'
+          one(safe,'''    render: @Composable (text: String) -> Unit
+) {
+    var buf0 by remember { mutableStateOf("") }
+''','''    render: @Composable (text: String) -> Unit
+) {
+    if (!isStreaming) {
+        render(content)
+        return
+    }
+    var buf0 by remember { mutableStateOf("") }
+''')
+          jp='app/src/main/java/com/newoether/agora/ui/chat/message/MessageItemJson.kt'; p=Path(jp); s=p.read_text()
+          s=s.replace('''private fun parseJsonOrNull(text: String): JsonElement? {
+    return try { Json.parseToJsonElement(text) } catch (_: Exception) { null }
+}
+''','''private const val MAX_STRUCTURED_JSON_CHARS = 64 * 1024
+private const val MAX_PLAIN_PREVIEW_CHARS = 32 * 1024
+private const val MAX_JSON_DEPTH = 12
+private const val MAX_JSON_CHILDREN = 200
+private fun parseJsonOrNull(text: String): JsonElement? {
+    if (text.length > MAX_STRUCTURED_JSON_CHARS) return null
+    return try { Json.parseToJsonElement(text) } catch (_: Throwable) { null }
+}
+''')
+          s=s.replace('''private fun JsonNodeView(json: JsonElement, depth: Int = 0) {
+    when (json) {''','''private fun JsonNodeView(json: JsonElement, depth: Int = 0) {
+    if (depth >= MAX_JSON_DEPTH) {
+        Text("… nested JSON truncated", style = ChatType.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    when (json) {''')
+          s=s.replace('obj.entries.forEach { (key, value) ->','obj.entries.take(MAX_JSON_CHILDREN).forEach { (key, value) ->')
+          s=s.replace('arr.forEachIndexed { i, item ->','arr.take(MAX_JSON_CHILDREN).forEachIndexed { i, item ->')
+          oldp='''    } else {
+        SelectionContainer {
+            Text(
+                text = text,
+                style = ChatType.thoughtCodeLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}'''
+          newp='''    } else {
+        val truncated = text.length > MAX_PLAIN_PREVIEW_CHARS
+        val preview = if (truncated) text.take(MAX_PLAIN_PREVIEW_CHARS) else text
+        SelectionContainer {
+            Column {
+                if (truncated) Text("Large JSON (${text.length} chars) — preview truncated for stability", style = ChatType.meta, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(bottom = 6.dp))
+                Text(text = preview, style = ChatType.thoughtCodeLarge, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}'''
+          if oldp not in s: raise SystemExit('json marker mismatch')
+          p.write_text(s.replace(oldp,newp))
+          one('app/build.gradle.kts','        versionCode = 28\n        versionName = "1.4.0-workbench"','        versionCode = 29\n        versionName = "1.4.1-workbench"')
+          PY
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java app/build.gradle.kts
+          git commit -m 'perf: optimize long chat loading and bound large JSON rendering'
+          git push origin HEAD:main
