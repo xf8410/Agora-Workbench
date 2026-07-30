@@ -52,12 +52,39 @@ jobs:
           test -s workbench-upload.jks
           test -s signing.env
           source signing.env
-          keytool -list -keystore workbench-upload.jks -storepass "$KEYSTORE_PASSWORD" -alias workbench
+
+          # `keytool -list` only checks the store password. AGP must also decrypt the
+          # private key, whose password can differ. Validate that now by exporting the
+          # alias to a temporary PKCS12 store, and tolerate old keys that use the store
+          # password for both layers.
+          keytool -list -keystore workbench-upload.jks \
+            -storepass "$KEYSTORE_PASSWORD" -alias workbench
+          validate_key_password() {
+            local candidate="$1"
+            rm -f key-password-check.p12
+            keytool -importkeystore -noprompt \
+              -srckeystore workbench-upload.jks -srcstorepass "$KEYSTORE_PASSWORD" \
+              -srcalias workbench -srckeypass "$candidate" \
+              -destkeystore key-password-check.p12 -deststoretype PKCS12 \
+              -deststorepass 'temporary-check-password' \
+              -destkeypass 'temporary-check-password' >/dev/null 2>&1
+          }
+          if validate_key_password "$KEY_PASSWORD"; then
+            effective_key_password="$KEY_PASSWORD"
+            echo 'Private-key password validated from KEY_PASSWORD.'
+          elif validate_key_password "$KEYSTORE_PASSWORD"; then
+            effective_key_password="$KEYSTORE_PASSWORD"
+            echo 'KEY_PASSWORD was stale; using the validated store password for the private key.'
+          else
+            echo 'Neither KEY_PASSWORD nor KEYSTORE_PASSWORD can decrypt alias workbench.' >&2
+            exit 1
+          fi
+          rm -f key-password-check.p12
           {
             echo "storeFile=$signing_dir/workbench-upload.jks"
             echo "storePassword=$KEYSTORE_PASSWORD"
             echo "keyAlias=workbench"
-            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyPassword=$effective_key_password"
           } > "$GITHUB_WORKSPACE/local.properties"
 
       - name: Diagnose proot build
