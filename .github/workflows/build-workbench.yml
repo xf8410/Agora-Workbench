@@ -1,36 +1,109 @@
 name: Build Agora Workbench APK
+
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+      - workbench/durable-archive-action-logs
     paths-ignore:
       - '**/*.md'
+
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: build-workbench-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
+
       - uses: android-actions/setup-android@v3
+
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
+
+      - name: Build proot native binaries
+        run: bash build-proot.sh
+
       - name: Build F-Droid debug APK
         run: |
+          set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace assembleFdroidDebug
-      - name: Upload APK
+
+      - name: Prepare distributable APK
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          SOURCE_APK=$(find app/build/outputs/apk/fdroid/debug -type f -name '*.apk' -print -quit)
+          test -n "$SOURCE_APK"
+          mkdir -p dist
+          APK_NAME="Agora-Workbench-${VERSION}.apk"
+          cp "$SOURCE_APK" "dist/$APK_NAME"
+          (cd dist && sha256sum "$APK_NAME" > "$APK_NAME.sha256")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-fdroid-debug
-          path: app/build/outputs/apk/fdroid/debug/*.apk
+          name: Agora-Workbench-${{ steps.package.outputs.version }}
+          path: dist/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
+
+      - name: Publish versioned GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+          APK_NAME: ${{ steps.package.outputs.apk_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          NOTES=$(mktemp)
+          cat > "$NOTES" <<EOF
+          Automated Agora Workbench build.
+
+          Version: ${VERSION}
+          Branch: ${GITHUB_REF_NAME}
+          Commit: ${GITHUB_SHA}
+          Actions run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Agora Workbench ${TAG}" \
+              --notes-file "$NOTES" \
+              --target "$GITHUB_SHA" \
+              --latest
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Agora Workbench ${TAG}" \
+              --notes-file "$NOTES" \
+              --latest
+          fi
+
+          gh release upload "$TAG" \
+            "dist/$APK_NAME" \
+            "dist/$APK_NAME.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
