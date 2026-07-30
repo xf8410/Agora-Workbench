@@ -1,3 +1,4 @@
+# Deterministic patch for the suspend-call compiler error.
 from pathlib import Path
 
 p = Path('app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt')
