@@ -1,38 +1,45 @@
-name: Repair public browser branch
-on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/repair-public-browser-branch.yml']
-  workflow_dispatch:
+name: Permanently remove obsolete patch workflows
+
+on: [workflow_dispatch]
+
 permissions:
   contents: write
+
 jobs:
-  repair:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: workbench/public-repository-browser
           fetch-depth: 0
-      - name: Restore GenerationManager and wire confirmation
+      - name: Remove obsolete workflows from active branches
+        env:
+          REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          set -euxo pipefail
-          git fetch origin main
-          git show origin/main:app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt > /tmp/GenerationManager.kt
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('/tmp/GenerationManager.kt')
-          s=p.read_text()
-          old='    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)'
-          new='''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
-        provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: false }
-    }'''
-          if old not in s: raise SystemExit('provider marker missing')
-          p.write_text(s.replace(old,new,1))
-          PY
-          cp /tmp/GenerationManager.kt app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          set -euo pipefail
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
-          git commit -m 'fix: restore generation manager and confirm GitHub mutations'
-          git push origin HEAD:workbench/public-repository-browser
+
+          remove_from_branch() {
+            branch="$1"
+            echo "Cleaning $branch"
+            git fetch origin "$branch"
+            git checkout -B "$branch" "origin/$branch"
+            git rm --ignore-unmatch \
+              .github/workflows/apply-separate-public-read.yml \
+              .github/workflows/repair-public-browser-branch.yml \
+              .github/workflows/validate-public-repository-browser.yml \
+              .github/workflows/remove-obsolete-workflows.yml
+            if git diff --cached --quiet; then
+              echo "No obsolete workflows remain on $branch"
+              return
+            fi
+            git commit -m 'chore: permanently remove obsolete one-shot workflows'
+            git push origin "HEAD:$branch"
+          }
+
+          # Clean the feature branch first so merging it cannot resurrect the files.
+          remove_from_branch workbench/fix-invisible-messages
+          remove_from_branch main
