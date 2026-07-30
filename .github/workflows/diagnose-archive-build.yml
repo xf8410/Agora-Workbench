@@ -1,0 +1,53 @@
+name: Diagnose archive branch build
+on:
+  push:
+    branches: [workbench/durable-archive-action-logs]
+    paths:
+      - '.github/workflows/diagnose-archive-build.yml'
+permissions:
+  contents: write
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/durable-archive-action-logs
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;28.2.13676358'
+      - name: Compile and capture bounded diagnostics
+        id: compile
+        continue-on-error: true
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew --no-daemon --stacktrace compileFdroidDebugKotlin > /tmp/build.log 2>&1
+          code=$?
+          {
+            echo '# Archive branch build diagnostics'
+            echo
+            echo "Exit code: $code"
+            echo
+            echo '```text'
+            grep -E '(^e: | error: |FAILURE:|What went wrong|Execution failed|Unresolved reference|Type mismatch|No value passed|cannot find symbol)' /tmp/build.log | tail -n 240 || true
+            echo '```'
+          } > build-diagnostics.md
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+      - name: Commit diagnostics
+        run: |
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add build-diagnostics.md
+          git commit -m 'ci: record archive build diagnostics' || true
+          git push origin HEAD:workbench/durable-archive-action-logs
+      - name: Fail after diagnostics are saved
+        if: steps.compile.outputs.exit_code != '0'
+        run: exit 1
