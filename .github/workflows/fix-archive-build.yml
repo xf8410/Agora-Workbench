@@ -1,0 +1,85 @@
+name: Fix and build archive branch
+on:
+  push:
+    branches: [workbench/durable-archive-action-logs]
+    paths: ['.github/workflows/fix-archive-build.yml']
+permissions:
+  contents: write
+jobs:
+  fix-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/durable-archive-action-logs
+          submodules: recursive
+      - name: Fix suspend call outside coroutine body
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt')
+          s=p.read_text()
+          start=s.index('    private suspend fun failedLogs(')
+          end=s.index('    private suspend fun dispatch(', start)
+          replacement='''    private suspend fun failedLogs(repo: String, runId: Long, maxChars: Int): String {
+              val jobs = client.request("GET", "/repos/$repo/actions/runs/$runId/jobs?per_page=100")
+              requireOk(jobs.code, jobs.body)
+              val failed = (json.parseToJsonElement(jobs.body).jsonObject["jobs"]?.jsonArray
+                  ?: JsonArray(emptyList())).filter { it.jsonObject.string("conclusion") == "failure" }
+              var remaining = maxChars
+              val entries = mutableListOf<JsonObject>()
+              for (element in failed) {
+                  if (remaining <= 0) break
+                  val job = element.jsonObject
+                  val budget = minOf(remaining, 20_000)
+                  // Suspend before entering the non-suspend JSON builder DSL.
+                  val response = client.requestBounded(
+                      "GET", "/repos/$repo/actions/jobs/${job.long("id")}/logs", maxChars = budget
+                  )
+                  val focused = response.body.lineSequence().filter { line ->
+                      val lower = line.lowercase()
+                      "error" in lower || "failed" in lower || "exception" in lower ||
+                          "> task" in lower || "e:" in lower
+                  }.take(250).joinToString("\\n").ifBlank { response.body.take(budget) }
+                  remaining -= focused.length
+                  entries += buildJsonObject {
+                      put("job_id", job.long("id")); put("name", job.string("name"))
+                      put("log", focused)
+                      put("truncated", response.truncated || response.body.length > focused.length)
+                  }
+              }
+              return buildJsonObject {
+                  put("run_id", runId)
+                  put("failed_jobs", JsonArray(entries))
+                  put("truncated", remaining <= 0)
+              }.toString()
+          }
+
+'''
+          p.write_text(s[:start]+replacement+s[end:])
+          PY
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt
+          git commit -m 'fix: read Actions logs outside JSON builder'
+          git push origin HEAD:workbench/durable-archive-action-logs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;28.2.13676358'
+      - name: Build F-Droid debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace assembleFdroidDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Agora-Workbench-archive-tools-debug
+          path: app/build/outputs/apk/fdroid/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
