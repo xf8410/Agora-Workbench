@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: workbench-main-release
-  cancel-in-progress: false
+  group: workbench-main-apk
+  cancel-in-progress: true
 
 jobs:
   build-and-publish:
@@ -36,38 +36,39 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
 
-      - name: Use ephemeral CI signing
+      - name: Disable persistent release signing
+        shell: bash
         run: |
-          # With no release keystore in local.properties, app/build.gradle.kts uses
-          # Android's runner-local debug key for the release APK.
+          set -euo pipefail
           rm -f local.properties
-          echo 'Using ephemeral debug signing. Uninstall an older build before installing this APK.'
+          rm -rf "$RUNNER_TEMP/workbench-signing"
+          echo 'Building the fdroidDebug variant; no release keystore is used.'
 
       - name: Build proot native binaries
         run: bash build-proot.sh
 
-      - name: Test and build installable release APK
+      - name: Test and build debug APK
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace \
-            testFdroidDebugUnitTest assembleFdroidRelease
+          ./gradlew --no-daemon --console=plain --stacktrace \
+            testFdroidDebugUnitTest assembleFdroidDebug 2>&1 | tee ci-main-build.log
 
-      - name: Prepare release files
+      - name: Prepare APK files
         id: package
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          apk="$(find app/build/outputs/apk/fdroid/release -type f -name '*.apk' -print -quit)"
+          apk="$(find app/build/outputs/apk/fdroid/debug -type f -name '*.apk' -print -quit)"
           test -n "$apk"
           cp "$apk" dist/Agora-Workbench-latest.apk
           sha256sum dist/Agora-Workbench-latest.apk | tee dist/Agora-Workbench-latest.apk.sha256
           version="$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Verify APK signature and installability
+      - name: Verify APK signature
         shell: bash
         run: |
           set -euo pipefail
@@ -78,11 +79,12 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-fdroid-release
+          name: Agora-Workbench-fdroid-debug
           path: |
             dist/Agora-Workbench-latest.apk
             dist/Agora-Workbench-latest.apk.sha256
             dist/signature.txt
+            ci-main-build.log
           if-no-files-found: error
           retention-days: 14
 
@@ -99,25 +101,25 @@ jobs:
           tag='workbench-latest'
           notes_file="$(mktemp)"
           cat > "$notes_file" <<EOF
-          Latest successful Agora Workbench APK built from main.
+          Latest successful Agora Workbench fdroidDebug APK built from main.
 
           Version: $VERSION
           Commit: $HEAD_SHA
           Actions run: https://github.com/$REPOSITORY/actions/runs/$GITHUB_RUN_ID
 
-          This recovery build uses ephemeral CI/debug signing. Uninstall any older
-          Agora Workbench installation before installing this APK.
+          This is a debug-signed recovery build. Uninstall any older Agora Workbench
+          installation before installing it.
           Package: com.newoether.agora.workbench
           EOF
 
           if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" --repo "$REPOSITORY" \
-              --title 'Agora Workbench — Latest main build' \
+              --title 'Agora Workbench — Latest debug build' \
               --notes-file "$notes_file" --target "$HEAD_SHA" --latest
           else
             gh release create "$tag" --repo "$REPOSITORY" \
               --target "$HEAD_SHA" \
-              --title 'Agora Workbench — Latest main build' \
+              --title 'Agora Workbench — Latest debug build' \
               --notes-file "$notes_file" --latest
           fi
 
