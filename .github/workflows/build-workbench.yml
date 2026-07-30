@@ -1,7 +1,10 @@
 name: Build Agora Workbench APK
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - workbench/fix-red-build
 
 permissions:
   actions: read
@@ -83,7 +86,7 @@ jobs:
           git config user.name 'Agora Workbench Bot'
           git config user.email 'actions@github.com'
           git add -f ci-*.log ci-stage-results.txt
-          git commit -m 'Record full APK build diagnostics' || true
+          git commit -m 'Record full APK build diagnostics [skip ci]' || true
           git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Preserve stage failures
