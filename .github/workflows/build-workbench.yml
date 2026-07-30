@@ -12,13 +12,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: workbench-main-release
+  group: workbench-diagnostic-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,9 +33,6 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Install Android NDK
-        run: sdkmanager 'ndk;28.2.13676358'
-
       - name: Diagnose unit-test build
         id: diagnose
         continue-on-error: true
@@ -43,21 +40,23 @@ jobs:
         run: |
           set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee ci-diagnostic.log
+          timeout --signal=TERM --kill-after=30s 12m \
+            ./gradlew --no-daemon --console=plain --stacktrace testFdroidDebugUnitTest \
+            2>&1 | tee ci-diagnostic.log
 
-      - name: Commit diagnostic log after failure
-        if: steps.diagnose.outcome == 'failure'
+      - name: Commit diagnostic log
+        if: always()
         shell: bash
         run: |
+          test -f ci-diagnostic.log || echo 'Gradle did not start or checkout/setup failed before diagnostics.' > ci-diagnostic.log
           git config user.name 'Agora Workbench Bot'
           git config user.email 'actions@github.com'
           git add -f ci-diagnostic.log
-          git commit -m 'Record failing Gradle diagnostic'
-          git push origin HEAD:${GITHUB_REF_NAME}
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record Gradle diagnostic output'
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
 
-      - name: Fail after saving diagnostic
+      - name: Preserve failure status
         if: steps.diagnose.outcome == 'failure'
         run: exit 1
-
-      - name: Unit tests passed
-        run: echo 'Unit-test build passed; restore the release workflow after diagnosis.'
