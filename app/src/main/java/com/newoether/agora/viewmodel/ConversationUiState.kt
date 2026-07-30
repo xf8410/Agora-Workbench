@@ -1,8 +1,6 @@
 package com.newoether.agora.viewmodel
 
 import com.newoether.agora.model.ChatMessage
-import com.newoether.agora.model.MessageStatus
-import com.newoether.agora.model.Participant
 import com.newoether.agora.util.Constants
 
 data class ConversationUiState(
@@ -13,53 +11,101 @@ data class ConversationUiState(
     val selectedChildren: Map<String?, String> = emptyMap()
 ) {
     companion object {
-        /** Walk the conversation tree to produce the visible path. */
+        private fun isSynthetic(message: ChatMessage): Boolean =
+            message.id.startsWith(Constants.TOOL_MSG_PREFIX) ||
+                message.id.startsWith(Constants.RESULT_MSG_PREFIX)
+
+        /**
+         * Walk the conversation tree to produce the visible path.
+         *
+         * Message history is loaded through a bounded newest-first database window. In a large
+         * conversation that window can contain several disconnected components (branches and
+         * hidden tool/result chains), and the oldest component is not necessarily the active
+         * visible branch. Walking only the first orphan can therefore resolve to synthetic rows
+         * exclusively and leave the chat screen completely blank.
+         *
+         * Resolve every loaded component and keep the non-empty visible path whose newest row is
+         * most recent. This preserves normal branch selection while guaranteeing that a window
+         * containing user/model messages cannot render as an empty conversation.
+         */
         fun resolvePath(
             allMessages: List<ChatMessage>,
             streamingMsg: ChatMessage?,
             selectedChildren: Map<String?, String>
         ): List<ChatMessage> {
-            val path = mutableListOf<ChatMessage>()
+            if (allMessages.isEmpty()) {
+                return streamingMsg?.let(::listOf) ?: emptyList()
+            }
+
             val messagesByParent = allMessages.groupBy { it.parentId }
                 .mapValues { (_, list) -> list.sortedBy { it.timestamp } }
-            // A bounded DB window may start in the middle of a long branch. Start from the
-            // earliest loaded orphan instead of requiring the root message to be resident.
             val loadedIds = allMessages.asSequence().map { it.id }.toHashSet()
-            var cursor: String? = allMessages
-                .filter { it.parentId != null && it.parentId !in loadedIds }
-                .minByOrNull { it.timestamp }
-                ?.parentId
 
-            while (true) {
-                val siblings = messagesByParent[cursor] ?: break
-                if (siblings.isEmpty()) break
+            fun walk(startCursor: String?): List<ChatMessage> {
+                val path = mutableListOf<ChatMessage>()
+                val visited = HashSet<String>()
+                var cursor = startCursor
 
-                val selectedId = selectedChildren[cursor]
-                val visibleSiblings = siblings.filter {
-                    !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX)
+                while (true) {
+                    val siblings = messagesByParent[cursor] ?: break
+                    if (siblings.isEmpty()) break
+
+                    val visibleSiblings = siblings.filterNot(::isSynthetic)
+                    val selectedId = selectedChildren[cursor]
+                    var selected = if (visibleSiblings.isNotEmpty()) {
+                        visibleSiblings.find { it.id == selectedId } ?: visibleSiblings.last()
+                    } else {
+                        siblings.find { it.id == selectedId } ?: siblings.last()
+                    }
+                    if (!visited.add(selected.id)) break
+
+                    if (streamingMsg != null && selected.id == streamingMsg.id) {
+                        selected = streamingMsg
+                    }
+                    if (!isSynthetic(selected) || selected.id == streamingMsg?.id) {
+                        path.add(selected)
+                    }
+                    cursor = selected.id
                 }
-                var selected = if (visibleSiblings.isNotEmpty()) {
-                    visibleSiblings.find { it.id == selectedId } ?: visibleSiblings.last()
-                } else {
-                    siblings.find { it.id == selectedId } ?: siblings.last()
-                }
-                // Substitute streaming message if it matches
-                if (streamingMsg != null && selected.id == streamingMsg.id) {
-                    selected = streamingMsg
-                }
-                val isSynthetic = selected.id.startsWith(Constants.TOOL_MSG_PREFIX) ||
-                    selected.id.startsWith(Constants.RESULT_MSG_PREFIX)
-                if (!isSynthetic || (streamingMsg != null && selected.id == streamingMsg.id)) {
-                    path.add(selected)
-                }
-                cursor = selected.id
+                return path
             }
-            // Append streaming message if not yet in path
+
+            // null covers a resident real root. Every missing parent identifies the entry point
+            // of another component cut by the bounded Room query.
+            val entryCursors = buildList<String?> {
+                if (messagesByParent.containsKey(null)) add(null)
+                allMessages.asSequence()
+                    .mapNotNull { message -> message.parentId?.takeIf { it !in loadedIds } }
+                    .distinct()
+                    .forEach(::add)
+            }
+
+            var path = entryCursors.asSequence()
+                .map(::walk)
+                .filter { it.isNotEmpty() }
+                .maxWithOrNull(
+                    compareBy<List<ChatMessage>> { candidate -> candidate.maxOf { it.timestamp } }
+                        .thenBy { it.size }
+                )
+                ?: emptyList()
+
+            // A live overlay may not have reached Room yet. Attach it only to the selected path;
+            // if the bounded window contains no visible row, still show the live response rather
+            // than presenting an empty screen.
             if (streamingMsg != null && path.none { it.id == streamingMsg.id }) {
                 val lastId = path.lastOrNull()?.id
-                if (streamingMsg.parentId == lastId || (streamingMsg.parentId == null && path.isEmpty())) {
-                    path.add(streamingMsg)
+                if (streamingMsg.parentId == lastId ||
+                    (streamingMsg.parentId == null && path.isEmpty()) ||
+                    (path.isEmpty() && streamingMsg.parentId !in loadedIds)
+                ) {
+                    path = path + streamingMsg
                 }
+            }
+
+            // Defensive fallback for malformed/imported trees: visible records in the loaded
+            // window are preferable to a blank page even when no component can be walked.
+            if (path.isEmpty()) {
+                path = allMessages.filterNot(::isSynthetic).sortedBy { it.timestamp }
             }
             return path
         }
