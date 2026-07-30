@@ -24,7 +24,7 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     private val client = GitHubApiClient(context.applicationContext)
     private val json = Json { ignoreUnknownKeys = true }
     private val names = setOf(
-        "github_list_repositories", "github_read_file", "github_create_branch",
+        "github_list_repositories", "github_create_repository", "github_read_file", "github_create_branch",
         "github_write_file", "github_get_workflow_runs", "github_dispatch_workflow",
     )
 
@@ -32,6 +32,12 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         fun string(description: String) = ToolProperty("string", description)
         return listOf(
             tool("github_list_repositories", "List repositories accessible to the signed-in GitHub account.", emptyMap()),
+            tool("github_create_repository", "Create a repository owned by the signed-in GitHub user. Defaults to private and initializes main with a README.", mapOf(
+                "name" to string("Repository name, 1-100 characters. Do not include an owner or slash."),
+                "description" to string("Optional repository description."),
+                "private" to ToolProperty("boolean", "Whether the repository is private. Defaults to true."),
+                "auto_init" to ToolProperty("boolean", "Initialize the repository with a README and main branch. Defaults to true."),
+            ), listOf("name")),
             tool("github_read_file", "Read a UTF-8 text file or list a directory in a GitHub repository.", mapOf(
                 "repo" to string("Repository in owner/name form."),
                 "path" to string("Repository-relative file or directory path. Use an empty string for the root directory."),
@@ -57,9 +63,13 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         val args = runCatching { json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" }) }
             .getOrElse { return errorJson("Invalid tool arguments") }
         fun arg(key: String, default: String = "") = (args[key] as? JsonPrimitive)?.content ?: default
+        fun boolArg(key: String, default: Boolean) = (args[key] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: default
         return runCatching {
             when (name) {
                 "github_list_repositories" -> listRepositories()
+                "github_create_repository" -> createRepository(
+                    arg("name"), arg("description"), boolArg("private", true), boolArg("auto_init", true)
+                )
                 "github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))
                 "github_create_branch" -> buildJsonObject { put("branch", client.createBranch(arg("repo"), arg("branch"), arg("base", "main"))); put("ok", true) }.toString()
                 "github_write_file" -> buildJsonObject {
@@ -70,6 +80,25 @@ class GitHubToolProvider(context: Context) : ToolProvider {
                 else -> errorJson("Unknown GitHub tool")
             }
         }.getOrElse { errorJson(it.message ?: "GitHub operation failed") }
+    }
+
+    private suspend fun createRepository(name: String, description: String, privateRepo: Boolean, autoInit: Boolean): String {
+        require(name.matches(Regex("[A-Za-z0-9._-]{1,100}"))) { "Repository name must be 1-100 characters using letters, numbers, dot, underscore, or hyphen" }
+        val response = client.request("POST", "/user/repos", buildJsonObject {
+            put("name", name)
+            if (description.isNotBlank()) put("description", description.take(350))
+            put("private", privateRepo)
+            put("auto_init", autoInit)
+        })
+        if (response.code !in 200..299) error("GitHub returned HTTP ${response.code}: ${response.body.take(300)}")
+        val obj = json.parseToJsonElement(response.body).jsonObject
+        return buildJsonObject {
+            put("ok", true)
+            put("full_name", obj.string("full_name"))
+            put("private", obj.string("private").toBooleanStrictOrNull() ?: privateRepo)
+            put("default_branch", obj.string("default_branch", "main"))
+            put("html_url", obj.string("html_url"))
+        }.toString()
     }
 
     private suspend fun listRepositories(): String {
