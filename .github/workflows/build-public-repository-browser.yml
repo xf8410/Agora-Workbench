@@ -1,0 +1,53 @@
+name: Validate public repository browser
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/public-repository-browser
+          submodules: recursive
+          fetch-depth: 0
+      - name: Restore and patch GenerationManager confirmation wiring
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout origin/main -- app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt')
+          s=p.read_text()
+          old='''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)'''
+          new='''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
+        provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: false }
+    }'''
+          if old not in s:
+              if new not in s: raise SystemExit('GitHub provider marker mismatch')
+          else:
+              s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          git commit -m 'fix: require confirmation for GitHub mutations'
+          git push origin HEAD:workbench/public-repository-browser
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;28.2.13676358'
+      - name: Build native dependencies
+        run: bash build-proot.sh
+      - name: Compile and test
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
