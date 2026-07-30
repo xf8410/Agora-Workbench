@@ -11,18 +11,24 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.newoether.agora.uma.UmaProtocolCapture
 import com.newoether.agora.uma.UmaWorkbenchService
 import com.newoether.agora.viewmodel.ChatViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     fun send(action: String) = context.startService(
         Intent(context, UmaWorkbenchService::class.java).setAction(action))
     fun ensureOverlayThenStart() {
@@ -34,51 +40,46 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     CollapsingSettingsScaffold(title = "赛马娘工作台", onBack = onBack) {
         SettingsGroupColumn(modifier = Modifier.fillMaxWidth()) {
             SettingsGroup(title = "Agora 内置 SO 连接", items = listOf(
-                {
-                    SettingsItem(
-                        headlineContent = { Text("启动监听与 Agora 浮窗") },
-                        supportingContent = { Text("直接读取 127.0.0.1:18765；赛马娘保持前台，不经过浏览器或其他 App") },
-                        leadingContent = { Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.primary) },
-                        modifier = Modifier.clickable { ensureOverlayThenStart() })
-                },
-                {
-                    SettingsItem(
-                        headlineContent = { Text("自动分析开关") },
-                        supportingContent = { Text("回合、阶段或训练选择变化后，复用 Agora 后台生成引擎继续固定对话；最短间隔 20 秒") },
-                        leadingContent = { Icon(Icons.Default.Sync, null, tint = MaterialTheme.colorScheme.primary) },
-                        modifier = Modifier.clickable { send(UmaWorkbenchService.ACTION_TOGGLE_AUTO) })
-                },
-                {
-                    SettingsItem(
-                        headlineContent = { Text("立即分析") },
-                        supportingContent = { Text("现在读取一致快照，并让当前默认模型使用 uma_* 工具分析") },
-                        leadingContent = { Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary) },
-                        modifier = Modifier.clickable { send(UmaWorkbenchService.ACTION_ANALYZE) })
-                },
-                {
-                    SettingsItem(
-                        headlineContent = { Text("立即刷新") },
-                        supportingContent = { Text("只请求当前 /summary 快照，不调用模型") },
-                        leadingContent = { Icon(Icons.Default.Refresh, null, tint = MaterialTheme.colorScheme.primary) },
-                        modifier = Modifier.clickable { send(UmaWorkbenchService.ACTION_REFRESH) })
-                },
-                {
-                    SettingsItem(
-                        headlineContent = { Text("停止工作台") },
-                        supportingContent = { Text("停止后台监听并移除 Agora 浮窗") },
-                        leadingContent = { Icon(Icons.Default.Stop, null, tint = MaterialTheme.colorScheme.error) },
-                        modifier = Modifier.clickable { UmaWorkbenchService.stop(context) })
-                },
+                { SettingsItem(headlineContent={Text("启动监听与 Agora 浮窗")},
+                    supportingContent={Text("直接读取 127.0.0.1:18765；赛马娘保持前台，不经过浏览器或其他 App")},
+                    leadingContent={Icon(Icons.Default.PlayArrow,null,tint=MaterialTheme.colorScheme.primary)},
+                    modifier=Modifier.clickable{ensureOverlayThenStart()}) },
+                { SettingsItem(headlineContent={Text("自动分析开关")},
+                    supportingContent={Text("关键状态变化后复用 Agora 后台生成引擎；最短间隔 20 秒")},
+                    leadingContent={Icon(Icons.Default.Sync,null,tint=MaterialTheme.colorScheme.primary)},
+                    modifier=Modifier.clickable{send(UmaWorkbenchService.ACTION_TOGGLE_AUTO)}) },
+                { SettingsItem(headlineContent={Text("立即分析")},
+                    supportingContent={Text("读取一致快照，并让默认模型使用 uma_* 白名单工具分析")},
+                    leadingContent={Icon(Icons.Default.AutoAwesome,null,tint=MaterialTheme.colorScheme.primary)},
+                    modifier=Modifier.clickable{send(UmaWorkbenchService.ACTION_ANALYZE)}) },
+                { SettingsItem(headlineContent={Text("立即刷新")}, supportingContent={Text("只请求当前 /summary，不调用模型")},
+                    leadingContent={Icon(Icons.Default.Refresh,null,tint=MaterialTheme.colorScheme.primary)},
+                    modifier=Modifier.clickable{send(UmaWorkbenchService.ACTION_REFRESH)}) },
+                { SettingsItem(headlineContent={Text("停止工作台")}, supportingContent={Text("停止后台监听并移除 Agora 浮窗")},
+                    leadingContent={Icon(Icons.Default.Stop,null,tint=MaterialTheme.colorScheme.error)},
+                    modifier=Modifier.clickable{UmaWorkbenchService.stop(context)}) }
             ))
-            SettingsGroup(title = "可用能力", items = listOf({
-                SettingsItem(
-                    headlineContent = { Text("一致快照、变化对比和定点诊断") },
-                    supportingContent = { Text("支持 snapshot/changes、hookdiag、event reward targets、Ramen transitions、事件观测以及单类字段/方法查询") })
+            SettingsGroup(title = "通信协议观测（手动开启）", items = listOf(
+                { SettingsItem(headlineContent={Text("开始通信观测")},
+                    supportingContent={Text("仅用于你自己的正常游戏流程。Agora 模型只能看到路径、方向、大小和本地序号，不会收到正文、Hex、Header、Cookie 或 Token")},
+                    leadingContent={Icon(Icons.Default.Visibility,null,tint=MaterialTheme.colorScheme.primary)},
+                    modifier=Modifier.clickable{scope.launch{runCatching{UmaProtocolCapture.setEnabled(true)}
+                        .onSuccess{viewModel.emitSnackbar("通信观测已开启，请回游戏执行一个正常步骤")}
+                        .onFailure{viewModel.emitSnackbar("开启失败：${it.message}")}}}) },
+                { SettingsItem(headlineContent={Text("停止通信观测")},
+                    supportingContent={Text("停止 SO 抓取。随后可在聊天中让 Agora 调用 uma_protocol_metadata 读取脱敏端点清单")},
+                    leadingContent={Icon(Icons.Default.VisibilityOff,null,tint=MaterialTheme.colorScheme.error)},
+                    modifier=Modifier.clickable{scope.launch{runCatching{UmaProtocolCapture.setEnabled(false)}
+                        .onSuccess{viewModel.emitSnackbar("通信观测已停止")}
+                        .onFailure{viewModel.emitSnackbar("停止失败：${it.message}")}}}) }
+            ))
+            SettingsGroup(title = "怎么读取", items = listOf({
+                SettingsItem(headlineContent={Text("在 Agora 对话中直接说")},
+                    supportingContent={Text("“读取最近的赛马娘通信端点并按顺序整理”。模型会调用 uma_protocol_metadata；要读业务状态则调用 uma_get_snapshot、uma_event_observations 等。")})
             }))
             SettingsGroup(title = "安全边界", items = listOf({
-                SettingsItem(
-                    headlineContent = { Text("仅开放白名单小端点") },
-                    supportingContent = { Text("禁止 /scan、/il2cpp/classes、原始 sniff 和递归对象 dump；普通响应 32 KiB，summary 128 KiB") })
+                SettingsItem(headlineContent={Text("原始通信内容不交给模型")},
+                    supportingContent={Text("禁止 /scan、/il2cpp/classes、原始 sniff 输出和递归 dump；协议观测最多返回最近 20 条脱敏元数据。")})
             }))
         }
     }
