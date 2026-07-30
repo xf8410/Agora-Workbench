@@ -1,100 +1,17 @@
-name: Build Agora Workbench APK
+name: Build Agora Workbench APK (obsolete diagnostic branch)
 
+# The recovery workflow now lives on main. Keep this file manual-only so pushes to
+# workbench/fix-red-build cannot start a second expensive APK build.
 on:
   workflow_dispatch: {}
-  push:
-    branches:
-      - workbench/fix-red-build
 
 permissions:
-  actions: read
-  contents: write
+  contents: read
 
 jobs:
-  diagnose-full-build:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-
-      - uses: android-actions/setup-android@v3
-
-      - name: Install NDK
-        id: ndk
-        continue-on-error: true
-        shell: bash
-        run: sdkmanager 'ndk;28.2.13676358' 2>&1 | tee ci-ndk.log
-
-      - name: Use ephemeral CI signing
-        id: signing
-        shell: bash
-        run: |
-          # app/build.gradle.kts deliberately falls back to Android's generated debug
-          # keystore when local.properties has no release keystore. This produces an
-          # installable APK without depending on the broken persistent signing asset.
-          rm -f local.properties
-          echo 'Using runner-local Android debug key; uninstall older builds before installation.' \
-            | tee ci-signing.log
-
-      - name: Diagnose proot build
-        id: proot
-        continue-on-error: true
-        shell: bash
-        run: bash build-proot.sh 2>&1 | tee ci-proot.log
-
-      - name: Diagnose release build
-        id: gradle
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          chmod +x gradlew
-          ./gradlew --no-daemon --console=plain --stacktrace \
-            testFdroidDebugUnitTest assembleFdroidRelease 2>&1 | tee ci-gradle-release.log
-
-      - name: Verify installable APK
-        id: apk
-        if: steps.gradle.outcome == 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk="$(find app/build/outputs/apk/fdroid/release -type f -name '*.apk' -print -quit)"
-          test -n "$apk"
-          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" \
-            verify --verbose --print-certs "$apk"
-          echo "Verified installable APK: $apk"
-
-      - name: Upload APK
-        if: steps.gradle.outcome == 'success' && steps.apk.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: agora-workbench-fdroid-release-ephemeral-signing
-          path: app/build/outputs/apk/fdroid/release/*.apk
-          if-no-files-found: error
-
-      - name: Commit all diagnostic logs
-        if: always()
-        shell: bash
-        run: |
-          printf 'ndk=%s\nsigning=%s\nproot=%s\ngradle=%s\napk=%s\n' \
-            '${{ steps.ndk.outcome }}' '${{ steps.signing.outcome }}' \
-            '${{ steps.proot.outcome }}' '${{ steps.gradle.outcome }}' \
-            '${{ steps.apk.outcome }}' > ci-stage-results.txt
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'actions@github.com'
-          git add -f ci-*.log ci-stage-results.txt
-          git commit -m 'Record full APK build diagnostics [skip ci]' || true
-          git push origin HEAD:${GITHUB_REF_NAME}
-
-      - name: Preserve stage failures
-        if: steps.ndk.outcome == 'failure' || steps.signing.outcome == 'failure' || steps.proot.outcome == 'failure' || steps.gradle.outcome == 'failure' || steps.apk.outcome == 'failure'
-        run: exit 1
+      - run: |
+          echo 'This diagnostic branch is retired.'
+          echo 'Use the Build Agora Workbench APK workflow on main.'
