@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0
       - name: Restore GenerationManager and wire confirmation
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           git fetch origin main
           git show origin/main:app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt > /tmp/GenerationManager.kt
           python3 - <<'PY'
@@ -27,12 +27,19 @@ jobs:
           new='''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
         provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: false }
     }'''
-          if old not in s: raise SystemExit('provider marker missing')
-          p.write_text(s.replace(old,new,1))
+          if old in s:
+              s=s.replace(old,new,1)
+          elif new not in s:
+              raise SystemExit('provider marker missing')
+          p.write_text(s)
           PY
           cp /tmp/GenerationManager.kt app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
           git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          if git diff --cached --quiet; then
+            echo 'Public browser branch is already repaired.'
+            exit 0
+          fi
           git commit -m 'fix: restore generation manager and confirm GitHub mutations'
           git push origin HEAD:workbench/public-repository-browser
