@@ -728,14 +728,6 @@ class ChatViewModel(
             }
         }
         
-        viewModelScope.launch {
-            _selectedChildren.collect { childrenMap ->
-                val id = _currentConversationId.value
-                if (id != null) {
-                    persistSelectedChildren(id, childrenMap)
-                }
-            }
-        }
     }
 
     private suspend fun persistSelectedChildren(conversationId: String, childrenMap: Map<String?, String>) {
@@ -881,30 +873,30 @@ class ChatViewModel(
     }
 
     fun createNewChat() {
-        // Already on the new-chat screen: ignore (both the drawer and the top-bar capsule route
-        // here; behaviour must be identical and a no-op when there's nothing to reset).
-        if (_isNewChatMode.value) return
-        switchingJob?.cancel()
-        if (!_isNewChatMode.value) {
-            _pendingSystemPromptId.value = null
-        }
-        _isNewChatMode.value = true
-        _isTransitioningToNewChat.value = true
-        _isSwitching.value = true
-        switchingJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS) // Allow overlay to fade in
-            _currentConversationId.value = null
-            _currentActiveModel.value = null
-            _pendingConversationSettings.value = null
-            _allMessages.value = emptyList()
-            _selectedChildren.value = emptyMap()
-            _branchSwitchTrigger.value = null
-            _isSwitching.value = false
-            _isTransitioningToNewChat.value = false
-        }
-    }
+    if (_isNewChatMode.value) return
+    switchingJob?.cancel()
+    _pendingSystemPromptId.value = null
+    _isNewChatMode.value = true
+    _isTransitioningToNewChat.value = true
+    _isSwitching.value = true
 
-    fun selectConversation(id: String) {
+    // Identity changes are synchronous. A delayed reset could otherwise clear the id
+    // of a conversation created by a fast first Send during the fade animation.
+    _currentConversationId.value = null
+    _currentActiveModel.value = null
+    _pendingConversationSettings.value = null
+    _allMessages.value = emptyList()
+    _selectedChildren.value = emptyMap()
+    _branchSwitchTrigger.value = null
+
+    switchingJob = viewModelScope.launch {
+        kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS)
+        _isSwitching.value = false
+        _isTransitioningToNewChat.value = false
+    }
+}
+
+fun selectConversation(id: String) {
         if (_currentConversationId.value == id && !_isNewChatMode.value) return
 
         switchingJob?.cancel()
@@ -1033,7 +1025,8 @@ class ChatViewModel(
     fun regenerate(messageId: String) = generationController.regenerate(messageId)
 
     fun switchBranch(parentId: String?, currentMessageId: String, direction: Int) {
-        if (_isLoading.value && _generatingInConversationId.value == _currentConversationId.value) return
+    val conversationId = _currentConversationId.value ?: return
+    if (_isLoading.value && _generatingInConversationId.value == conversationId) return
         val siblings = _allMessages.value.filter { it.parentId == parentId && !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX) }.sortedBy { it.timestamp }
         if (siblings.size < 2) return
         var currentIndex = siblings.indexOfFirst { it.id == currentMessageId }
@@ -1052,7 +1045,13 @@ class ChatViewModel(
             val newMap = _selectedChildren.value.toMutableMap()
             val targetMessage = siblings[newIndex]
             newMap[parentId] = targetMessage.id
-            _selectedChildren.value = newMap
+    // Bind persistence to the conversation where the action started.
+    persistSelectedChildren(conversationId, newMap)
+    if (_currentConversationId.value != conversationId) {
+        _isSwitching.value = false
+        return@launch
+    }
+    _selectedChildren.value = newMap
             
             _branchSwitchTrigger.value = null
             _branchSwitchTrigger.value = targetMessage.id

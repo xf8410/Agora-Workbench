@@ -197,6 +197,10 @@ interface ChatDao {
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
     fun getMessageCountForConversation(conversationId: String): Flow<Int>
 
+    /** Complete tree snapshot for business operations; UI rendering remains windowed. */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
+    suspend fun getAllMessagesForConversation(conversationId: String): List<MessageEntity>
+
     /** Fix abandoned rows without reading their potentially huge payload columns. */
     @Query("""
         UPDATE messages SET status = 'STOPPED'

@@ -227,7 +227,7 @@ internal fun ChatDrawerContent(
                 if (search.isActive) {
                     val grouped = search.results.groupBy { it.first.conversationId }
                     val titleMap = conversations.associate { it.id to it.title }
-                    items(grouped.entries.toList()) { (convId, entries) ->
+                    items(grouped.entries.toList(), key = { it.key }) { (convId, entries) ->
                         val bestScore = entries.maxOfOrNull { it.second } ?: 0f
                         SearchResultItem(
                             title = titleMap[convId] ?: stringResource(R.string.unknown),
@@ -242,7 +242,7 @@ internal fun ChatDrawerContent(
                         )
                     }
                 } else {
-                    items(conversations) { conversation ->
+                    items(conversations, key = { it.id }) { conversation ->
                         val isSelected = conversation.id == currentConversationId
                         val isGenerating = conversation.id in generatingConversationIds
                         val menuEnabled = !isSwitching && !isGenerating
