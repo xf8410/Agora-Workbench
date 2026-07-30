@@ -131,19 +131,37 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     }
 
     private suspend fun failedLogs(repo: String, runId: Long, maxChars: Int): String {
-        val jobs=client.request("GET","/repos/$repo/actions/runs/$runId/jobs?per_page=100"); requireOk(jobs.code,jobs.body)
-        val failed=(json.parseToJsonElement(jobs.body).jsonObject["jobs"]?.jsonArray ?: JsonArray(emptyList())).filter { it.jsonObject.string("conclusion") == "failure" }
-        var remaining=maxChars
-        return buildJsonObject { put("run_id",runId); putJsonArray("failed_jobs") {
-            for (e in failed) {
-                if (remaining <= 0) break
-                val o=e.jsonObject; val budget=minOf(remaining,20_000)
-                val log=client.requestBounded("GET","/repos/$repo/actions/jobs/${o.long("id")}/logs",maxChars=budget)
-                val focused=log.body.lineSequence().filter { line -> val x=line.lowercase(); "error" in x || "failed" in x || "exception" in x || "> task" in x || "e:" in x }.take(250).joinToString("\n").ifBlank { log.body.take(budget) }
-                remaining -= focused.length
-                add(buildJsonObject { put("job_id",o.long("id")); put("name",o.string("name")); put("log",focused); put("truncated",log.truncated || log.body.length>focused.length) })
+        val jobs = client.request("GET", "/repos/$repo/actions/runs/$runId/jobs?per_page=100")
+        requireOk(jobs.code, jobs.body)
+        val failed = (json.parseToJsonElement(jobs.body).jsonObject["jobs"]?.jsonArray
+            ?: JsonArray(emptyList())).filter { it.jsonObject.string("conclusion") == "failure" }
+        var remaining = maxChars
+        val entries = mutableListOf<JsonObject>()
+        for (element in failed) {
+            if (remaining <= 0) break
+            val job = element.jsonObject
+            val budget = minOf(remaining, 20_000)
+            val response = client.requestBounded(
+                "GET", "/repos/$repo/actions/jobs/${job.long("id")}/logs", maxChars = budget
+            )
+            val focused = response.body.lineSequence().filter { line ->
+                val lower = line.lowercase()
+                "error" in lower || "failed" in lower || "exception" in lower ||
+                    "> task" in lower || "e:" in lower
+            }.take(250).joinToString("\n").ifBlank { response.body.take(budget) }
+            remaining -= focused.length
+            entries += buildJsonObject {
+                put("job_id", job.long("id"))
+                put("name", job.string("name"))
+                put("log", focused)
+                put("truncated", response.truncated || response.body.length > focused.length)
             }
-        }; put("truncated",remaining<=0) }.toString()
+        }
+        return buildJsonObject {
+            put("run_id", runId)
+            put("failed_jobs", JsonArray(entries))
+            put("truncated", remaining <= 0)
+        }.toString()
     }
 
     private suspend fun dispatch(repo:String,workflow:String,ref:String):String { val r=client.request("POST","/repos/$repo/actions/workflows/$workflow/dispatches",buildJsonObject { put("ref",ref) }); requireOk(r.code,r.body); return buildJsonObject { put("ok",true); put("workflow",workflow); put("ref",ref) }.toString() }
