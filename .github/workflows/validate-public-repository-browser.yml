@@ -1,61 +1,14 @@
 name: Validate public repository browser
-on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/validate-public-repository-browser.yml'
+
+"on":
   workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
-  validate:
+  notice:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: workbench/public-repository-browser
-          submodules: recursive
-          fetch-depth: 0
-      - name: Restore and wire GenerationManager
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          git checkout origin/main -- app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt')
-          s=p.read_text()
-          old='    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)'
-          new='''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
-        provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: false }
-    }'''
-          if old in s:
-              s=s.replace(old,new,1)
-          elif new not in s:
-              raise SystemExit('GitHub provider marker mismatch')
-          p.write_text(s)
-          PY
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
-          if ! git diff --cached --quiet; then
-            git commit -m 'fix: require confirmation for GitHub mutations'
-            git push origin HEAD:workbench/public-repository-browser
-          else
-            echo 'GenerationManager is already synchronized.'
-          fi
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - uses: android-actions/setup-android@v3
-      - name: Install Android NDK
-        run: sdkmanager 'ndk;28.2.13676358'
-      - name: Build native dependencies
-        run: bash build-proot.sh
-      - name: Compile and test
-        run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
+      - name: Maintenance notice
+        run: echo "This legacy branch validation workflow has been retired."
