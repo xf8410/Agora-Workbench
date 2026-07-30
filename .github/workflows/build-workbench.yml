@@ -6,11 +6,13 @@ on:
     paths-ignore:
       - '**/*.md'
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,10 +31,34 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace assembleFdroidDebug
-      - name: Upload APK
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Agora-Workbench-fdroid-debug
           path: app/build/outputs/apk/fdroid/debug/*.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          APK=$(find app/build/outputs/apk/fdroid/debug -name '*.apk' | head -1)
+          # Delete existing release+tag if present (for re-runs)
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git push origin :refs/tags/"$TAG" 2>/dev/null || true
+          gh release create "$TAG" "$APK"             --title "Agora Workbench $TAG"             --notes "Automated build from main branch.
+
+          **Changes in this release:**
+          - Proot sandbox: CI builds libproot_exec.so/libproot_loader.so/libtalloc.so
+          - Update check completely removed
+          - GitHub tool authorization added to system prompt
+          - GitHub tools always visible (sign-in check deferred to execution)
+          - Version bumped to $TAG"
