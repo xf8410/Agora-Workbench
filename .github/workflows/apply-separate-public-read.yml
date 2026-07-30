@@ -1,5 +1,8 @@
 name: Apply separate public repository read
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/apply-separate-public-read.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -22,28 +25,14 @@ jobs:
           s=p.read_text()
           old='''        if (!client.isSignedIn()) return errorJson("GitHub is not signed in. Go to Settings → GitHub Workbench to sign in with a token or Device Flow.")
         val args = runCatching'''
-          new='''        // Do not gate the whole provider on login: github_read_file supports anonymous
-        // public repositories. All account listing and mutation calls still use authenticated
-        // GitHubApiClient.request() and therefore continue to require login.
+          new='''        // github_read_file supports anonymous public repositories; authenticated
+        // listing and mutations remain guarded inside GitHubApiClient.request().
         val args = runCatching'''
           if old in s: s=s.replace(old,new,1)
           elif new not in s: raise SystemExit('global auth marker mismatch')
-          s=s.replace(
-              'Read a UTF-8 text file or list a directory in a GitHub repository.',
-              'Read a UTF-8 text file or list a directory. Public repositories work without login; private repositories require the signed-in account.',
-              1,
-          )
-          s=s.replace(
-              '"ref" to string("Branch, tag, or commit. Defaults to main.")',
-              '"ref" to string("Branch, tag, or commit. Empty means the repository default branch.")',
-              1,
-          )
-          # Keep ref empty so GitHubApiClient can resolve repositories whose default is not main.
-          s=s.replace(
-              '"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))',
-              '"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref"))',
-              1,
-          )
+          s=s.replace('Read a UTF-8 text file or list a directory in a GitHub repository.','Read a UTF-8 text file or list a directory. Public repositories work without login; private repositories require the signed-in account.',1)
+          s=s.replace('"ref" to string("Branch, tag, or commit. Defaults to main.")','"ref" to string("Branch, tag, or commit. Empty means the repository default branch.")',1)
+          s=s.replace('"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))','"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref"))',1)
           p.write_text(s)
           PY
           git config user.name 'Agora Workbench Bot'
