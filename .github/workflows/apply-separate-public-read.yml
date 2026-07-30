@@ -1,78 +1,14 @@
 name: Apply separate public repository read
-on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/apply-separate-public-read.yml']
+
+"on":
   workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
-  patch-and-build:
+  notice:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: workbench/separate-public-repo-read
-          submodules: recursive
-          fetch-depth: 0
-      - name: Separate logged-in operations from anonymous public reads
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt')
-          s=p.read_text()
-          old='''        if (!client.isSignedIn()) return errorJson("GitHub is not signed in. Go to Settings → GitHub Workbench to sign in with a token or Device Flow.")
-        val args = runCatching'''
-          new='''        // github_read_file supports anonymous public repositories; authenticated
-        // listing and mutations remain guarded inside GitHubApiClient.request().
-        val args = runCatching'''
-          if old in s:
-              s=s.replace(old,new,1)
-          elif new not in s:
-              raise SystemExit('global auth marker mismatch')
-          old_description='Read a UTF-8 text file or list a directory in a GitHub repository.'
-          new_description='Read a UTF-8 text file or list a directory. Public repositories work without login; private repositories require the signed-in account.'
-          if old_description in s:
-              s=s.replace(old_description,new_description,1)
-          elif new_description not in s:
-              raise SystemExit('description marker mismatch')
-          old_ref='"ref" to string("Branch, tag, or commit. Defaults to main.")'
-          new_ref='"ref" to string("Branch, tag, or commit. Empty means the repository default branch.")'
-          if old_ref in s:
-              s=s.replace(old_ref,new_ref,1)
-          elif new_ref not in s:
-              raise SystemExit('ref marker mismatch')
-          old_dispatch='"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))'
-          new_dispatch='"github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref"))'
-          if old_dispatch in s:
-              s=s.replace(old_dispatch,new_dispatch,1)
-          elif new_dispatch not in s:
-              raise SystemExit('dispatch marker mismatch')
-          p.write_text(s)
-          PY
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/github/GitHubApiClient.kt app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt
-          git diff --cached --check
-          if ! git diff --cached --quiet; then
-            git commit -m 'feat: read public repositories without GitHub login'
-            git push origin HEAD:workbench/separate-public-repo-read
-          else
-            echo 'Public repository read patch is already applied.'
-          fi
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-      - uses: android-actions/setup-android@v3
-      - name: Install Android NDK
-        run: sdkmanager 'ndk;28.2.13676358'
-      - name: Build native dependencies
-        run: bash build-proot.sh
-      - name: Compile and test
-        run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
+      - name: Maintenance notice
+        run: echo "This one-time public-read patch workflow has been retired."
