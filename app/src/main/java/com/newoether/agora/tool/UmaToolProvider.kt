@@ -4,6 +4,7 @@ import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.api.ToolFunction
 import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
+import com.newoether.agora.uma.UmaProtocolCapture
 import com.newoether.agora.uma.UmaRuntimeState
 import com.newoether.agora.viewmodel.GenerationContext
 import java.net.HttpURLConnection
@@ -24,8 +25,8 @@ class UmaToolProvider : ToolProvider {
     private val names = setOf(
         "uma_health", "uma_status", "uma_summary", "uma_get_snapshot", "uma_get_changes",
         "uma_event_choices", "uma_event_observations", "uma_hook_diagnostics",
-        "uma_event_reward_targets", "uma_ramen_transitions", "uma_search_classes",
-        "uma_get_fields", "uma_get_methods", "uma_find_method"
+        "uma_event_reward_targets", "uma_ramen_transitions", "uma_protocol_metadata",
+        "uma_search_classes", "uma_get_fields", "uma_get_methods", "uma_find_method"
     )
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
@@ -43,6 +44,7 @@ class UmaToolProvider : ToolProvider {
             tool("uma_hook_diagnostics", "Read the bounded hlpatch hook diagnostic endpoint.", emptyMap()),
             tool("uma_event_reward_targets", "Read the whitelisted event reward target diagnostics.", emptyMap()),
             tool("uma_ramen_transitions", "Read the bounded recent Ramen transition observations. Use only for a Ramen investigation.", emptyMap()),
+            tool("uma_protocol_metadata", "Read at most 20 recent sanitized protocol observations. Returns only route path, direction, size and local id; never payloads, headers, cookies, tokens, text or hex.", emptyMap()),
             tool("uma_search_classes", "Targeted IL2CPP class-name search. Never performs a full class scan.", mapOf(
                 "keyword" to string("Specific class-name keyword, 2-80 characters.")), listOf("keyword")),
             tool("uma_get_fields", "Read fields for one explicitly named IL2CPP class.", mapOf(
@@ -58,6 +60,9 @@ class UmaToolProvider : ToolProvider {
         if (name !in names) return error("Unknown Uma tool")
         if (name == "uma_get_snapshot") return UmaRuntimeState.snapshotJson()
         if (name == "uma_get_changes") return UmaRuntimeState.changesJson()
+        if (name == "uma_protocol_metadata") return runCatching {
+            UmaProtocolCapture.readSanitizedMetadata()
+        }.getOrElse { error(it.message ?: "Protocol metadata read failed") }
         val args = runCatching {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
         }.getOrElse { return error("Invalid tool arguments") }
