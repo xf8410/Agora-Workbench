@@ -1,6 +1,10 @@
 name: Fix archive compiler error
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - workbench/durable-archive-action-logs
+    paths:
+      - .github/workflows/fix-archive-build.yml
 permissions:
   contents: write
 jobs:
@@ -40,16 +44,13 @@ jobs:
                   }.take(250).joinToString("\n").ifBlank { response.body.take(budget) }
                   remaining -= focused.length
                   entries += buildJsonObject {
-                      put("job_id", job.long("id"))
-                      put("name", job.string("name"))
+                      put("job_id", job.long("id")); put("name", job.string("name"))
                       put("log", focused)
                       put("truncated", response.truncated || response.body.length > focused.length)
                   }
               }
               return buildJsonObject {
-                  put("run_id", runId)
-                  put("failed_jobs", JsonArray(entries))
-                  put("truncated", remaining <= 0)
+                  put("run_id", runId); put("failed_jobs", JsonArray(entries)); put("truncated", remaining <= 0)
               }.toString()
           }
 
