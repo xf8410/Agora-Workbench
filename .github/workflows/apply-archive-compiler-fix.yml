@@ -1,0 +1,22 @@
+name: Apply archive compiler fix
+on:
+  push:
+    branches: [workbench/durable-archive-action-logs]
+    paths: [scripts/fix_archive_failed_logs.py]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/durable-archive-action-logs
+      - run: python3 scripts/fix_archive_failed_logs.py
+      - run: |
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt
+          git diff --cached --check
+          git commit -m 'fix: move Actions log read outside JSON DSL'
+          git push origin HEAD:workbench/durable-archive-action-logs
