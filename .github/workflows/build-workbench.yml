@@ -42,7 +42,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
-          set -o pipefail
+          exec > >(tee "$GITHUB_WORKSPACE/ci-signing.log") 2>&1
+          set -euo pipefail
           signing_dir="$RUNNER_TEMP/workbench-signing"
           mkdir -p "$signing_dir"
           cd "$signing_dir"
@@ -58,7 +59,6 @@ jobs:
             echo "keyAlias=workbench"
             echo "keyPassword=$KEY_PASSWORD"
           } > "$GITHUB_WORKSPACE/local.properties"
-        2>&1 | tee "$GITHUB_WORKSPACE/ci-signing.log"
 
       - name: Diagnose proot build
         id: proot
