@@ -1,0 +1,51 @@
+name: Apply GitHub tool suite
+
+on: [workflow_dispatch]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore wiring, bump version, and remove installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          target='workbench/github-tool-suite'
+          git fetch origin "$target" main
+          git checkout -B "$target" "origin/$target"
+          git checkout origin/main -- app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt')
+          s=p.read_text()
+          old='    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)'
+          new='''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
+              provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: false }
+          }'''
+          if s.count(old) != 1: raise SystemExit('GitHub provider wiring marker mismatch')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('app/build.gradle.kts')
+          s=p.read_text()
+          if 'versionCode = 30' not in s or 'versionName = "1.4.2-workbench"' not in s:
+              raise SystemExit('Version marker mismatch')
+          s=s.replace('versionCode = 30','versionCode = 31',1)
+          s=s.replace('versionName = "1.4.2-workbench"','versionName = "1.4.3-workbench"',1)
+          p.write_text(s)
+          PY
+          git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt app/build.gradle.kts
+          git commit -m 'feat: wire confirmed GitHub tool suite and bump 1.4.3'
+          git push origin "HEAD:$target"
+
+          git checkout -B main origin/main
+          git rm .github/workflows/apply-github-tool-suite.yml
+          git commit -m 'chore: remove one-shot GitHub tool installer'
+          git push origin HEAD:main
