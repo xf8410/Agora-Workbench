@@ -7,14 +7,6 @@ plugins {
     id("buildlogic.removefirstlast-fix")
 }
 
-import java.util.Properties
-
-val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("local.properties")
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(keystorePropertiesFile.reader())
-}
-
 android {
     namespace = "com.newoether.agora"
     compileSdk {
@@ -29,7 +21,6 @@ android {
         targetSdk = 36
         versionCode = 30
         versionName = "1.4.2-workbench"
-
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -48,21 +39,10 @@ android {
         arg("room.schemaLocation", "$projectDir/schemas")
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file(keystoreProperties.getProperty("storeFile", "."))
-            storePassword = keystoreProperties.getProperty("storePassword", "")
-            keyAlias = keystoreProperties.getProperty("keyAlias", "")
-            keyPassword = keystoreProperties.getProperty("keyPassword", "")
-        }
-    }
-
-    val hasKeystore = keystoreProperties.getProperty("storeFile", ".").let { it != "." }
-    val releaseSigning = if (hasKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
-
     buildTypes {
         release {
-            signingConfig = releaseSigning
+            // Intentionally unsigned. CI builds fdroidDebug, for which the Android
+            // Gradle Plugin creates and uses its standard runner-local debug key.
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -93,7 +73,8 @@ android {
         compose = true
     }
 
-    // Extract .so files to disk for ProcessBuilder exec (Kai approach)
+    // Required for ProcessBuilder to execute the packaged proot shared objects.
+    // This is native-library packaging and is unrelated to APK release signing.
     @Suppress("UnstableApiUsage")
     packaging {
         jniLibs {
@@ -112,36 +93,6 @@ android {
 // built via GNUmakefile (see .build-proot/) and placed directly in jniLibs.
 // No CMake target is needed — the binaries are manually managed prebuilts.
 // talloc is built with SONAME=libtalloc.so (no version) so AGP packaging works.
-
-tasks.register<Copy>("copyPlayApk") {
-    from("build/outputs/apk/play/release")
-    into("release")
-    include("*.apk")
-}
-
-tasks.register<Copy>("copyFdroidApk") {
-    from("build/outputs/apk/fdroid/release")
-    into("release")
-    include("*.apk")
-}
-
-tasks.register<Copy>("copyPlayBundle") {
-    from("build/outputs/bundle/playRelease")
-    into("release")
-    include("*.aab")
-}
-
-afterEvaluate {
-    tasks.named("assemblePlayRelease") {
-        finalizedBy("copyPlayApk")
-    }
-    tasks.named("assembleFdroidRelease") {
-        finalizedBy("copyFdroidApk")
-    }
-    tasks.named("bundlePlayRelease") {
-        finalizedBy("copyPlayBundle")
-    }
-}
 
 dependencies {
     implementation(libs.androidx.core.ktx)
