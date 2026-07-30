@@ -15,7 +15,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-data class GitHubApiResponse(val code: Int, val body: String)
+data class GitHubApiResponse(val code: Int, val body: String, val truncated: Boolean = false)
 
 /** Small, controlled GitHub REST client. The token is read internally and never returned. */
 class GitHubApiClient(context: Context) {
@@ -24,10 +24,20 @@ class GitHubApiClient(context: Context) {
 
     fun isSignedIn(): Boolean = auth.loadSession() != null
 
-    suspend fun request(method: String, path: String, body: JsonElement? = null): GitHubApiResponse = withContext(Dispatchers.IO) {
+    suspend fun request(method: String, path: String, body: JsonElement? = null): GitHubApiResponse =
+        requestBounded(method, path, body, 2_000_000)
+
+    /** Reads at most [maxChars]. This is used for Actions logs so a large log cannot OOM the app. */
+    suspend fun requestBounded(
+        method: String,
+        path: String,
+        body: JsonElement? = null,
+        maxChars: Int = 64_000,
+    ): GitHubApiResponse = withContext(Dispatchers.IO) {
         val session = auth.loadSession() ?: error("GitHub is not signed in")
         val connection = URL("https://api.github.com$path").openConnection() as HttpURLConnection
         try {
+            connection.instanceFollowRedirects = true
             connection.requestMethod = method
             connection.connectTimeout = 15_000
             connection.readTimeout = 45_000
@@ -42,7 +52,21 @@ class GitHubApiClient(context: Context) {
             }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            GitHubApiResponse(code, stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+            if (stream == null) return@withContext GitHubApiResponse(code, "")
+            val reader = stream.bufferedReader()
+            val out = StringBuilder(minOf(maxChars, 16_384))
+            val buffer = CharArray(4096)
+            var truncated = false
+            reader.use {
+                while (out.length < maxChars) {
+                    val wanted = minOf(buffer.size, maxChars - out.length)
+                    val n = it.read(buffer, 0, wanted)
+                    if (n < 0) break
+                    out.append(buffer, 0, n)
+                }
+                if (out.length >= maxChars && it.read() >= 0) truncated = true
+            }
+            GitHubApiResponse(code, out.toString(), truncated)
         } finally { connection.disconnect() }
     }
 
@@ -63,7 +87,6 @@ class GitHubApiClient(context: Context) {
         return json.parseToJsonElement(response.body)
     }
 
-    /** Compatibility helper for callers that explicitly require a single file. */
     suspend fun readFile(repo: String, path: String, ref: String): JsonObject =
         readContent(repo, path, ref) as? JsonObject ?: error("Expected a GitHub file response, but path is a directory")
 
