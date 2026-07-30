@@ -94,8 +94,8 @@ class ChatViewModel(
 ) : AndroidViewModel(application) {
 
     companion object {
-        private const val INITIAL_MESSAGE_WINDOW = 100
-        private const val MESSAGE_WINDOW_STEP = 100
+        private const val INITIAL_MESSAGE_WINDOW = 40
+        private const val MESSAGE_WINDOW_STEP = 40
         private const val MAX_MESSAGE_WINDOW = 500
 
         /** Overlay fade duration for conversation-switch transitions. */
@@ -636,12 +636,7 @@ class ChatViewModel(
                         // generation in the target conversation would be misread as idle and its
                         // in-flight SENDING message wrongly marked STOPPED.
                         if (!state.generating.value) {
-                            val stuckMessages = convRepo.getMessagesForConversation(id).first()
-                                .filter { it.status == MessageStatus.SENDING || it.status == MessageStatus.THINKING || it.status == MessageStatus.TOOL_CALLING || it.status == MessageStatus.TRANSCRIBING }
-
-                            stuckMessages.forEach { msg ->
-                                convRepo.upsertMessage(msg.copy(status = MessageStatus.STOPPED))
-                            }
+                            convRepo.fixStuckMessages(id)
                         }
 
                         // Restore selected branches
@@ -666,46 +661,47 @@ class ChatViewModel(
                             convRepo.getMessageCountForConversation(id)
                         ) { entities, total -> entities to total }.collect { (entities, total) ->
                             _hasOlderMessages.value = entities.size < total && messageWindowSize.value < MAX_MESSAGE_WINDOW
-                            val mapped = entities.map {
-                                ChatMessage(
-                                    id = it.id,
-                                    parentId = it.parentId,
-                                    text = SearchResultFormatter.format(it.text, appContext),
-                                    images = it.images,
-                                    thoughts = it.thoughts,
-                                    thoughtTitle = it.thoughtTitle,
-                                    tokenCount = it.tokenCount,
-                                    status = it.status,
-                                    participant = it.participant,
-                                    timestamp = it.timestamp,
-                                    thoughtTimeMs = it.thoughtTimeMs,
-                                    modelName = it.modelName,
-                                    segments = it.toolCallJson?.let { json ->
-                                        try { Json.decodeFromString<List<MessageSegment>>(json) } catch (_: Exception) { null }
-                                    } ?: it.thoughts?.takeIf { t -> t.isNotBlank() }?.let { listOf(MessageSegment(type = "thought", content = it)) },
-                                    toolCall = it.toolCallJson?.let { json ->
-                                        try {
-                                            val segs = Json.decodeFromString<List<MessageSegment>>(json)
-                                            segs.lastOrNull { s -> s.type == "tool" }?.let { s ->
-                                                val rawResult = s.toolResult ?: ""
-                                                ToolCallData(s.toolName ?: "", s.toolArgs ?: "{}", SearchResultFormatter.format(rawResult, appContext))
-                                            }
-                                        } catch (_: Exception) { null }
-                                    },
-                                    attachmentMeta = it.attachmentMeta?.let { json ->
-                                        try { Json.decodeFromString<AttachmentMeta>(json) } catch (_: Exception) { null }
+                            // Keep formatting/JSON decoding off Main and decode tool JSON once.
+                            val mapped = withContext(Dispatchers.Default) {
+                                entities.map { entity ->
+                                    val decodedSegments = entity.toolCallJson?.let { raw ->
+                                        try { Json.decodeFromString<List<MessageSegment>>(raw) }
+                                        catch (_: Exception) { null }
                                     }
-                                )
+                                    ChatMessage(
+                                        id = entity.id,
+                                        parentId = entity.parentId,
+                                        text = SearchResultFormatter.format(entity.text, appContext),
+                                        images = entity.images,
+                                        thoughts = entity.thoughts,
+                                        thoughtTitle = entity.thoughtTitle,
+                                        tokenCount = entity.tokenCount,
+                                        status = entity.status,
+                                        participant = entity.participant,
+                                        timestamp = entity.timestamp,
+                                        thoughtTimeMs = entity.thoughtTimeMs,
+                                        modelName = entity.modelName,
+                                        segments = decodedSegments ?: entity.thoughts
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?.let { listOf(MessageSegment(type = "thought", content = it)) },
+                                        toolCall = decodedSegments?.lastOrNull { it.type == "tool" }?.let { seg ->
+                                            ToolCallData(
+                                                seg.toolName.orEmpty(),
+                                                seg.toolArgs ?: "{}",
+                                                SearchResultFormatter.format(seg.toolResult.orEmpty(), appContext)
+                                            )
+                                        },
+                                        attachmentMeta = entity.attachmentMeta?.let { raw ->
+                                            try { Json.decodeFromString<AttachmentMeta>(raw) }
+                                            catch (_: Exception) { null }
+                                        }
+                                    )
+                                }
                             }
-                            // Backfill toolCall for old result_ messages persisted without toolCallJson.
-                            // They inherit the parent tool_ message's ToolCallData so the provider can
-                            // format them as proper "tool" role messages with matching tool_call_id.
+                            val mappedById = mapped.associateBy { it.id }
                             _allMessages.value = mapped.map { msg ->
                                 if (msg.id.startsWith(Constants.RESULT_MSG_PREFIX) && msg.toolCall == null) {
-                                    val parentTool = mapped.find { it.id == msg.parentId }
-                                    if (parentTool != null && parentTool.toolCall != null) {
-                                        msg.copy(toolCall = parentTool.toolCall)
-                                    } else msg
+                                    mappedById[msg.parentId]?.toolCall?.let { msg.copy(toolCall = it) } ?: msg
                                 } else msg
                             }
                             if (!generationMirrorStarted) {
@@ -914,12 +910,12 @@ class ChatViewModel(
         switchingJob?.cancel()
         _isTransitioningToNewChat.value = false
         _isSwitching.value = true
+        // Query Room immediately; animate the switching overlay concurrently.
+        _isNewChatMode.value = false
+        _branchSwitchTrigger.value = null
+        messageWindowSize.value = INITIAL_MESSAGE_WINDOW
+        _currentConversationId.value = id
         switchingJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS) // Allow overlay to fade in
-            _isNewChatMode.value = false
-            _branchSwitchTrigger.value = null
-            messageWindowSize.value = INITIAL_MESSAGE_WINDOW
-            _currentConversationId.value = id
             val conversation = convRepo.getConversation(id)
             _currentActiveModel.value = conversation?.modelId
             triggerScrollToMessage()

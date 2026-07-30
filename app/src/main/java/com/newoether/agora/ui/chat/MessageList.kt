@@ -70,11 +70,13 @@ fun MessageList(
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
 
-    val currentPath = messages.list.filter { it.participant != Participant.ERROR }
-    val contextStartIndex = if (currentPath.size > maxContextWindow) currentPath.size - maxContextWindow else 0
-    val inContextIds = currentPath.drop(contextStartIndex).map { it.id }.toSet()
-
-    val lastUserMessageIndex = messages.list.indexOfLast { it.participant == Participant.USER }
+    val inContextIds = remember(messages, maxContextWindow) {
+        messages.list.filter { it.participant != Participant.ERROR }
+            .takeLast(maxContextWindow.coerceAtLeast(0)).mapTo(HashSet()) { it.id }
+    }
+    val lastUserMessageIndex = remember(messages) {
+        messages.list.indexOfLast { it.participant == Participant.USER }
+    }
 
     // Precompute branch siblings grouped by parent once per allMessages change.
     // Previously this filter+sort ran per visible item (O(n²) and re-run on every

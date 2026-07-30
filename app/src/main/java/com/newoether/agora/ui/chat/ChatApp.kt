@@ -382,7 +382,7 @@ fun ChatApp(
                                 }
                             }
 
-                            delay(500)
+                            delay(32)
                             this@withTimeout.cancel()
                         }
                     }

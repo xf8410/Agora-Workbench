@@ -139,7 +139,10 @@ data class EmbeddingEntity(
 
 @Entity(
     tableName = "messages",
-    indices = [Index(value = ["conversationId"])],
+    indices = [
+        Index(value = ["conversationId"]),
+        Index(value = ["conversationId", "timestamp"]),
+    ],
     foreignKeys = [
         ForeignKey(
             entity = ChatEntity::class,
@@ -193,6 +196,14 @@ interface ChatDao {
 
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
     fun getMessageCountForConversation(conversationId: String): Flow<Int>
+
+    /** Fix abandoned rows without reading their potentially huge payload columns. */
+    @Query("""
+        UPDATE messages SET status = 'STOPPED'
+        WHERE conversationId = :conversationId
+          AND status IN ('SENDING', 'THINKING', 'TOOL_CALLING', 'TRANSCRIBING')
+    """)
+    suspend fun stopStuckMessages(conversationId: String)
 
     @Upsert
     suspend fun upsertConversation(conversation: ChatEntity)
@@ -456,7 +467,7 @@ abstract class ChatDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
 
     companion object {
-        const val CURRENT_VERSION = 15
+        const val CURRENT_VERSION = 16
         const val DB_NAME = "agora_db"
 
         val ALL_MIGRATIONS = listOf(
@@ -577,6 +588,11 @@ abstract class ChatDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE conversations ADD COLUMN draftText TEXT NOT NULL DEFAULT ''")
                     db.execSQL("ALTER TABLE conversations ADD COLUMN draftAttachments TEXT")
+                }
+            },
+            object : Migration(15, 16) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_conversationId_timestamp ON messages (conversationId, timestamp)")
                 }
             }
         )

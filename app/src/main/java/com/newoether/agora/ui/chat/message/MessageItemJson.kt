@@ -21,12 +21,24 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
+private const val MAX_STRUCTURED_JSON_CHARS = 64 * 1024
+private const val MAX_PLAIN_PREVIEW_CHARS = 32 * 1024
+private const val MAX_JSON_DEPTH = 12
+private const val MAX_JSON_CHILDREN = 200
+
 private fun parseJsonOrNull(text: String): JsonElement? {
-    return try { Json.parseToJsonElement(text) } catch (_: Exception) { null }
+    if (text.length > MAX_STRUCTURED_JSON_CHARS) return null
+    // Deep nesting can throw StackOverflowError, which is not an Exception.
+    return try { Json.parseToJsonElement(text) } catch (_: Throwable) { null }
 }
 
 @Composable
 private fun JsonNodeView(json: JsonElement, depth: Int = 0) {
+    if (depth >= MAX_JSON_DEPTH) {
+        Text("… nested JSON truncated", style = ChatType.meta,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
     when (json) {
         is kotlinx.serialization.json.JsonObject -> JsonObjectView(json, depth)
         is kotlinx.serialization.json.JsonArray -> JsonArrayView(json, depth)
@@ -61,7 +73,7 @@ private fun KeyChip(label: String, color: androidx.compose.ui.graphics.Color) {
 @Composable
 private fun JsonObjectView(obj: kotlinx.serialization.json.JsonObject, depth: Int) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        obj.entries.forEach { (key, value) ->
+        obj.entries.take(MAX_JSON_CHILDREN).forEach { (key, value) ->
             val blockString = isBlockString(value)
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -112,7 +124,7 @@ private fun JsonArrayView(arr: kotlinx.serialization.json.JsonArray, depth: Int)
     if (allPrimitive && arr.size <= 8) {
         Row(modifier = Modifier.padding(vertical = 1.dp)) {
             Text("[", style = ChatType.thoughtBody, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            arr.forEachIndexed { i, item ->
+            arr.take(MAX_JSON_CHILDREN).forEachIndexed { i, item ->
                 when (item) {
                     is JsonPrimitive -> JsonPrimitiveView(item, inline = true)
                     is kotlinx.serialization.json.JsonNull -> JsonNullView()
@@ -126,7 +138,7 @@ private fun JsonArrayView(arr: kotlinx.serialization.json.JsonArray, depth: Int)
         }
     } else {
         Column(modifier = Modifier.fillMaxWidth()) {
-            arr.forEachIndexed { i, item ->
+            arr.take(MAX_JSON_CHILDREN).forEachIndexed { i, item ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
                     verticalAlignment = Alignment.Top
@@ -137,9 +149,9 @@ private fun JsonArrayView(arr: kotlinx.serialization.json.JsonArray, depth: Int)
                         is JsonPrimitive -> JsonPrimitiveView(item, modifier = Modifier.weight(1f))
                         is kotlinx.serialization.json.JsonNull -> JsonNullView()
                         is kotlinx.serialization.json.JsonObject ->
-                            Box(Modifier.weight(1f)) { JsonObjectView(item, depth) }
+                            Box(Modifier.weight(1f)) { JsonObjectView(item, depth + 1) }
                         is kotlinx.serialization.json.JsonArray ->
-                            Box(Modifier.weight(1f)) { JsonArrayView(item, depth) }
+                            Box(Modifier.weight(1f)) { JsonArrayView(item, depth + 1) }
                     }
                 }
             }
@@ -185,12 +197,21 @@ internal fun JsonOrPlainView(text: String) {
     if (json != null) {
         SelectionContainer { JsonNodeView(json) }
     } else {
+        val truncated = text.length > MAX_PLAIN_PREVIEW_CHARS
+        val preview = if (truncated) text.take(MAX_PLAIN_PREVIEW_CHARS) else text
         SelectionContainer {
-            Text(
-                text = text,
-                style = ChatType.thoughtCodeLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column {
+                if (truncated) {
+                    Text(
+                        "Large JSON (${text.length} chars) — preview truncated for stability",
+                        style = ChatType.meta,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+                Text(preview, style = ChatType.thoughtCodeLarge,
+                    color = MaterialTheme.colorScheme.onSurface)
+            }
         }
     }
 }
