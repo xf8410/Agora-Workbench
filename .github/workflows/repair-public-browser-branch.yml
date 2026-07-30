@@ -1,5 +1,8 @@
 name: Repair public browser branch
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/repair-public-browser-branch.yml']
   workflow_dispatch:
 permissions:
   contents: write
