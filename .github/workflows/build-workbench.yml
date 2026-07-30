@@ -34,64 +34,16 @@ jobs:
         shell: bash
         run: sdkmanager 'ndk;28.2.13676358' 2>&1 | tee ci-ndk.log
 
-      - name: Diagnose signing
+      - name: Use ephemeral CI signing
         id: signing
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
-          exec > >(tee "$GITHUB_WORKSPACE/ci-signing.log") 2>&1
-          set -euo pipefail
-          signing_dir="$RUNNER_TEMP/workbench-signing"
-          mkdir -p "$signing_dir"
-          cd "$signing_dir"
-          gh release download workbench-signing-key --repo "$REPOSITORY" \
-            --pattern 'workbench-upload.jks' --pattern 'signing.env' --dir .
-          test -s workbench-upload.jks
-          test -s signing.env
-          source signing.env
-
-          keytool -list -keystore workbench-upload.jks \
-            -storepass "$KEYSTORE_PASSWORD" -alias workbench
-
-          # Export the private key into a fresh PKCS12 store with a known simple
-          # password. Gradle signs with this normalized temporary store instead of
-          # reopening the legacy JKS, avoiding JKS provider/password compatibility
-          # problems and local.properties escaping of the original passwords.
-          normalized_store="$signing_dir/workbench-normalized.p12"
-          normalized_password='agora-ci-normalized-2026'
-          normalize_key() {
-            local candidate="$1"
-            rm -f "$normalized_store"
-            keytool -importkeystore -noprompt \
-              -srckeystore workbench-upload.jks \
-              -srcstorepass "$KEYSTORE_PASSWORD" \
-              -srcalias workbench \
-              -srckeypass "$candidate" \
-              -destkeystore "$normalized_store" \
-              -deststoretype PKCS12 \
-              -deststorepass "$normalized_password" \
-              -destkeypass "$normalized_password" >/dev/null 2>&1
-            keytool -list -keystore "$normalized_store" \
-              -storepass "$normalized_password" -alias workbench >/dev/null
-          }
-          if normalize_key "$KEY_PASSWORD"; then
-            echo 'Private key normalized using KEY_PASSWORD.'
-          elif normalize_key "$KEYSTORE_PASSWORD"; then
-            echo 'Private key normalized using KEYSTORE_PASSWORD.'
-          else
-            echo 'Unable to decrypt and normalize private key alias workbench.' >&2
-            exit 1
-          fi
-
-          {
-            echo "storeFile=$normalized_store"
-            echo "storePassword=$normalized_password"
-            echo "keyAlias=workbench"
-            echo "keyPassword=$normalized_password"
-          } > "$GITHUB_WORKSPACE/local.properties"
+          # app/build.gradle.kts deliberately falls back to Android's generated debug
+          # keystore when local.properties has no release keystore. This produces an
+          # installable APK without depending on the broken persistent signing asset.
+          rm -f local.properties
+          echo 'Using runner-local Android debug key; uninstall older builds before installation.' \
+            | tee ci-signing.log
 
       - name: Diagnose proot build
         id: proot
@@ -109,13 +61,34 @@ jobs:
           ./gradlew --no-daemon --console=plain --stacktrace \
             testFdroidDebugUnitTest assembleFdroidRelease 2>&1 | tee ci-gradle-release.log
 
+      - name: Verify installable APK
+        id: apk
+        if: steps.gradle.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find app/build/outputs/apk/fdroid/release -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" \
+            verify --verbose --print-certs "$apk"
+          echo "Verified installable APK: $apk"
+
+      - name: Upload APK
+        if: steps.gradle.outcome == 'success' && steps.apk.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agora-workbench-fdroid-release-ephemeral-signing
+          path: app/build/outputs/apk/fdroid/release/*.apk
+          if-no-files-found: error
+
       - name: Commit all diagnostic logs
         if: always()
         shell: bash
         run: |
-          printf 'ndk=%s\nsigning=%s\nproot=%s\ngradle=%s\n' \
+          printf 'ndk=%s\nsigning=%s\nproot=%s\ngradle=%s\napk=%s\n' \
             '${{ steps.ndk.outcome }}' '${{ steps.signing.outcome }}' \
-            '${{ steps.proot.outcome }}' '${{ steps.gradle.outcome }}' > ci-stage-results.txt
+            '${{ steps.proot.outcome }}' '${{ steps.gradle.outcome }}' \
+            '${{ steps.apk.outcome }}' > ci-stage-results.txt
           git config user.name 'Agora Workbench Bot'
           git config user.email 'actions@github.com'
           git add -f ci-*.log ci-stage-results.txt
@@ -123,5 +96,5 @@ jobs:
           git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Preserve stage failures
-        if: steps.ndk.outcome == 'failure' || steps.signing.outcome == 'failure' || steps.proot.outcome == 'failure' || steps.gradle.outcome == 'failure'
+        if: steps.ndk.outcome == 'failure' || steps.signing.outcome == 'failure' || steps.proot.outcome == 'failure' || steps.gradle.outcome == 'failure' || steps.apk.outcome == 'failure'
         run: exit 1
