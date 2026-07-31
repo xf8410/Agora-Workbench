@@ -42,37 +42,38 @@ jobs:
           source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$source_apk"
           mkdir -p release
-          cp "$source_apk" release/Agora-Workbench-1.4.3-workbench-fdroid-debug.apk
-          sha256sum release/Agora-Workbench-1.4.3-workbench-fdroid-debug.apk \
-            > release/Agora-Workbench-1.4.3-workbench-fdroid-debug.apk.sha256
+          cp "$source_apk" release/Agora-Workbench-1.4.4-workbench-fdroid-debug.apk
+          sha256sum release/Agora-Workbench-1.4.4-workbench-fdroid-debug.apk \
+            > release/Agora-Workbench-1.4.4-workbench-fdroid-debug.apk.sha256
 
       - name: Upload Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-1.4.3-workbench-fdroid-debug
+          name: Agora-Workbench-1.4.4-workbench-fdroid-debug
           path: release/*
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish Agora Workbench 1.4.3 as latest Release
+      - name: Publish Agora Workbench 1.4.4 as latest Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.3-workbench
+          tag_name: v1.4.4-workbench
           target_commitish: ${{ github.sha }}
-          name: Agora Workbench v1.4.3-workbench
+          name: Agora Workbench v1.4.4-workbench
           prerelease: false
           draft: false
           make_latest: true
           body: |
             Automated Agora Workbench build.
 
-            Version: `1.4.3-workbench`
-            Version code: `31`
+            Version: `1.4.4-workbench`
+            Version code: `32`
             Branch: `main`
             Commit: `${{ github.sha }}`
 
-            Includes the conversation cross-talk and branch-state fixes.
+            Adds Agora-controlled protocol capture, hlpatch v3.25 metadata support,
+            and a broad bounded reader for non-mutating local SO endpoints.
           files: release/*
           fail_on_unmatched_files: true
           overwrite_files: true
