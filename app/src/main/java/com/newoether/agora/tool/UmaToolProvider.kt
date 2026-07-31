@@ -65,15 +65,15 @@ class UmaToolProvider : ToolProvider {
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
-        if (name !in names) return error("Unknown Uma tool")
+        if (name !in names) return toolError("Unknown Uma tool")
         if (name == "uma_get_snapshot") return UmaRuntimeState.snapshotJson()
         if (name == "uma_get_changes") return UmaRuntimeState.changesJson()
         if (name == "uma_protocol_metadata") return runCatching {
             UmaProtocolCapture.readSanitizedMetadata()
-        }.getOrElse { error(it.message ?: "Protocol metadata read failed") }
+        }.getOrElse { toolError(it.message ?: "Protocol metadata read failed") }
         val args = runCatching {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
-        }.getOrElse { return error("Invalid tool arguments") }
+        }.getOrElse { return toolError("Invalid tool arguments") }
         fun text(key: String) = (args[key] as? JsonPrimitive)?.content.orEmpty().trim()
         fun safeSegment(value: String, min: Int, max: Int, label: String): String {
             require(value.length in min..max) { "$label length must be $min-$max" }
@@ -83,11 +83,12 @@ class UmaToolProvider : ToolProvider {
         return runCatching {
             when (name) {
                 "uma_sniff_set_enabled" -> {
-                    val enabled = (args["enabled"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
-                        ?: error("enabled must be true or false")
+                    val enabledText = (args["enabled"] as? JsonPrimitive)?.content
+                    val enabled = enabledText?.toBooleanStrictOrNull()
+                        ?: throw IllegalArgumentException("enabled must be true or false")
                     UmaProtocolCapture.setEnabled(enabled)
                 }
-                "uma_sniff_clear" -> get("/api/sniff/clear", 32 * 1024)
+                "uma_sniff_clear" -> UmaProtocolCapture.clear()
                 "uma_read_endpoint" -> {
                     val path = validateReadPath(text("path"))
                     val maxKiB = text("max_kib").toIntOrNull()?.coerceIn(1, 1024) ?: 256
@@ -110,12 +111,12 @@ class UmaToolProvider : ToolProvider {
                         "uma_get_fields" -> "/fields/${safeSegment(text("class_name"), 1, 160, "class_name")}"
                         "uma_get_methods" -> "/methods/${safeSegment(text("class_name"), 1, 160, "class_name")}"
                         "uma_find_method" -> "/find_method/${safeSegment(text("method"), 2, 120, "method")}"
-                        else -> error("Unknown Uma tool")
+                        else -> throw IllegalArgumentException("Unknown Uma tool")
                     }
                     get(path, if (name == "uma_summary") 128 * 1024 else 32 * 1024)
                 }
             }
-        }.getOrElse { error(it.message ?: "Local SO request failed") }
+        }.getOrElse { toolError(it.message ?: "Local SO request failed") }
     }
 
     private fun validateReadPath(input: String): String {
@@ -164,6 +165,6 @@ class UmaToolProvider : ToolProvider {
         ToolDefinition(function = ToolFunction(name = name, description = description,
             parameters = ToolParameters(properties = properties, required = required)))
 
-    private fun error(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
+    private fun toolError(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
     override fun handles(name: String): Boolean = name in names
 }
