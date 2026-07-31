@@ -77,8 +77,9 @@ class ConversationRepository(
     fun getMessageCountForConversation(conversationId: String): Flow<Int> =
         chatDao.getMessageCountForConversation(conversationId)
 
+    /** Complete tree used for parent/leaf resolution and mutations. */
     suspend fun getMessagesForConversationSnapshot(conversationId: String): List<MessageEntity> =
-        chatDao.getMessagesForConversation(conversationId).first()
+        chatDao.getAllMessagesForConversation(conversationId)
 
     suspend fun getLastMessageForConversation(conversationId: String): MessageEntity? =
         chatDao.getLastMessageForConversation(conversationId)
