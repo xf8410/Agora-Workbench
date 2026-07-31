@@ -1,12 +1,15 @@
 name: Build Agora Workbench APK
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths-ignore:
       - '**/*.md'
+
 permissions:
-  contents: read
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,22 +18,58 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
+
       - uses: android-actions/setup-android@v3
+
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
+
       - name: Build F-Droid debug APK
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace assembleFdroidDebug
-      - name: Upload APK
+
+      - name: Prepare APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$source_apk"
+          mkdir -p release
+          cp "$source_apk" release/Agora-Workbench-1.4.3-workbench-fdroid-debug.apk
+          sha256sum release/Agora-Workbench-1.4.3-workbench-fdroid-debug.apk \
+            > release/Agora-Workbench-1.4.3-workbench-fdroid-debug.apk.sha256
+
+      - name: Upload Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-fdroid-debug
-          path: app/build/outputs/apk/fdroid/debug/*.apk
+          name: Agora-Workbench-1.4.3-workbench-fdroid-debug
+          path: release/*
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish rolling Workbench Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: workbench-latest
+          name: Agora Workbench 1.4.3
+          prerelease: true
+          make_latest: true
+          body: |
+            Rolling Workbench build from `${{ github.sha }}`.
+
+            Version: `1.4.3-workbench` (`versionCode 31`)
+
+            Includes the conversation cross-talk and branch-state fixes. This rolling
+            release is replaced by each successful build from `main`.
+          files: release/*
+          fail_on_unmatched_files: true
+          overwrite_files: true
