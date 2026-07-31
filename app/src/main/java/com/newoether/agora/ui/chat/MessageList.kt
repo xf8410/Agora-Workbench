@@ -80,9 +80,6 @@ fun MessageList(
         messages.list.indexOfLast { it.participant == Participant.USER }
     }
 
-    // Precompute branch siblings grouped by parent once per allMessages change.
-    // Previously this filter+sort ran per visible item (O(n²) and re-run on every
-    // streaming-token recomposition of the active message).
     val siblingsByParent = remember(allMessages) {
         allMessages.list
             .filter { !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX) }
@@ -90,7 +87,10 @@ fun MessageList(
             .mapValues { (_, v) -> v.sortedBy { it.timestamp } }
     }
 
-    val extraPadding = if (lastUserMessageIndex == -1 || viewportHeight == 0) {
+    // The spacer is useful while an answer is streaming: it keeps the latest user turn near
+    // the top and reserves room for incoming tokens. Once generation stops it must disappear,
+    // otherwise a short stored reply leaves a large scrollable blank area below the message.
+    val extraPadding = if (!isLoading || lastUserMessageIndex == -1 || viewportHeight == 0) {
         0.dp
     } else {
         with(density) {
@@ -140,39 +140,36 @@ fun MessageList(
                 val branchIndex = siblings.indexOfFirst { it.id == message.id }
                 val totalBranches = siblings.size
 
-                // Fade newly-appended messages in. Placement/fade-out left off so this
-                // doesn't fight the manual height/scroll padding management below.
                 Box(modifier = if (isLoading) Modifier else Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = null)) {
-                MessageItem(
-                    message = message,
-                    onEdit = { id, text ->
-                        onEditMessage(id, text)
-                        editingMessageId = null
-                    },
-                    // isStreaming driven by message status, not isLoading flag
-                    isStreaming = isLastMessage && message.participant == Participant.MODEL
-                        && message.status in setOf(MessageStatus.SENDING, MessageStatus.THINKING, MessageStatus.TOOL_CALLING, MessageStatus.TRANSCRIBING),
-                    isLoading = isLoading,
-                    isEditingAllowed = (editingMessageId == null || editingMessageId == message.id) && !isLoading,
-                    isEditing = editingMessageId == message.id,
-                    isSwitching = isSwitching,
-                    isInContext = isInContext,
-                    modelAliases = modelAliases,
-                    visualizeContextRollout = visualizeContextRollout,
-                    toolCallDisplayMode = toolCallDisplayMode,
-                    onStartEdit = { editingMessageId = message.id },
-                    onCancelEdit = { editingMessageId = null },
-                    branchIndex = branchIndex,
-                    totalBranches = totalBranches,
-                    onSwitchBranch = { direction -> onSwitchBranch(message.parentId, message.id, direction) },
-                    onRegenerate = onRegenerate,
-                    onDelete = onDelete,
-                    onMediaClick = onMediaClick,
-                    onFileContentClick = onFileContentClick,
-                    onPdfPagesClick = onPdfPagesClick,
-                    onHeightChanged = { height -> messageHeights[message.id] = height },
-                    thoughtExpandedStates = thoughtExpandedStates
-                )
+                    MessageItem(
+                        message = message,
+                        onEdit = { id, text ->
+                            onEditMessage(id, text)
+                            editingMessageId = null
+                        },
+                        isStreaming = isLastMessage && message.participant == Participant.MODEL
+                            && message.status in setOf(MessageStatus.SENDING, MessageStatus.THINKING, MessageStatus.TOOL_CALLING, MessageStatus.TRANSCRIBING),
+                        isLoading = isLoading,
+                        isEditingAllowed = (editingMessageId == null || editingMessageId == message.id) && !isLoading,
+                        isEditing = editingMessageId == message.id,
+                        isSwitching = isSwitching,
+                        isInContext = isInContext,
+                        modelAliases = modelAliases,
+                        visualizeContextRollout = visualizeContextRollout,
+                        toolCallDisplayMode = toolCallDisplayMode,
+                        onStartEdit = { editingMessageId = message.id },
+                        onCancelEdit = { editingMessageId = null },
+                        branchIndex = branchIndex,
+                        totalBranches = totalBranches,
+                        onSwitchBranch = { direction -> onSwitchBranch(message.parentId, message.id, direction) },
+                        onRegenerate = onRegenerate,
+                        onDelete = onDelete,
+                        onMediaClick = onMediaClick,
+                        onFileContentClick = onFileContentClick,
+                        onPdfPagesClick = onPdfPagesClick,
+                        onHeightChanged = { height -> messageHeights[message.id] = height },
+                        thoughtExpandedStates = thoughtExpandedStates
+                    )
                 }
             }
             item {
