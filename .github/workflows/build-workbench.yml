@@ -36,7 +36,6 @@ jobs:
           ./gradlew --no-daemon --stacktrace assembleFdroidDebug
 
       - name: Prepare APK
-        id: apk
         shell: bash
         run: |
           set -euo pipefail
@@ -55,21 +54,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish rolling Workbench Release
+      - name: Publish Agora Workbench 1.4.3 as latest Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: workbench-latest
-          name: Agora Workbench 1.4.3
-          prerelease: true
+          tag_name: v1.4.3-workbench
+          target_commitish: ${{ github.sha }}
+          name: Agora Workbench v1.4.3-workbench
+          prerelease: false
+          draft: false
           make_latest: true
           body: |
-            Rolling Workbench build from `${{ github.sha }}`.
+            Automated Agora Workbench build.
 
-            Version: `1.4.3-workbench` (`versionCode 31`)
+            Version: `1.4.3-workbench`
+            Version code: `31`
+            Branch: `main`
+            Commit: `${{ github.sha }}`
 
-            Includes the conversation cross-talk and branch-state fixes. This rolling
-            release is replaced by each successful build from `main`.
+            Includes the conversation cross-talk and branch-state fixes.
           files: release/*
           fail_on_unmatched_files: true
           overwrite_files: true
