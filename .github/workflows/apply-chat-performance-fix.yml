@@ -13,14 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: workbench/fix-chat-history-white-screen
           fetch-depth: 0
       - name: Apply source patch
-        run: python3 scripts/apply_chat_performance_fix.py
+        run: python3 scripts/apply_chat_history_resilience_fix.py
       - name: Commit patch
         run: |
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
           git add app/src/main/java app/build.gradle.kts
           git diff --cached --check
-          git commit -m 'perf: optimize long chat loading and bound large JSON rendering'
-          git push origin HEAD:main
+          git commit -m 'fix: make chat history loading bounded and recoverable'
+          git push origin HEAD:workbench/fix-chat-history-white-screen
