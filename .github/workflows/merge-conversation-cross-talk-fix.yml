@@ -1,0 +1,29 @@
+name: Merge verified conversation cross-talk fix
+
+on:
+  push:
+    branches:
+      - workbench/fix-conversation-cross-talk
+    paths:
+      - .github/workflows/merge-conversation-cross-talk-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Merge verified branch into main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main workbench/fix-conversation-cross-talk
+          git checkout -B main origin/main
+          git merge --no-ff origin/workbench/fix-conversation-cross-talk -m "merge: fix conversation state cross-talk"
+          git rm -f .github/workflows/merge-conversation-cross-talk-fix.yml
+          git commit --amend --no-edit
+          git push origin main
