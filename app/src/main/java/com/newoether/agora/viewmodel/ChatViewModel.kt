@@ -94,8 +94,8 @@ class ChatViewModel(
 ) : AndroidViewModel(application) {
 
     companion object {
-        private const val INITIAL_MESSAGE_WINDOW = 40
-        private const val MESSAGE_WINDOW_STEP = 40
+        private const val INITIAL_MESSAGE_WINDOW = 24
+        private const val MESSAGE_WINDOW_STEP = 24
         private const val MAX_MESSAGE_WINDOW = 500
 
         /** Overlay fade duration for conversation-switch transitions. */
@@ -395,6 +395,9 @@ class ChatViewModel(
     private val _hasOlderMessages = MutableStateFlow(false)
     val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
 
+    private val _historyLoadError = MutableStateFlow<String?>(null)
+    val historyLoadError: StateFlow<String?> = _historyLoadError.asStateFlow()
+
     /** Load one older bounded window. The hard cap prevents a long scroll from rebuilding
      * the original unbounded Room/Compose heap pressure on Android OEM builds. */
     fun loadOlderMessages() {
@@ -659,7 +662,26 @@ class ChatViewModel(
                                 convRepo.getMessagesForConversation(id, limit)
                             },
                             convRepo.getMessageCountForConversation(id)
-                        ) { entities, total -> entities to total }.collect { (entities, total) ->
+                        ) { entities, total -> entities to total }
+                            .retryWhen { cause, attempt ->
+                                if (cause is CancellationException) return@retryWhen false
+                                DebugLog.e("ChatViewModel", "History load failed for $id (attempt $attempt)", cause)
+                                _historyLoadError.value = cause.message ?: "Unable to load conversation history"
+                                if (attempt < 2) {
+                                    delay(150L * (attempt + 1))
+                                    true
+                                } else false
+                            }
+                            .catch { cause ->
+                                if (cause is CancellationException) throw cause
+                                DebugLog.e("ChatViewModel", "History load stopped for $id", cause)
+                                _historyLoadError.value = cause.message ?: "Unable to load conversation history"
+                                _allMessages.value = emptyList()
+                                _hasOlderMessages.value = false
+                                _isSwitching.value = false
+                            }
+                            .collect { (entities, total) ->
+                            _historyLoadError.value = null
                             _hasOlderMessages.value = entities.size < total && messageWindowSize.value < MAX_MESSAGE_WINDOW
                             // Keep formatting/JSON decoding off Main and decode tool JSON once.
                             val mapped = withContext(Dispatchers.Default) {
@@ -906,6 +928,9 @@ fun selectConversation(id: String) {
         _isNewChatMode.value = false
         _branchSwitchTrigger.value = null
         messageWindowSize.value = INITIAL_MESSAGE_WINDOW
+        _historyLoadError.value = null
+        _allMessages.value = emptyList()
+        _hasOlderMessages.value = false
         _currentConversationId.value = id
         switchingJob = viewModelScope.launch {
             val conversation = convRepo.getConversation(id)
