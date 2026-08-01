@@ -1,36 +1,17 @@
-name: Apply Agora Uma Workbench integration
+name: Legacy Uma integration source patch (disabled)
+
+# Disabled to prevent a push-triggered patch from creating another main commit and racing
+# the build/release workflow. Integration changes must be committed to source explicitly.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/apply_uma_workbench_integration.py'
-      - 'app/src/main/java/com/newoether/agora/uma/**'
-      - 'app/src/main/java/com/newoether/agora/tool/UmaToolProvider.kt'
-      - 'app/src/main/java/com/newoether/agora/ui/settings/SettingsUmaPage.kt'
-  workflow_dispatch: {}
+  workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
-  patch:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Apply integration wiring
-        run: python3 scripts/apply_uma_workbench_integration.py
-      - name: Commit wiring
-        run: |
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/AndroidManifest.xml \
-            app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt \
-            app/src/main/java/com/newoether/agora/ui/settings/SettingsScreen.kt \
-            app/src/main/res/values/strings.xml app/build.gradle.kts
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo 'Integration already wired.'
-          else
-            git commit -m 'feat: enable Agora-native Uma background workbench'
-            git push origin HEAD:main
-          fi
+      - run: |
+          echo "Disabled: use a reviewed workbench/* branch; do not patch or push main here."
+          exit 1
