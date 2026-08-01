@@ -1,188 +1,101 @@
 <div align="center">
-  <img src="app/src/main/assets/agora_transparent_large.png" alt="Agora Logo" width="120" />
+  <img src="app/src/main/assets/agora_transparent_large.png" alt="Agora Workbench" width="120" />
 
-  # Agora
+  # Agora Workbench
 
-  **BYOK LLM 客户端 — 多提供商接入、智能代理工作流、远程设备控制**
+  **面向个人 AI 工作流的 Android 魔改客户端**
 
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Platform: Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com)
-  [![Kotlin](https://img.shields.io/badge/Kotlin-Native-blue.svg)](https://kotlinlang.org/)
-  <br/>[English](README.md) | **中文**
-
-  <img src="assets/feature_graphic.png" alt="Agora — 夺回数据主权的 BYOK AI 应用" width="100%" />
+  本仓库是 `xf8410/Agora-Workbench` 的独立维护版本，不是应用商店中的官方 Agora 客户端。
 </div>
 
-## 下载
+## 项目定位
 
-[![F-Droid](https://img.shields.io/badge/F--Droid-安装-blue?logo=fdroid)](https://f-droid.org/packages/com.newoether.agora/)
-&nbsp;&nbsp;
-[![Google Play](https://img.shields.io/badge/Google_Play-安装-blue?logo=google-play)](https://play.google.com/store/apps/details?id=com.newoether.agora)
-&nbsp;&nbsp;
-[![GitHub Releases](https://img.shields.io/badge/GitHub-Releases-blue?logo=github)](https://github.com/newo-ether/Agora/releases)
+Agora Workbench 是在 Android 端持续改造的个人 AI 工作台，重点不是保持上游原版说明，而是为实际使用补充更完整的本地工作区、GitHub 协作、长期记忆、工具调用和受控测试能力。
 
-- **F-Droid（推荐）** — 通过 [F-Droid](https://f-droid.org/) 安装，搜索 **Agora**。
-- **Google Play** — 从 [Google Play 商店](https://play.google.com/store/apps/details?id=com.newoether.agora) 安装。
-- **GitHub Releases** — 从 [Releases 页面](https://github.com/newo-ether/Agora/releases) 下载最新 `.apk`。
-- **从源码构建** — 用 Android Studio 克隆并构建（详见[快速开始](#快速开始)）。
+当前主要方向：
 
----
+- 多模型与自定义 API 提供商接入
+- 本地对话、分支、Token 统计和上下文管理
+- GitHub 仓库读取、修改、分支、Actions 与发布闭环
+- Android 本地 PRoot 工作区及大文件 Artifact 管理
+- 长期记忆、对话归档与上下文仓库同步
+- 受控的本地工具和项目专用扩展
+- 面向本魔改版的独立构建、版本和 Release 流程
 
-**Agora** — 为 AI 重度用户打造的 BYOK Android 客户端。接入 8+ 内置提供商（外加无限自定义端点），使用自己的 API 密钥，支持对话分支树、llama.cpp 本地推理、加密远程 Shell 控制。所有数据存储在本地，无日志泄露。开源，MIT 协议。
+## 当前状态
 
-## 截图
+本项目处于持续开发和实机验证阶段，并非稳定发行版。目前暂停修复并保留以下待办：
 
-<table>
-<tr>
-<td width="33%"><img src="assets/screenshot_1.jpg" alt="聊天" width="100%"/></td>
-<td width="33%"><img src="assets/screenshot_2.jpg" alt="工具" width="100%"/></td>
-<td width="33%"><img src="assets/screenshot_3.jpg" alt="设置" width="100%"/></td>
-</tr>
-</table>
+1. 客户端重启后对话与 Token 计数的可靠持久化
+2. 历史对话白屏、正文缺失和恢复路径
+3. 回复结束后异常空白字符
+4. GitHub AI 工具集补全及 GitHub 优先路由
+5. `workbench/*` 到 `main` 的单一集成门
+6. APK、main commit、Actions run 与 Release 的一一对应
 
-## 为什么选择 Agora？
+在这些项目完成验收前，请把构建视为测试版本，并在升级前备份重要数据。
 
-- **无中间层：** 直连 API。无遥测、无追踪、无企业服务器记录你的对话。一切存储在本地 Room 数据库中。
-- **非线性思维：** 树形消息数据库让你可以编辑任意历史消息、重新生成回复、探索备选分支，不会丢失上下文。
-- **原生智能代理：** 多轮工具调用，支持联网搜索、代码执行、远程文件操作、记忆管理、语义对话搜索。
-- **远程控制：** 通过 [Conch](https://github.com/newo-ether/conch) 协议管理服务器、编辑文件、搜索远程代码 — ECDH + AES-256-GCM 端到端加密。
+## 已加入的 Workbench 能力
 
-## 功能特性
+- 独立包名：`com.newoether.agora.workbench`
+- GitHub 登录和保存凭据的受控使用
+- AI 可读取仓库、浏览目录、创建工作分支、修改文件及查看/触发 Actions
+- GitHub 远程代码工作区
+- Android 持久工作目录 `/workspace`
+- PRoot 沙盒和大型输出 Artifact 化
+- 长会话有界加载及 OOM 防护
+- 对话、记忆、提示词和设置的导入导出/备份基础能力
+- 项目专用工具扩展与本地服务接入
 
-### 多提供商接入
-- **8 个内置提供商：** OpenAI、Anthropic、Google Gemini、DeepSeek、通义千问（DashScope）、OpenRouter、Ollama、本地（GGUF via llama.cpp）
-- **无限自定义提供商**，支持任意 Base URL 和 API 密钥
-- **BYOK：** 使用自己的 API 密钥 — 无需订阅，无中间层
-- **每个提供商支持多个 API 密钥**，可命名别名，方便轮换
-- 每个提供商可独立覆盖 Base URL，适配代理和自托管端点
+> GitHub 工具集仍在补全。当前 main 中存在的能力以实际源码和构建记录为准，不以旧工作分支或历史说明为准。
 
-### 智能代理工具
-模型可在多轮循环中自主调用以下工具：
-- **联网搜索** — DuckDuckGo Lite（匿名免密钥）、Brave、Serper、Tavily、SearXNG
-- **代码执行** — Gemini 代码执行、PRoot Alpine Linux 沙盒 + SAF 文件访问
-- **图片生成** — BYOK 文生图，OpenAI 兼容 `/v1/images/generations`，聊天内直接渲染
-- **远程 Shell 与文件 I/O** — 通过 [Conch](https://github.com/newo-ether/conch) 协议执行命令、读写/编辑/搜索远程文件
-- **记忆** — 跨对话的持久活跃记忆和记忆文件存储
-- **对话搜索** — 基于 RAG 的对话历史语义搜索
+## 下载测试版
 
-### 深度推理
-- 支持深度推理：OpenAI o1/o3、Anthropic extended thinking、Gemini thinking、DeepSeek-R1、通义千问 QwQ
-- 可配置推理等级（低/中/高）
-- 流式思考标签渲染，可折叠 UI + 耗时追踪
+唯一可信下载来源是本仓库自己的 Releases：
 
-### 本地智能
-- **本地 LLM 推理** via llama.cpp — 完全离线运行 GGUF 模型
-- **本地 embedding** — 设备端语义搜索（RAG）对话历史
-- **Ollama** 提供商 — 接入局域网自托管模型
+**https://github.com/xf8410/Agora-Workbench/releases**
 
-### 远程设备控制（Conch 协议）
-- ECDH 密钥交换 + AES-256-GCM 加密 + HMAC-SHA256 签名
-- 令牌桶速率限制 + 基于 nonce 的防重放保护
-- **多设备支持** — 配置多台远程服务器并切换
-- **MCP 集成** — Conch 可作为 Claude Desktop MCP 服务器
+不要从 F-Droid、Google Play、上游仓库或其他 Agora Release 下载来验证本魔改版，它们不是同一个应用。
 
-### 知识管理
-- **RAG 语义搜索** 基于余弦相似度搜索所有历史对话
-- 可配置相似度阈值和关键词/模型搜索方式
-- 可独立选择 embedding 模型（远程或本地），不依赖聊天模型
-- **上下文窗口管理** — 实时 token 计数和滑动窗口
-- 可视化上下文范围指示器，淡化窗口外的消息
+下载前应核对：
 
-### 数据可移植
-- **.agora 导出/导入：** 对话、记忆、提示词、设置、API 密钥打包为单一可移植文件
-- **合并、替换、跳过** 三种导入策略
-- **自动备份** — 基于 WorkManager 的周期性备份，可配置周期、分类和保留策略
-- **第三方导入：** Claude 和 ChatGPT 导出格式（.zip / .json）
-- 导出和导入流程均有 API 密钥安全提醒
+- 仓库必须是 `xf8410/Agora-Workbench`
+- 构建来源必须是 `main`
+- Release 标注的 commit 应与待测试 main commit 一致
+- 优先核对 APK 的 SHA-256
+- 安装后的包名应为 `com.newoether.agora.workbench`
 
-### 个性化定制
-- **系统提示词模板**，三段式编辑器（系统提示词 + 用户前置 + 用户后置）
-- 变量替换：`{sent_time}`、`{sent_date}` 及可扩展变量系统
-- 每个对话独立切换模型和系统提示词
-- 聊天底栏可按消息切换模型
-- 每对话生成参数覆盖（温度、maxTokens、惩罚项等）
-- **自动标题生成**，可配置生成模型
+目前发布溯源仍在整改。如果 Release 无法明确对应当前 main HEAD，请暂缓下载并等待新的可验证构建。
 
-### UI & 交互
-- 现代 Material 3 设计，Jetpack Compose + 动态取色（Material You）
-- 亮色 / 暗色 / 跟随系统主题模式，可配置配色方案
-- **非线性分支：** 编辑任意历史消息，分支进入备选对话路径
-- 实时流式响应，消息锚定 + 动画自动滚动
-- 全局触觉反馈（长按、选择、成功/错误）
-- 沉浸式手势图片与媒体查看器
-- Markdown 渲染，支持语法高亮、LaTeX 数学公式、代码块
-- 图片、视频、PDF、文件附件支持及缩略图预览
-- iOS 风格折叠大标题设置页，共享页面过渡动画
-- 模糊效果支持性能可配置开关
-- 支持英文、简体中文和繁体中文
+## 开发与合并规则
 
-## 文档
+- 功能修改先进入 `workbench/*` 分支
+- 分支 CI 成功不等于已经可下载测试
+- 只有合入 `main` 且当前 main HEAD 的 APK构建和发布成功，才算可测试版本
+- 禁止旧补丁工作流用陈旧整文件覆盖新实现
+- 完成的工作分支必须明确合并或说明阻塞原因，不得长期静默遗留
+- 后续 APK 名称和发布清单应包含版本、短 commit、Actions run、构建时间与 SHA-256
 
-📖 **[浏览用户手册](https://newo-ether.github.io/Agora/)** — 24 个页面，涵盖安装、提供商、工具、搜索、记忆、Shell 等。
+## 数据与安全
 
-🏗️ **[架构指南](ARCHITECTURE.md)** — 完整的代码库导览：数据层、API 提供商、JNI、UI 及数据流。
+- API Key、GitHub Token、Cookie 和其他认证信息不得写入仓库、对话归档或构建日志
+- GitHub 写操作应在 `workbench/*` 分支进行，并保留用户确认边界
+- 大型日志和原始数据应保存在受控 Artifact 中，对话只保留有界摘要
+- 项目专用扩展必须采用最小权限、白名单和 fail-closed 策略
 
-## 快速开始
+## 上下文归档分类
 
-### 环境要求
-- [Android Studio](https://developer.android.com/studio)（推荐 Ladybug 及以上）
-- Android SDK 34+
-- 任一支持提供商的 API 密钥
+长期上下文仓库必须将不同项目分开保存：
 
-### 快速配置
+- Agora Workbench：`projects/agora-workbench/`
+- 赛马娘 SO / hlpatch：`projects/uma-so/`
 
-<table>
-<tr>
-<td width="20%"><b>① 启动</b><br/>在设备上打开 Agora。</td>
-<td width="20%"><b>② 设置</b><br/>从导航栏打开<b>设置</b>。</td>
-<td width="20%"><b>③ API 密钥</b><br/>选择<b>提供商</b>，添加你的 <b>API 密钥</b>。</td>
-<td width="20%"><b>④ 模型</b><br/><b>模型</b> →「从所有提供商同步」。</td>
-<td width="20%"><b>⑤ 定制</b><br/>系统提示词、上下文、搜索、记忆。</td>
-</tr>
-</table>
+两者可以存在集成接口，但故障、计划、代码证据和发布状态不得混写在同一个项目文件中。
 
-### 运行本地模型
+## 构建
 
-<table>
-<tr>
-<td width="25%"><b>① 放置</b><br/>将 GGUF 模型文件放到设备上。</td>
-<td width="25%"><b>② 导入</b><br/>设置 → 提供商 → 本地 →「导入 GGUF 模型」。</td>
-<td width="25%"><b>③ 配置</b><br/>设置上下文大小、温度等参数。</td>
-<td width="25%"><b>④ 选择</b><br/>从聊天模型选择器中选择你的本地模型。</td>
-</tr>
-</table>
+仓库使用 Kotlin、Jetpack Compose、Room、Android NDK 和 GitHub Actions。测试构建以仓库 Actions 中的 `Build Agora Workbench APK` 为准；但只有与当前 main HEAD 对应且成功发布的构建才是推荐测试对象。
 
-### 设置远程 Shell（Conch）
+## 说明
 
-<table>
-<tr>
-<td width="33%"><b>① 部署</b><br/>在目标机器上部署 <a href="https://github.com/newo-ether/conch">Conch 服务器</a>。</td>
-<td width="33%"><b>② 添加设备</b><br/>设置 → Shell 设备 → 添加 URL 和 API 密钥。</td>
-<td width="33%"><b>③ 使用</b><br/>模型会自动发现 Shell 设备，用于执行命令、文件操作和搜索。</td>
-</tr>
-</table>
-
-## 技术栈
-
-- **语言：** [Kotlin](https://kotlinlang.org/)
-- **UI 框架：** [Jetpack Compose](https://developer.android.com/jetpack/compose)（Material 3，动态取色）
-- **架构：** MVVM + Kotlin Coroutines & Flow
-- **本地存储：** [Room Database](https://developer.android.com/training/data-storage/room) 树形消息结构 + DataStore Preferences
-- **网络：** OkHttp + SSE 流式传输
-- **序列化：** `kotlinx.serialization`
-- **原生：** llama.cpp via Android NDK（CMake）用于本地 LLM 推理和 embedding
-- **图片加载：** Coil
-- **Markdown：** Multiplatform Markdown Renderer M3
-- **数学公式：** JLaTeXMath-Android
-
-## 参与贡献
-
-欢迎贡献！可以 Fork 仓库、提交 Pull Request 或创建 Issue。
-
-## 隐私
-
-Agora 不会收集、存储或传输任何个人数据。所有对话、API 密钥和设置均存储在本地设备上。消息直接从你的设备发送到你配置的 AI 提供商 — 无中间服务器、无遥测、无追踪。详见[隐私政策](PRIVACY.md)。
-
-## 许可证
-
-本项目基于 [MIT License](LICENSE) 开源。
+本 README 已替换原有官方宣传、官方商店入口、F-Droid 入口及上游关联项目说明。此后文档只描述本仓库实际维护的 Agora Workbench 魔改版本。
