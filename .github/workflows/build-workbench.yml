@@ -27,12 +27,27 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Apply staged source migration on workbench branch
+        if: github.ref == 'refs/heads/workbench/root-fix-release-tools-phase1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f scripts/port_legacy_github_patches_once.py ]]; then
+            python3 scripts/port_legacy_github_patches_once.py
+            git config user.name 'Agora Workbench Bot'
+            git config user.email 'agora-workbench@users.noreply.github.com'
+            git add -A
+            git diff --cached --check
+            git commit -m 'feat: port useful legacy GitHub patches into source'
+            git push origin HEAD:workbench/root-fix-release-tools-phase1
+          fi
+
       - name: Verify checked-out identity
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
             git fetch origin main
             test "$(git rev-parse origin/main)" = "${GITHUB_SHA}"
           fi
@@ -60,37 +75,24 @@ jobs:
           set -euo pipefail
           version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$BUILD_FILE" | head -n1)"
           version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$BUILD_FILE" | head -n1)"
-          test -n "$version_name"
-          test -n "$version_code"
-          short_sha="${GITHUB_SHA:0:12}"
+          test -n "$version_name"; test -n "$version_code"
+          build_sha="$(git rev-parse HEAD)"; short_sha="${build_sha:0:12}"
           built_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          test -n "$source_apk"
-          mkdir -p release
+          test -n "$source_apk"; mkdir -p release
           apk_name="Agora-Workbench-${version_name}-vc${version_code}-${short_sha}-run${GITHUB_RUN_ID}.apk"
           cp "$source_apk" "release/$apk_name"
           apk_sha256="$(sha256sum "release/$apk_name" | awk '{print $1}')"
           printf '%s  %s\n' "$apk_sha256" "$apk_name" > "release/$apk_name.sha256"
           cat > release/build-manifest.json <<EOF
-          {
-            "repository": "${GITHUB_REPOSITORY}",
-            "branch": "${GITHUB_REF_NAME}",
-            "commit": "${GITHUB_SHA}",
-            "versionName": "${version_name}",
-            "versionCode": ${version_code},
-            "runId": ${GITHUB_RUN_ID},
-            "runAttempt": ${GITHUB_RUN_ATTEMPT},
-            "builtAtUtc": "${built_at}",
-            "apk": "${apk_name}",
-            "sha256": "${apk_sha256}"
-          }
+          {"repository":"${GITHUB_REPOSITORY}","branch":"${GITHUB_REF_NAME}","commit":"${build_sha}","versionName":"${version_name}","versionCode":${version_code},"runId":${GITHUB_RUN_ID},"runAttempt":${GITHUB_RUN_ATTEMPT},"builtAtUtc":"${built_at}","apk":"${apk_name}","sha256":"${apk_sha256}"}
           EOF
           cat > release/RELEASE_NOTES.md <<EOF
           Automated Agora Workbench build from the exact checked-out commit.
 
           - Version: \`${version_name}\` (code \`${version_code}\`)
           - Branch: \`${GITHUB_REF_NAME}\`
-          - Commit: \`${GITHUB_SHA}\`
+          - Commit: \`${build_sha}\`
           - Actions run: \`${GITHUB_RUN_ID}\` attempt \`${GITHUB_RUN_ATTEMPT}\`
           - Built UTC: \`${built_at}\`
           - APK: \`${apk_name}\`
