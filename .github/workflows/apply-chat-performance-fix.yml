@@ -1,8 +1,8 @@
-name: One-shot migrate useful legacy workflow code
+name: One-shot remove migrated legacy patch workflows
 
-# One-shot branch migration. It ports the only still-missing useful pieces into normal
-# Kotlin source, removes every legacy source-patching workflow (including itself), and
-# never writes main. After a successful run this workflow no longer exists on the branch.
+# All useful runtime pieces were audited against normal source before this deletion:
+# chat performance, GitHub login, workspace artifacts, Uma wiring, and broad reader are
+# already present. Missing GitHub mutations are being ported as reviewed Kotlin source.
 on:
   workflow_dispatch:
 
@@ -10,100 +10,17 @@ permissions:
   contents: write
 
 jobs:
-  migrate-and-delete:
+  delete:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: workbench/root-fix-release-tools-phase1
           fetch-depth: 0
-      - name: Port confirmation and repository creation into source
+      - name: Delete all legacy source patchers, including this one
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def one(path, old, new):
-              p = Path(path)
-              s = p.read_text()
-              if new in s:
-                  return
-              count = s.count(old)
-              if count != 1:
-                  raise SystemExit(f"expected one marker in {path}, got {count}: {old[:100]!r}")
-              p.write_text(s.replace(old, new, 1))
-
-          provider = 'app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt'
-          one(provider,
-              '    private val client = GitHubApiClient(context.applicationContext)\n    private val json = Json { ignoreUnknownKeys = true }',
-              '    private val client = GitHubApiClient(context.applicationContext)\n    /** Every remote mutation must be explicitly approved; null is fail-closed. */\n    var confirm: (suspend (summary: String) -> Boolean)? = null\n    private val json = Json { ignoreUnknownKeys = true }')
-          one(provider,
-              '        "github_list_repositories", "github_read_file", "github_create_branch",',
-              '        "github_list_repositories", "github_create_repository", "github_read_file", "github_create_branch",')
-          one(provider,
-              '            tool("github_list_repositories", "List up to 100 repositories accessible to the signed-in GitHub account.", emptyMap()),\n            tool("github_read_file",',
-              '''            tool("github_list_repositories", "List up to 100 repositories accessible to the signed-in GitHub account.", emptyMap()),
-            tool("github_create_repository", "Create a repository for the signed-in user after explicit confirmation.", mapOf(
-                "name" to string("Repository name, 1-100 safe characters."),
-                "description" to string("Optional description, maximum 350 characters."),
-                "private" to ToolProperty("boolean", "Defaults to true."),
-                "auto_init" to ToolProperty("boolean", "Initialize main with README; defaults to true."),
-            ), listOf("name")),
-            tool("github_read_file",''')
-          one(provider,
-              '                "github_list_repositories" -> listRepositories()\n                "github_read_file" ->',
-              '''                "github_list_repositories" -> listRepositories()
-                "github_create_repository" -> {
-                    val repoName = arg("name")
-                    checkConfirmed("Create GitHub repository $repoName")
-                    createRepository(repoName, arg("description"), boolArg("private", true), boolArg("auto_init", true))
-                }
-                "github_read_file" ->''')
-          one(provider,
-              '                "github_create_branch" -> {\n                    requireWorkbenchBranch(arg("branch"))',
-              '                "github_create_branch" -> {\n                    requireWorkbenchBranch(arg("branch"))\n                    checkConfirmed("Create GitHub branch ${arg("repo")}:${arg("branch")}")')
-          one(provider,
-              '                "github_write_file" -> {\n                    requireWorkbenchBranch(arg("branch"))',
-              '                "github_write_file" -> {\n                    requireWorkbenchBranch(arg("branch"))\n                    checkConfirmed("Commit ${arg("repo")}:${arg("branch")}/${arg("path")}")')
-          one(provider,
-              '                "github_dispatch_workflow" -> dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))',
-              '                "github_dispatch_workflow" -> {\n                    checkConfirmed("Dispatch ${arg("repo")} workflow ${arg("workflow")} on ${arg("ref", "main")}")\n                    dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))\n                }')
-          one(provider,
-              '    private suspend fun listRepositories(): String {',
-              '''    private suspend fun checkConfirmed(summary: String) {
-        if (confirm?.invoke(summary) != true) error("GitHub mutation denied or confirmation unavailable")
-    }
-
-    private suspend fun createRepository(name: String, description: String, privateRepo: Boolean, autoInit: Boolean): String {
-        require(name.matches(Regex("[A-Za-z0-9._-]{1,100}"))) { "Invalid repository name" }
-        val response = client.request("POST", "/user/repos", buildJsonObject {
-            put("name", name)
-            if (description.isNotBlank()) put("description", description.take(350))
-            put("private", privateRepo)
-            put("auto_init", autoInit)
-        })
-        requireSuccess(response.code, response.body)
-        val obj = json.parseToJsonElement(response.body).jsonObject
-        return buildJsonObject {
-            put("ok", true); put("full_name", obj.str("full_name")); put("private", obj.bool("private", privateRepo))
-            put("default_branch", obj.str("default_branch", "main")); put("html_url", obj.str("html_url"))
-        }.toString()
-    }
-
-    private suspend fun listRepositories(): String {''')
-
-          manager = 'app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt'
-          one(manager,
-              '    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)',
-              '''    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
-        // Fail closed when no UI confirmation sink is attached (headless/background generation).
-        provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: false }
-    }''')
-          PY
-
-      - name: Remove legacy source-patching workflows
-        run: |
           git rm \
             .github/workflows/apply-chat-performance-fix.yml \
             .github/workflows/github-ai-tools.yml \
@@ -114,17 +31,8 @@ jobs:
             .github/workflows/apply-uma-workbench-integration.yml \
             .github/workflows/merge-uma-broad-reader.yml \
             .github/workflows/apply-github-create-repository-tool.yml
-
-      - name: Commit migration to this workbench branch only
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${GITHUB_REF_NAME}" != "main"
-          test "${GITHUB_REF_NAME}" != "master"
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt \
-                  app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
           git diff --cached --check
-          git commit -m 'refactor: migrate useful workflow patches into source and remove legacy patchers'
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git commit -m 'ci: remove migrated legacy source patch workflows'
+          git push origin HEAD:workbench/root-fix-release-tools-phase1
