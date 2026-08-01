@@ -24,9 +24,11 @@ import kotlinx.serialization.json.putJsonArray
 /** Bounded GitHub REST tools. Credentials stay inside [GitHubApiClient]. */
 class GitHubToolProvider(context: Context) : ToolProvider {
     private val client = GitHubApiClient(context.applicationContext)
+    /** Remote mutations are fail-closed unless the user approves them. */
+    var confirm: (suspend (summary: String) -> Boolean)? = null
     private val json = Json { ignoreUnknownKeys = true }
     private val names = setOf(
-        "github_list_repositories", "github_read_file", "github_create_branch",
+        "github_list_repositories", "github_create_repository", "github_read_file", "github_create_branch",
         "github_write_file", "github_get_workflow_runs", "github_dispatch_workflow",
         "github_list_branches", "github_list_commits", "github_get_tree",
         "github_search_code", "github_compare_refs", "github_get_pull_request",
@@ -38,6 +40,12 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         fun integer(description: String) = ToolProperty("integer", description)
         return listOf(
             tool("github_list_repositories", "List up to 100 repositories accessible to the signed-in GitHub account.", emptyMap()),
+            tool("github_create_repository", "Create a repository after explicit user confirmation.", mapOf(
+                "name" to string("Repository name, 1-100 safe characters."),
+                "description" to string("Optional description."),
+                "private" to ToolProperty("boolean", "Defaults to true."),
+                "auto_init" to ToolProperty("boolean", "Initialize main with README; defaults to true."),
+            ), listOf("name")),
             tool("github_read_file", "Read a bounded UTF-8 preview or list one repository directory.", mapOf(
                 "repo" to string("Repository in owner/name form."),
                 "path" to string("Repository-relative path; empty means root."),
@@ -90,6 +98,10 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         return runCatching {
             when (name) {
                 "github_list_repositories" -> listRepositories()
+                "github_create_repository" -> {
+                    checkConfirmed("Create GitHub repository ${arg("name")}")
+                    createRepository(arg("name"), arg("description"), boolArg("private", true), boolArg("auto_init", true))
+                }
                 "github_read_file" -> readFileOrDirectory(arg("repo"), arg("path"), arg("ref", "main"))
                 "github_list_branches" -> listBranches(arg("repo"), intArg("limit", 30))
                 "github_list_commits" -> listCommits(arg("repo"), arg("ref", "main"), arg("path"), intArg("limit", 20))
@@ -102,16 +114,44 @@ class GitHubToolProvider(context: Context) : ToolProvider {
                 "github_list_workflow_artifacts" -> workflowArtifacts(arg("repo"), arg("run_id"), intArg("limit", 50))
                 "github_create_branch" -> {
                     requireWorkbenchBranch(arg("branch"))
+                    checkConfirmed("Create GitHub branch ${arg("repo")}:${arg("branch")}")
                     buildJsonObject { put("branch", client.createBranch(arg("repo"), arg("branch"), arg("base", "main"))); put("ok", true) }.toString()
                 }
                 "github_write_file" -> {
                     requireWorkbenchBranch(arg("branch"))
+                    checkConfirmed("Commit ${arg("repo")}:${arg("branch")}/${arg("path")}")
                     buildJsonObject { put("commit_sha", client.writeFile(arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content"))); put("ok", true) }.toString()
                 }
-                "github_dispatch_workflow" -> dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))
+                "github_dispatch_workflow" -> {
+                    checkConfirmed("Dispatch ${arg("repo")} workflow ${arg("workflow")} on ${arg("ref", "main")}")
+                    dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))
+                }
                 else -> errorJson("Unknown GitHub tool")
             }
         }.getOrElse { errorJson(it.message ?: "GitHub operation failed") }
+    }
+
+    private suspend fun checkConfirmed(summary: String) {
+        if (confirm?.invoke(summary) != true) error("GitHub mutation denied or confirmation unavailable")
+    }
+
+    private suspend fun createRepository(name: String, description: String, privateRepo: Boolean, autoInit: Boolean): String {
+        require(name.matches(Regex("[A-Za-z0-9._-]{1,100}"))) { "Invalid repository name" }
+        val response = client.request("POST", "/user/repos", buildJsonObject {
+            put("name", name)
+            if (description.isNotBlank()) put("description", description.take(350))
+            put("private", privateRepo)
+            put("auto_init", autoInit)
+        })
+        requireSuccess(response.code, response.body)
+        val obj = json.parseToJsonElement(response.body).jsonObject
+        return buildJsonObject {
+            put("ok", true)
+            put("full_name", obj.str("full_name"))
+            put("private", obj.bool("private", privateRepo))
+            put("default_branch", obj.str("default_branch", "main"))
+            put("html_url", obj.str("html_url"))
+        }.toString()
     }
 
     private suspend fun listRepositories(): String {

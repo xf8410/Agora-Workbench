@@ -166,7 +166,9 @@ class GenerationManager(
     private val webSearchToolProvider = WebSearchToolProvider()
     private val ragToolProvider = RagToolProvider(conversations)
     private val imageGenToolProvider = ImageGenToolProvider(app)
-    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app)
+    private val githubToolProvider = com.newoether.agora.tool.GitHubToolProvider(app).also { provider ->
+        provider.confirm = { summary -> onConfirmShellCommand?.invoke("GitHub", summary) ?: false }
+    }
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
         // Forward to the ViewModel-provided gate at call time (read the var lazily).
