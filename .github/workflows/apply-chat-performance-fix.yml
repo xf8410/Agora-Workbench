@@ -1,26 +1,18 @@
-name: Apply chat history performance fix
+name: Legacy chat performance source patch (disabled)
+
+# Disabled: source-generating workflows must not mutate main or overwrite newer code.
+# The historical script remains in git for audit only; apply changes through a reviewed
+# workbench/* branch and the normal build/integration path.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/apply_chat_performance_fix.py'
-  workflow_dispatch: {}
+  workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
-  patch:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Apply source patch
-        run: python3 scripts/apply_chat_performance_fix.py
-      - name: Commit patch
-        run: |
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java app/build.gradle.kts
-          git diff --cached --check
-          git commit -m 'perf: optimize long chat loading and bound large JSON rendering'
-          git push origin HEAD:main
+      - run: |
+          echo "Disabled: port the required change to a workbench/* branch and validate it there."
+          exit 1
