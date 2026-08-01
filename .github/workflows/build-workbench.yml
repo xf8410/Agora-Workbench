@@ -27,18 +27,18 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Apply staged source migration on workbench branch
+      - name: Apply staged source wiring on workbench branch
         if: github.ref == 'refs/heads/workbench/root-fix-release-tools-phase1'
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f scripts/port_legacy_github_patches_once.py ]]; then
-            python3 scripts/port_legacy_github_patches_once.py
+          if [[ -f scripts/wire_github_watch_provider_once.py ]]; then
+            python3 scripts/wire_github_watch_provider_once.py
             git config user.name 'Agora Workbench Bot'
             git config user.email 'agora-workbench@users.noreply.github.com'
             git add -A
             git diff --cached --check
-            git commit -m 'feat: port useful legacy GitHub patches into source'
+            git commit -m 'feat: register persistent GitHub Actions watch tools'
             git push origin HEAD:workbench/root-fix-release-tools-phase1
           fi
 
