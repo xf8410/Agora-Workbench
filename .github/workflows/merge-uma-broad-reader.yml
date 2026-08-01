@@ -1,24 +1,17 @@
-name: Merge Uma broad local reader
+name: Legacy feature-specific direct merge (disabled)
 
+# A feature-specific workflow must not merge an old fixed branch into main. Use the common
+# reviewed integration procedure after rebasing on the current main HEAD.
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  merge:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Merge validated feature branch into main
-        run: |
-          set -euo pipefail
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git fetch origin workbench/uma-broad-local-reader
-          git merge --no-ff origin/workbench/uma-broad-local-reader \
-            -m 'merge: Uma broad local reader'
-          git push origin HEAD:main
+      - run: |
+          echo "Disabled: feature-specific direct pushes to main are prohibited."
+          exit 1
