@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Collections
 
-/** Foreground confirmation controller shared by shell and fail-closed GitHub mutations. */
+/** Foreground confirmation controller shared by shell and GitHub mutations. */
 class ShellConfirmationController(private val settings: SettingsRepository) {
     data class PendingShellCommand(
         val server: String,
@@ -20,30 +20,24 @@ class ShellConfirmationController(private val settings: SettingsRepository) {
 
     private val _pendingShellCommand = MutableStateFlow<PendingShellCommand?>(null)
     val pendingShellCommand: StateFlow<PendingShellCommand?> = _pendingShellCommand.asStateFlow()
+
+    /** Servers/providers approved for all mutations until this app process ends. */
     private val sessionAllowedServers = Collections.synchronizedSet(mutableSetOf<String>())
 
     init {
-        // Weak registration: this does not retain the ViewModel. Headless execution remains denied.
+        // Weak registration: this does not retain the ViewModel. Headless execution remains denied
+        // until a foreground user has explicitly granted this process-wide GitHub session.
         GitHubMutationConfirmation.register(this)
     }
 
-    /** Ordinary shell policy: honors the user's setting and per-session trusted-server choice. */
+    /**
+     * Read-only GitHub tools never call this method. On the first mutation the user can approve
+     * once or choose "always allow"; the latter authorizes every later GitHub mutation in this app
+     * process, including branch writes, PR creation and merge, without repetitive prompts.
+     */
     suspend fun confirm(server: String, summary: String): Boolean {
         if (!settings.shellConfirmEnabled.value) return true
         if (sessionAllowedServers.contains(server)) return true
-        return awaitDecision(server, summary)
-    }
-
-    /**
-     * Critical remote mutation policy. Never honors the shell-confirm toggle or session trust:
-     * creating/merging a PR must receive a fresh foreground approval for that exact summary.
-     */
-    suspend fun confirmCritical(server: String, summary: String): Boolean =
-        awaitDecision(server, summary)
-
-    private suspend fun awaitDecision(server: String, summary: String): Boolean {
-        // Do not replace another unresolved prompt: two concurrent mutations must not steal one
-        // another's approval. The later operation fails closed and can be retried explicitly.
         if (_pendingShellCommand.value != null) return false
         val deferred = CompletableDeferred<Boolean>()
         val pending = PendingShellCommand(server, summary, deferred)
@@ -57,13 +51,10 @@ class ShellConfirmationController(private val settings: SettingsRepository) {
         }
     }
 
+    /** Called by the UI. "Always allow" is process/session scoped, not permanently persisted. */
     fun resolve(allow: Boolean, alwaysAllowServer: Boolean = false) {
         val pending = _pendingShellCommand.value ?: return
-        // Critical GitHub confirmations are deliberately one-shot. The UI may still display the
-        // existing checkbox, but it cannot authorize future GitHub PR creation/merge operations.
-        if (allow && alwaysAllowServer && pending.server != "GitHub") {
-            sessionAllowedServers.add(pending.server)
-        }
+        if (allow && alwaysAllowServer) sessionAllowedServers.add(pending.server)
         pending.deferred.complete(allow)
         _pendingShellCommand.value = null
     }
