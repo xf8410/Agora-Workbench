@@ -1,0 +1,35 @@
+name: Integrate client resilience fixes once
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/integrate-client-resilience-fixes
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Apply source integration
+        run: python3 scripts/apply_client_resilience_integration.py
+      - name: Validate Kotlin build and tests
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
+      - name: Commit integrated source
+        run: |
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app
+          git diff --cached --check
+          git commit -m 'fix: integrate client white-screen and durability resilience'
+          git push origin HEAD:workbench/integrate-client-resilience-fixes
