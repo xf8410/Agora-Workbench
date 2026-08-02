@@ -1,10 +1,9 @@
 package com.newoether.agora.viewmodel
 
 import com.newoether.agora.model.ChatMessage
-import com.newoether.agora.model.MessageStatus
-import com.newoether.agora.model.Participant
 import com.newoether.agora.util.Constants
 
+/** UI projection for one conversation. */
 data class ConversationUiState(
     val path: List<ChatMessage> = emptyList(),
     val allMessages: List<ChatMessage> = emptyList(),
@@ -13,55 +12,79 @@ data class ConversationUiState(
     val selectedChildren: Map<String?, String> = emptyMap()
 ) {
     companion object {
-        /** Walk the conversation tree to produce the visible path. */
+        private val cacheLock = Any()
+        private var cachedMessages: List<ChatMessage>? = null
+        private var cachedSelections: Map<String?, String>? = null
+        private var cachedPath: List<ChatMessage> = emptyList()
+
+        /**
+         * Resolve the persisted tree once, then overlay the streaming row in O(path length).
+         *
+         * Previously every 500 ms stream frame regrouped and sorted every loaded message. On a
+         * long conversation that work ran together with Markdown parsing and layout on every token
+         * flush, causing visible UI jank even on a fast network. StateFlow keeps the same list/map
+         * instances while only streamingMsg changes, so identity caching safely removes that hot
+         * O(n log n) tree rebuild. Any Room page or branch change creates a new instance and
+         * invalidates the cache.
+         */
         fun resolvePath(
             allMessages: List<ChatMessage>,
             streamingMsg: ChatMessage?,
             selectedChildren: Map<String?, String>
         ): List<ChatMessage> {
-            val path = mutableListOf<ChatMessage>()
-            val messagesByParent = allMessages.groupBy { it.parentId }
+            val base = synchronized(cacheLock) {
+                if (cachedMessages === allMessages && cachedSelections === selectedChildren) {
+                    cachedPath
+                } else {
+                    buildPersistedPath(allMessages, selectedChildren).also {
+                        cachedMessages = allMessages
+                        cachedSelections = selectedChildren
+                        cachedPath = it
+                    }
+                }
+            }
+            val streaming = streamingMsg ?: return base
+            val existing = base.indexOfFirst { it.id == streaming.id }
+            if (existing >= 0) {
+                return base.toMutableList().also { it[existing] = streaming }
+            }
+            val lastId = base.lastOrNull()?.id
+            return if (streaming.parentId == lastId || (streaming.parentId == null && base.isEmpty())) {
+                base + streaming
+            } else base
+        }
+
+        private fun buildPersistedPath(
+            allMessages: List<ChatMessage>,
+            selectedChildren: Map<String?, String>
+        ): List<ChatMessage> {
+            if (allMessages.isEmpty()) return emptyList()
+            val path = ArrayList<ChatMessage>()
+            val byParent = allMessages.groupBy { it.parentId }
                 .mapValues { (_, list) -> list.sortedBy { it.timestamp } }
-            // A bounded DB window may start in the middle of a long branch. Start from the
-            // earliest loaded orphan instead of requiring the root message to be resident.
             val loadedIds = allMessages.asSequence().map { it.id }.toHashSet()
-            var cursor: String? = allMessages
+            var cursor: String? = allMessages.asSequence()
                 .filter { it.parentId != null && it.parentId !in loadedIds }
                 .minByOrNull { it.timestamp }
                 ?.parentId
 
             while (true) {
-                val siblings = messagesByParent[cursor] ?: break
-                if (siblings.isEmpty()) break
-
+                val siblings = byParent[cursor] ?: break
                 val selectedId = selectedChildren[cursor]
-                val visibleSiblings = siblings.filter {
-                    !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX)
-                }
-                var selected = if (visibleSiblings.isNotEmpty()) {
-                    visibleSiblings.find { it.id == selectedId } ?: visibleSiblings.last()
+                val visible = siblings.filterNot(::isSynthetic)
+                val selected = if (visible.isNotEmpty()) {
+                    visible.find { it.id == selectedId } ?: visible.last()
                 } else {
                     siblings.find { it.id == selectedId } ?: siblings.last()
                 }
-                // Substitute streaming message if it matches
-                if (streamingMsg != null && selected.id == streamingMsg.id) {
-                    selected = streamingMsg
-                }
-                val isSynthetic = selected.id.startsWith(Constants.TOOL_MSG_PREFIX) ||
-                    selected.id.startsWith(Constants.RESULT_MSG_PREFIX)
-                if (!isSynthetic || (streamingMsg != null && selected.id == streamingMsg.id)) {
-                    path.add(selected)
-                }
+                if (!isSynthetic(selected)) path += selected
                 cursor = selected.id
-            }
-            // Append streaming message if not yet in path
-            if (streamingMsg != null && path.none { it.id == streamingMsg.id }) {
-                val lastId = path.lastOrNull()?.id
-                if (streamingMsg.parentId == lastId || (streamingMsg.parentId == null && path.isEmpty())) {
-                    path.add(streamingMsg)
-                }
             }
             return path
         }
+
+        private fun isSynthetic(message: ChatMessage): Boolean =
+            message.id.startsWith(Constants.TOOL_MSG_PREFIX) ||
+                message.id.startsWith(Constants.RESULT_MSG_PREFIX)
     }
 }
