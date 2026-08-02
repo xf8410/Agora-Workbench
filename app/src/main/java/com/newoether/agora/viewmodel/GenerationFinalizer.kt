@@ -1,9 +1,10 @@
 package com.newoether.agora.viewmodel
 
+import com.newoether.agora.data.local.MessageEntity
 import com.newoether.agora.data.repository.ConversationRepository
 import com.newoether.agora.data.repository.SettingsRepository
-import com.newoether.agora.data.local.MessageEntity
 import com.newoether.agora.model.ChatMessage
+import com.newoether.agora.model.MessagePersistenceGuard
 import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.util.Constants
@@ -14,24 +15,12 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/**
- * Persists terminal (STOPPED) message state to the DB after a generation is stopped. Kept separate
- * from per-conversation [ConversationGenerationState] (which owns no repos) so it can delegate
- * finalization without holding repository references.
- *
- * Runs on the supplied conversation-owned scope; the stopped conversation id comes from
- * [ConversationGenerationState.StopResult], NOT from the live `currentConversationId`, so a stop
- * triggered after the user switched conversations still persists to the ORIGINAL conversation.
- */
+/** Persists STOPPED state to the original conversation through the shared bounded write path. */
 class GenerationFinalizer(
     private val convRepo: ConversationRepository,
     private val settings: SettingsRepository,
     private val onIndexMessageForRag: (messageId: String, text: String) -> Unit,
 ) {
-    /**
-     * Persist [messages] as STOPPED into [conversationId] on [scope]. Returns the launched job
-     * (or null if nothing to persist). The caller may chain a subsequent generation onto this job.
-     */
     fun launchStopFinalization(
         scope: CoroutineScope,
         conversationId: String?,
@@ -48,9 +37,7 @@ class GenerationFinalizer(
                     if (message.text.isNotBlank() && settings.autoCacheEnabled.value &&
                         (settings.modelSearchMethod.value == Constants.SEARCH_METHOD_RAG ||
                             settings.manualSearchMethod.value == Constants.SEARCH_METHOD_RAG)
-                    ) {
-                        onIndexMessageForRag(message.id, message.text)
-                    }
+                    ) onIndexMessageForRag(message.id, message.text)
                 }
             } catch (e: Exception) {
                 DebugLog.e("AgoraVM", "Failed to persist stopped generation", e)
@@ -60,19 +47,15 @@ class GenerationFinalizer(
 }
 
 private fun ChatMessage.toStoppedEntity(conversationId: String): MessageEntity {
-    val toolJson = segments?.let { Json.encodeToString(it) } ?: toolCall?.let {
-        Json.encodeToString(listOf(
+    val toolJson = segments?.let { MessagePersistenceGuard.encodeSegmentsBounded(it) } ?: toolCall?.let {
+        MessagePersistenceGuard.encodeSegmentsBounded(listOf(
             MessageSegment(
-                type = "tool",
-                toolName = it.toolName,
-                toolArgs = it.arguments,
-                toolResult = it.result,
-                signature = it.signature,
-                toolCallId = it.toolCallId,
+                type = "tool", toolName = it.toolName, toolArgs = it.arguments,
+                toolResult = it.result, signature = it.signature, toolCallId = it.toolCallId,
             )
         ))
     }
-    return MessageEntity(
+    return MessagePersistenceGuard.sanitize(MessageEntity(
         id = id,
         conversationId = conversationId,
         parentId = parentId,
@@ -88,5 +71,5 @@ private fun ChatMessage.toStoppedEntity(conversationId: String): MessageEntity {
         modelName = modelName,
         toolCallJson = toolJson,
         attachmentMeta = attachmentMeta?.let { Json.encodeToString(it) },
-    )
+    ))
 }
