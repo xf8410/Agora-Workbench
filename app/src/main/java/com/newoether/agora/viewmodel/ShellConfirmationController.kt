@@ -10,14 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Collections
 
-/**
- * Coordinates user confirmation of shell commands issued by remote MCP / shell servers.
- *
- * Owns the pending-confirmation [StateFlow], the per-session trust set, and the
- * suspend/await handshake between the generation pipeline (which asks) and the UI
- * (which answers). Extracted from [ChatViewModel] as a single responsibility so the
- * trust policy lives in one place and is independently testable.
- */
+/** Foreground confirmation controller shared by shell and fail-closed GitHub mutations. */
 class ShellConfirmationController(private val settings: SettingsRepository) {
     data class PendingShellCommand(
         val server: String,
@@ -27,31 +20,27 @@ class ShellConfirmationController(private val settings: SettingsRepository) {
 
     private val _pendingShellCommand = MutableStateFlow<PendingShellCommand?>(null)
     val pendingShellCommand: StateFlow<PendingShellCommand?> = _pendingShellCommand.asStateFlow()
-
-    // Servers the user chose to trust for the rest of this app session.
     private val sessionAllowedServers = Collections.synchronizedSet(mutableSetOf<String>())
 
-    /** Suspends until the user resolves the prompt; returns whether the command may run. */
+    init {
+        // Weak registration: this does not retain the ViewModel. Headless execution remains denied.
+        GitHubMutationConfirmation.register(this)
+    }
+
     suspend fun confirm(server: String, summary: String): Boolean {
         if (!settings.shellConfirmEnabled.value) return true
         if (sessionAllowedServers.contains(server)) return true
         val deferred = CompletableDeferred<Boolean>()
         _pendingShellCommand.value = PendingShellCommand(server, summary, deferred)
         return try {
-            // Bound the wait. The dialog renders only while the Activity is composing, so if it is
-            // backgrounded/rebuilt (or this is a headless automation run with no UI) the deferred
-            // would never resolve and the inline-blocking stream coroutine would hang forever
-            // (#49). Fail safe — refuse the command — after the timeout, and let the finally
-            // below clear the stale prompt so a late user tap can't resurrect a dead request.
             withTimeout(Constants.SHELL_CONFIRM_TIMEOUT_MS) { deferred.await() }
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             false
         } finally {
             if (_pendingShellCommand.value?.deferred === deferred) _pendingShellCommand.value = null
         }
     }
 
-    /** Called by the UI to resolve a pending confirmation. */
     fun resolve(allow: Boolean, alwaysAllowServer: Boolean = false) {
         val pending = _pendingShellCommand.value ?: return
         if (allow && alwaysAllowServer) sessionAllowedServers.add(pending.server)
