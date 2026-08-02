@@ -27,23 +27,43 @@ class ShellConfirmationController(private val settings: SettingsRepository) {
         GitHubMutationConfirmation.register(this)
     }
 
+    /** Ordinary shell policy: honors the user's setting and per-session trusted-server choice. */
     suspend fun confirm(server: String, summary: String): Boolean {
         if (!settings.shellConfirmEnabled.value) return true
         if (sessionAllowedServers.contains(server)) return true
+        return awaitDecision(server, summary)
+    }
+
+    /**
+     * Critical remote mutation policy. Never honors the shell-confirm toggle or session trust:
+     * creating/merging a PR must receive a fresh foreground approval for that exact summary.
+     */
+    suspend fun confirmCritical(server: String, summary: String): Boolean =
+        awaitDecision(server, summary)
+
+    private suspend fun awaitDecision(server: String, summary: String): Boolean {
+        // Do not replace another unresolved prompt: two concurrent mutations must not steal one
+        // another's approval. The later operation fails closed and can be retried explicitly.
+        if (_pendingShellCommand.value != null) return false
         val deferred = CompletableDeferred<Boolean>()
-        _pendingShellCommand.value = PendingShellCommand(server, summary, deferred)
+        val pending = PendingShellCommand(server, summary, deferred)
+        _pendingShellCommand.value = pending
         return try {
             withTimeout(Constants.SHELL_CONFIRM_TIMEOUT_MS) { deferred.await() }
         } catch (_: TimeoutCancellationException) {
             false
         } finally {
-            if (_pendingShellCommand.value?.deferred === deferred) _pendingShellCommand.value = null
+            if (_pendingShellCommand.value === pending) _pendingShellCommand.value = null
         }
     }
 
     fun resolve(allow: Boolean, alwaysAllowServer: Boolean = false) {
         val pending = _pendingShellCommand.value ?: return
-        if (allow && alwaysAllowServer) sessionAllowedServers.add(pending.server)
+        // Critical GitHub confirmations are deliberately one-shot. The UI may still display the
+        // existing checkbox, but it cannot authorize future GitHub PR creation/merge operations.
+        if (allow && alwaysAllowServer && pending.server != "GitHub") {
+            sessionAllowedServers.add(pending.server)
+        }
         pending.deferred.complete(allow)
         _pendingShellCommand.value = null
     }
