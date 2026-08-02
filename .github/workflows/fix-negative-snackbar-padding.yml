@@ -1,0 +1,53 @@
+name: Fix negative snackbar padding
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/fix-negative-snackbar-padding-v2
+
+      - name: Clamp dynamic snackbar padding
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/newoether/agora/MainActivity.kt')
+          s = p.read_text()
+          old = '''    val targetSnackbarPadding = if (showSettings || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
+    val snackbarBottomPadding by animateDpAsState(
+        targetValue = targetSnackbarPadding,'''
+          new = '''    // Layout callbacks and inset changes can briefly produce a negative Dp while the
+    // bottom bar is being removed or recomposed. Compose padding rejects negatives.
+    val targetSnackbarPadding = (
+        if (showSettings || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
+    ).coerceAtLeast(0.dp)
+    val snackbarBottomPadding by animateDpAsState(
+        targetValue = targetSnackbarPadding,'''
+          if s.count(old) != 1:
+              raise SystemExit(f'target padding marker count={s.count(old)}')
+          s = s.replace(old, new, 1)
+          old = '''                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = snackbarBottomPadding + 2.dp)'''
+          new = '''                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    // Defensive clamp at the padding boundary as spring animations may
+                    // transiently overshoot below zero even with a non-negative target.
+                    .padding(bottom = (snackbarBottomPadding + 2.dp).coerceAtLeast(0.dp))'''
+          if s.count(old) != 1:
+              raise SystemExit(f'padding call marker count={s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Commit fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/newoether/agora/MainActivity.kt
+          git commit -m "fix: prevent negative snackbar padding crash"
+          git push origin HEAD:workbench/fix-negative-snackbar-padding-v2
