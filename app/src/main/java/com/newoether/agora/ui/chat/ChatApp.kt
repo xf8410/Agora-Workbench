@@ -113,6 +113,7 @@ fun ChatApp(
     val messages by viewModel.messages.collectAsState()
     val allMessages by viewModel.allMessages.collectAsState()
     val hasOlderMessages by viewModel.hasOlderMessages.collectAsState()
+    val historyLoadError by viewModel.historyLoadError.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val queuedSends by viewModel.queuedSends.collectAsState()
     val currentConversationId by viewModel.currentConversationId.collectAsState()
@@ -621,6 +622,8 @@ fun ChatApp(
                                 thoughtExpandedStates = thoughtExpandedStates,
                                 hasOlderMessages = hasOlderMessages,
                                 onLoadOlder = viewModel::loadOlderMessages,
+                                loadError = historyLoadError,
+                                onRetryLoad = { currentConversationId?.let { id -> viewModel.createNewChat(); viewModel.selectConversation(id) } },
                                 contentPadding = PaddingValues(
                                     start = 8.dp,
                                     end = 8.dp,

@@ -72,7 +72,7 @@ class ConversationRepository(
     // ── Messages ──────────────────────────────────────────────
 
     fun getMessagesForConversation(conversationId: String, limit: Int = 100): Flow<List<MessageEntity>> =
-        chatDao.getMessagesForConversation(conversationId, limit.coerceIn(1, 500))
+        chatDao.getMessagesForConversation(conversationId, limit.coerceIn(1, 500), 65_536, 32_768, 131_072, 32_768)
 
     fun getMessageCountForConversation(conversationId: String): Flow<Int> =
         chatDao.getMessageCountForConversation(conversationId)
@@ -84,7 +84,8 @@ class ConversationRepository(
     suspend fun getLastMessageForConversation(conversationId: String): MessageEntity? =
         chatDao.getLastMessageForConversation(conversationId)
 
-    suspend fun upsertMessage(entity: MessageEntity) = chatDao.upsertMessage(entity)
+    suspend fun upsertMessage(entity: MessageEntity) =
+        chatDao.upsertMessage(com.newoether.agora.model.MessagePersistenceGuard.sanitize(entity))
 
     suspend fun deleteMessagesByIds(ids: List<String>) = chatDao.deleteMessagesByIds(ids)
 

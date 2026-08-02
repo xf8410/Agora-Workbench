@@ -58,7 +58,9 @@ fun MessageList(
     onPdfPagesClick: ((pages: List<String>, startIndex: Int) -> Unit)? = null,
     thoughtExpandedStates: SnapshotStateMap<String, Boolean> = remember { mutableStateMapOf() },
     hasOlderMessages: Boolean = false,
-    onLoadOlder: () -> Unit = {}
+    onLoadOlder: () -> Unit = {},
+    loadError: String? = null,
+    onRetryLoad: () -> Unit = {},
 ) {
     var editingMessageId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(isLoading) { if (isLoading) editingMessageId = null }
@@ -88,7 +90,7 @@ fun MessageList(
             .mapValues { (_, v) -> v.sortedBy { it.timestamp } }
     }
 
-    val extraPadding = if (lastUserMessageIndex == -1 || viewportHeight == 0) {
+    val extraPadding = if (!isLoading || lastUserMessageIndex == -1 || viewportHeight == 0) {
         0.dp
     } else {
         with(density) {
@@ -105,6 +107,20 @@ fun MessageList(
     }
 
     Box(modifier = modifier) {
+        if (loadError != null && messages.list.isEmpty()) {
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            ) {
+                androidx.compose.material3.Text("Conversation history could not be loaded")
+                androidx.compose.material3.Text(loadError, modifier = Modifier.padding(top = 8.dp))
+                androidx.compose.material3.Button(onClick = onRetryLoad, modifier = Modifier.padding(top = 16.dp)) {
+                    androidx.compose.material3.Text("Retry")
+                }
+            }
+            return@Box
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = contentPadding,
