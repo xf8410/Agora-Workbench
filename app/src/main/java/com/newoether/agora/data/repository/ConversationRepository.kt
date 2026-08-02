@@ -7,7 +7,7 @@ import com.newoether.agora.data.local.MessageEntity
 import com.newoether.agora.model.AttachmentMeta
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.ChatConversation
-import com.newoether.agora.model.MessageStatus
+import com.newoether.agora.model.MessagePersistenceGuard
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -15,32 +15,21 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-class ConversationRepository(
-    private val chatDao: ChatDao
-) {
-    // ── Conversations ─────────────────────────────────────────
-
+class ConversationRepository(private val chatDao: ChatDao) {
     private fun ChatEntity.toConversation() = ChatConversation(
         id = id, title = title, systemPromptId = systemPromptId, modelId = modelId,
         taskId = taskId, origin = origin, graduated = graduated
     )
 
     fun getAllConversations(): Flow<List<ChatConversation>> =
-        chatDao.getAllConversations().map { entities -> entities.map { it.toConversation() } }
-
+        chatDao.getAllConversations().map { list -> list.map { it.toConversation() } }
     fun observeConversation(id: String): Flow<ChatConversation?> =
         chatDao.observeConversation(id).map { it?.toConversation() }
-
-    /** Executions spawned by [taskId], newest first — the task's execution log. */
     fun getExecutionsForTask(taskId: String): Flow<List<ChatConversation>> =
-        chatDao.getExecutionsForTask(taskId).map { entities -> entities.map { it.toConversation() } }
-
-    /** Observes message-level changes for every execution belonging to [taskId]. */
+        chatDao.getExecutionsForTask(taskId).map { list -> list.map { it.toConversation() } }
     fun observeExecutionMessagesForTask(taskId: String): Flow<List<MessageEntity>> =
         chatDao.observeExecutionMessagesForTask(taskId)
 
-    /** Promotes a task/loop execution into the main list once the user takes it over.
-     *  Returns true only for the transition that made the conversation searchable. */
     suspend fun graduateConversation(id: String): Boolean {
         val conv = chatDao.getConversation(id) ?: return false
         if (conv.origin != "user" && !conv.graduated) {
@@ -50,15 +39,12 @@ class ConversationRepository(
         return false
     }
 
-    suspend fun getConversation(id: String): ChatEntity? =
-        chatDao.getConversation(id)
-
+    suspend fun getConversation(id: String) = chatDao.getConversation(id)
     suspend fun createConversation(title: String, systemPromptId: String? = null, modelId: String? = null): String {
         val id = java.util.UUID.randomUUID().toString()
         chatDao.upsertConversation(ChatEntity(id = id, title = title, systemPromptId = systemPromptId, modelId = modelId))
         return id
     }
-
     suspend fun upsertConversation(entity: ChatEntity) = chatDao.upsertConversation(entity)
 
     suspend fun deleteConversation(id: String) {
@@ -69,167 +55,98 @@ class ConversationRepository(
         chatDao.deleteConversation(id)
     }
 
-    // ── Messages ──────────────────────────────────────────────
-
     fun getMessagesForConversation(conversationId: String, limit: Int = 100): Flow<List<MessageEntity>> =
-        chatDao.getMessagesForConversation(conversationId, limit.coerceIn(1, 500))
-
+        chatDao.getMessagesForConversation(conversationId, limit.coerceIn(1, 200))
     fun getMessageCountForConversation(conversationId: String): Flow<Int> =
         chatDao.getMessageCountForConversation(conversationId)
 
-    /** Complete tree used for parent/leaf resolution and mutations. */
+    /** Legacy full-tree operation. New model/UI paths must prefer ancestor/page queries. */
     suspend fun getMessagesForConversationSnapshot(conversationId: String): List<MessageEntity> =
         chatDao.getAllMessagesForConversation(conversationId)
 
-    suspend fun getLastMessageForConversation(conversationId: String): MessageEntity? =
-        chatDao.getLastMessageForConversation(conversationId)
+    suspend fun getAncestorPath(conversationId: String, leafId: String?, maxDepth: Int = 200): List<MessageEntity> {
+        if (leafId == null) return emptyList()
+        val reverse = ArrayList<MessageEntity>(maxDepth.coerceAtMost(200))
+        var id: String? = leafId
+        var depth = 0
+        while (id != null && depth++ < maxDepth.coerceIn(1, 500)) {
+            val row = chatDao.getMessageInConversation(conversationId, id) ?: break
+            reverse += row
+            id = row.parentId
+        }
+        reverse.reverse()
+        return reverse
+    }
 
-    suspend fun upsertMessage(entity: MessageEntity) = chatDao.upsertMessage(entity)
+    suspend fun getLastMessageForConversation(conversationId: String) = chatDao.getLastMessageForConversation(conversationId)
+
+    /** The one and only messages write boundary. */
+    suspend fun upsertMessage(entity: MessageEntity) =
+        chatDao.upsertMessage(MessagePersistenceGuard.sanitize(entity))
 
     suspend fun deleteMessagesByIds(ids: List<String>) = chatDao.deleteMessagesByIds(ids)
-
-    suspend fun getMessagesByIds(ids: List<String>): List<MessageEntity> =
-        chatDao.getMessagesByIds(ids)
-
-    suspend fun getSearchableMessagesByIds(ids: List<String>): List<MessageEntity> =
+    suspend fun getMessagesByIds(ids: List<String>) = chatDao.getMessagesByIds(ids)
+    suspend fun getSearchableMessagesByIds(ids: List<String>) =
         if (ids.isEmpty()) emptyList() else chatDao.getSearchableMessagesByIds(ids)
-
-    suspend fun isMessageSearchable(messageId: String): Boolean =
-        chatDao.isMessageSearchable(messageId)
-
-    // ── Branch Selection ──────────────────────────────────────
+    suspend fun isMessageSearchable(messageId: String) = chatDao.isMessageSearchable(messageId)
 
     suspend fun saveBranchSelections(conversationId: String, selections: Map<String?, String>) {
         val conversation = chatDao.getConversation(conversationId) ?: return
-        val stringKeyMap = selections.mapKeys { it.key ?: "null" }
-        val json = Json.encodeToString(stringKeyMap)
-        if (conversation.selectedBranchesJson != json) {
-            chatDao.upsertConversation(conversation.copy(selectedBranchesJson = json, lastUpdated = System.currentTimeMillis()))
+        val encoded = Json.encodeToString(selections.mapKeys { it.key ?: "null" })
+        if (conversation.selectedBranchesJson != encoded) {
+            chatDao.upsertConversation(conversation.copy(selectedBranchesJson = encoded, lastUpdated = System.currentTimeMillis()))
         }
     }
 
     suspend fun restoreBranchSelections(conversationId: String): Map<String?, String> {
-        val conversation = chatDao.getConversation(conversationId) ?: return emptyMap()
-        val raw = conversation.selectedBranchesJson ?: return emptyMap()
-        return try {
-            val map = Json.decodeFromString<Map<String, String>>(raw)
-            map.mapKeys { if (it.key == "null") null else it.key }
-        } catch (_: Exception) {
-            emptyMap()
-        }
+        val raw = chatDao.getConversation(conversationId)?.selectedBranchesJson ?: return emptyMap()
+        return runCatching { Json.decodeFromString<Map<String, String>>(raw) }
+            .getOrDefault(emptyMap()).mapKeys { if (it.key == "null") null else it.key }
     }
 
-    // ── Stuck Message Fixer ───────────────────────────────────
-
-    suspend fun fixStuckMessages(conversationId: String) {
-        chatDao.stopStuckMessages(conversationId)
-    }
-
-    // ── Embeddings ────────────────────────────────────────────
-
-    suspend fun deleteEmbeddingsByConversation(conversationId: String) =
-        chatDao.deleteEmbeddingsByConversation(conversationId)
-
-    suspend fun deleteOrphanedEmbeddings() =
-        chatDao.deleteOrphanedEmbeddings()
-
-    suspend fun deleteEmbeddingsByModel(modelId: String) =
-        chatDao.deleteEmbeddingsByModel(modelId)
-
-    suspend fun getEmbeddedMessageIdsByModel(modelId: String): List<String> =
-        chatDao.getEmbeddedMessageIdsByModel(modelId)
-
-    suspend fun upsertEmbedding(entity: EmbeddingEntity) =
-        chatDao.upsertEmbedding(entity)
-
-    suspend fun upsertEmbeddingIfSearchable(entity: EmbeddingEntity): Boolean =
-        chatDao.upsertEmbeddingIfSearchable(entity)
-
-    suspend fun deleteAllConversations() =
-        chatDao.deleteAllConversations()
-
-    suspend fun findExistingMessageIds(ids: List<String>): List<String> =
-        chatDao.findExistingMessageIds(ids)
-
-    suspend fun getEmbeddingsByModel(modelId: String): List<EmbeddingEntity> =
-        chatDao.getEmbeddingsByModel(modelId)
-
-    suspend fun deleteEmbedding(messageId: String) =
-        chatDao.deleteEmbedding(messageId)
-
-    suspend fun getEmbeddingCountByModel(modelId: String): Int =
-        chatDao.getEmbeddingCountByModel(modelId)
-
-    suspend fun getIndexableMessageCount(): Int =
-        chatDao.getIndexableMessageCount()
-
-    // ── Search ────────────────────────────────────────────────
-
-    suspend fun searchMessages(query: String, limit: Int = 10): List<MessageEntity> =
-        chatDao.searchMessages(query, limit)
-
-    suspend fun getAllConversationsList(): List<ChatEntity> =
-        chatDao.getAllConversationsList()
-
-    suspend fun getSearchableConversation(id: String): ChatEntity? =
-        chatDao.getSearchableConversation(id)
-
-    suspend fun getSearchableConversationsList(): List<ChatEntity> =
-        chatDao.getSearchableConversationsList()
-
+    suspend fun fixStuckMessages(conversationId: String) = chatDao.stopStuckMessages(conversationId)
+    suspend fun deleteEmbeddingsByConversation(conversationId: String) = chatDao.deleteEmbeddingsByConversation(conversationId)
+    suspend fun deleteOrphanedEmbeddings() = chatDao.deleteOrphanedEmbeddings()
+    suspend fun deleteEmbeddingsByModel(modelId: String) = chatDao.deleteEmbeddingsByModel(modelId)
+    suspend fun getEmbeddedMessageIdsByModel(modelId: String) = chatDao.getEmbeddedMessageIdsByModel(modelId)
+    suspend fun upsertEmbedding(entity: EmbeddingEntity) = chatDao.upsertEmbedding(entity)
+    suspend fun upsertEmbeddingIfSearchable(entity: EmbeddingEntity) = chatDao.upsertEmbeddingIfSearchable(entity)
+    suspend fun deleteAllConversations() = chatDao.deleteAllConversations()
+    suspend fun findExistingMessageIds(ids: List<String>) = chatDao.findExistingMessageIds(ids)
+    suspend fun getEmbeddingsByModel(modelId: String) = chatDao.getEmbeddingsByModel(modelId)
+    suspend fun deleteEmbedding(messageId: String) = chatDao.deleteEmbedding(messageId)
+    suspend fun getEmbeddingCountByModel(modelId: String) = chatDao.getEmbeddingCountByModel(modelId)
+    suspend fun getIndexableMessageCount() = chatDao.getIndexableMessageCount()
+    suspend fun searchMessages(query: String, limit: Int = 10) = chatDao.searchMessages(query, limit)
+    suspend fun getAllConversationsList() = chatDao.getAllConversationsList()
+    suspend fun getSearchableConversation(id: String) = chatDao.getSearchableConversation(id)
+    suspend fun getSearchableConversationsList() = chatDao.getSearchableConversationsList()
     suspend fun getAllMessageImages() = chatDao.getAllMessageImages()
+    suspend fun getMessagesPage(limit: Int = 100, offset: Int = 0) = chatDao.getMessagesPage(limit.coerceIn(1, 200), offset.coerceAtLeast(0))
+    suspend fun getMessagesForIndexingPage(limit: Int = 100, offset: Int = 0) = chatDao.getMessagesForIndexingPage(limit.coerceIn(1, 200), offset.coerceAtLeast(0))
+    suspend fun getUnembeddedMessagesPage(modelId: String, limit: Int = 200) = chatDao.getUnembeddedMessagesPage(modelId, limit.coerceIn(1, 200))
+    suspend fun updateDraft(conversationId: String, draftText: String, draftAttachments: String?) = chatDao.updateDraft(conversationId, draftText, draftAttachments)
 
-    suspend fun getMessagesPage(limit: Int = 100, offset: Int = 0): List<MessageEntity> =
-        chatDao.getMessagesPage(limit.coerceIn(1, 200), offset.coerceAtLeast(0))
-
-    suspend fun getMessagesForIndexingPage(limit: Int = 100, offset: Int = 0): List<MessageEntity> =
-        chatDao.getMessagesForIndexingPage(limit.coerceIn(1, 200), offset.coerceAtLeast(0))
-
-    suspend fun getUnembeddedMessagesPage(modelId: String, limit: Int = 200): List<MessageEntity> =
-        chatDao.getUnembeddedMessagesPage(modelId, limit.coerceIn(1, 200))
-
-    /** Persists the composer draft (text + serialized attachments) for a conversation. */
-    suspend fun updateDraft(conversationId: String, draftText: String, draftAttachments: String?) {
-        chatDao.updateDraft(conversationId, draftText, draftAttachments)
-    }
-
-    /** Deletes all on-disk attachment files referenced by [messages]. Safe to call with
-     *  an empty list. Errors per-file are swallowed so one bad path never aborts a delete. */
     suspend fun deleteMessageFiles(messages: List<MessageEntity>) = deleteAttachmentFilesFromEntities(messages)
-
-    /** Overload for the in-memory [ChatMessage] form used by the VM's cascade-delete path. */
     fun deleteMessageFiles(messages: List<ChatMessage>) {
-        for (msg in messages) {
-            for (imagePath in msg.images) {
-                runCatching { java.io.File(imagePath).delete() }
-            }
+        messages.forEach { msg ->
+            msg.images.forEach { runCatching { java.io.File(it).delete() } }
             msg.attachmentMeta?.items?.forEach { item ->
                 val uri = item.originalUri ?: return@forEach
-                if ((item.type == "video" || item.type == "image" || item.type == "file") &&
-                    uri.startsWith("file://")
-                ) {
+                if (item.type in setOf("video", "image", "file") && uri.startsWith("file://"))
                     runCatching { java.io.File(uri.removePrefix("file://")).delete() }
-                }
             }
         }
     }
 
     private fun deleteAttachmentFilesFromEntities(messages: List<MessageEntity>) {
-        for (msg in messages) {
-            for (imagePath in msg.images) {
-                runCatching { java.io.File(imagePath).delete() }
-            }
-            if (msg.attachmentMeta != null) {
-                runCatching {
-                    val meta = Json.decodeFromString<AttachmentMeta>(msg.attachmentMeta)
-                    for (item in meta.items) {
-                        val uri = item.originalUri ?: continue
-                        if ((item.type == "video" || item.type == "image" || item.type == "file") &&
-                            uri.startsWith("file://")
-                        ) {
-                            runCatching { java.io.File(uri.removePrefix("file://")).delete() }
-                        }
-                    }
+        messages.forEach { msg ->
+            msg.images.forEach { runCatching { java.io.File(it).delete() } }
+            msg.attachmentMeta?.let { raw ->
+                runCatching { Json.decodeFromString<AttachmentMeta>(raw) }.getOrNull()?.items?.forEach { item ->
+                    val uri = item.originalUri ?: return@forEach
+                    if (item.type in setOf("video", "image", "file") && uri.startsWith("file://"))
+                        runCatching { java.io.File(uri.removePrefix("file://")).delete() }
                 }
             }
         }
