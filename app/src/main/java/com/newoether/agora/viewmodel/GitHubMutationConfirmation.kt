@@ -3,9 +3,9 @@ package com.newoether.agora.viewmodel
 import java.lang.ref.WeakReference
 
 /**
- * Weak, process-local bridge for critical GitHub mutations. A foreground ChatViewModel creates
- * [ShellConfirmationController], which registers itself here. Headless/background execution has no
- * live controller and therefore fails closed. Every call requires a fresh one-shot approval.
+ * Weak process-local bridge for GitHub mutations. The first mutation can be approved once or with
+ * the existing "always allow" choice; session approval then covers all GitHub mutations until the
+ * app process ends. Read-only GitHub operations never enter this bridge.
  */
 object GitHubMutationConfirmation {
     @Volatile private var controller = WeakReference<ShellConfirmationController>(null)
@@ -15,5 +15,5 @@ object GitHubMutationConfirmation {
     }
 
     suspend fun confirm(summary: String): Boolean =
-        controller.get()?.confirmCritical("GitHub", summary) ?: false
+        controller.get()?.confirm("GitHub", summary) ?: false
 }
