@@ -4,16 +4,13 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
+    paths-ignore: ['**/*.md']
 
 concurrency:
   group: agora-workbench-${{ github.ref }}
   cancel-in-progress: true
-
 permissions:
   contents: write
-
 env:
   BUILD_FILE: app/build.gradle.kts
 
@@ -26,48 +23,35 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-
-      - name: Apply staged source wiring on workbench branch
-        if: github.ref == 'refs/heads/workbench/root-fix-release-tools-phase1'
-        shell: bash
+      - name: Apply client resilience source integration
+        if: github.ref == 'refs/heads/workbench/integrate-client-resilience-fixes'
         run: |
-          set -euo pipefail
-          if [[ -f scripts/wire_github_watch_provider_once.py ]]; then
-            python3 scripts/wire_github_watch_provider_once.py
-            git config user.name 'Agora Workbench Bot'
-            git config user.email 'agora-workbench@users.noreply.github.com'
-            git add -A
-            git diff --cached --check
-            git commit -m 'feat: register persistent GitHub Actions watch tools'
-            git push origin HEAD:workbench/root-fix-release-tools-phase1
-          fi
-
+          python3 scripts/apply_client_resilience_integration.py
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app
+          git diff --cached --check
+          git commit -m 'fix: integrate client white-screen and durability resilience'
+          git push origin HEAD:workbench/integrate-client-resilience-fixes
       - name: Verify checked-out identity
-        shell: bash
         run: |
-          set -euo pipefail
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
             test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
             git fetch origin main
             test "$(git rev-parse origin/main)" = "${GITHUB_SHA}"
           fi
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
-
       - uses: android-actions/setup-android@v3
-
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
-
-      - name: Build F-Droid debug APK
+      - name: Test and build F-Droid debug APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace assembleFdroidDebug
-
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
       - name: Prepare traceable APK and manifest
         id: package
         shell: bash
@@ -75,7 +59,6 @@ jobs:
           set -euo pipefail
           version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$BUILD_FILE" | head -n1)"
           version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$BUILD_FILE" | head -n1)"
-          test -n "$version_name"; test -n "$version_code"
           build_sha="$(git rev-parse HEAD)"; short_sha="${build_sha:0:12}"
           built_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
@@ -89,18 +72,14 @@ jobs:
           EOF
           cat > release/RELEASE_NOTES.md <<EOF
           Automated Agora Workbench build from the exact checked-out commit.
-
-          - Version: \`${version_name}\` (code \`${version_code}\`)
-          - Branch: \`${GITHUB_REF_NAME}\`
-          - Commit: \`${build_sha}\`
-          - Actions run: \`${GITHUB_RUN_ID}\` attempt \`${GITHUB_RUN_ATTEMPT}\`
-          - Built UTC: \`${built_at}\`
-          - APK: \`${apk_name}\`
-          - SHA-256: \`${apk_sha256}\`
+          - Version: ${version_name} (code ${version_code})
+          - Branch: ${GITHUB_REF_NAME}
+          - Commit: ${build_sha}
+          - Actions run: ${GITHUB_RUN_ID}
+          - SHA-256: ${apk_sha256}
           EOF
           echo "artifact_name=Agora-Workbench-${version_name}-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
-
       - name: Upload Actions artifact
         uses: actions/upload-artifact@v4
         with:
@@ -108,16 +87,13 @@ jobs:
           path: release/*
           if-no-files-found: error
           retention-days: 14
-
-      - name: Publish only the verified main HEAD
+      - name: Publish only verified main HEAD
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: workbench-latest
           target_commitish: ${{ github.sha }}
           name: Agora Workbench ${{ steps.package.outputs.version_name }} (${{ github.sha }})
-          prerelease: false
-          draft: false
           make_latest: true
           body_path: release/RELEASE_NOTES.md
           files: |
