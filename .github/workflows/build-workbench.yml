@@ -49,9 +49,19 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Test and build F-Droid debug APK
+        shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
+          set -o pipefail
+          if ! ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug 2>&1 | tee /tmp/gradle-build.log; then
+            tail -n 500 /tmp/gradle-build.log > ci-gradle-failure.log
+            git config user.name 'Agora CI Diagnostics'
+            git config user.email 'agora-ci@users.noreply.github.com'
+            git add ci-gradle-failure.log
+            git commit -m 'ci: capture Gradle failure diagnostics [skip ci]'
+            git push origin HEAD:${GITHUB_REF_NAME}
+            exit 1
+          fi
       - name: Prepare traceable APK and manifest
         id: package
         shell: bash
