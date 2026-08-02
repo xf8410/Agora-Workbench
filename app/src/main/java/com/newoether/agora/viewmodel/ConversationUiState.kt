@@ -1,8 +1,6 @@
 package com.newoether.agora.viewmodel
 
 import com.newoether.agora.model.ChatMessage
-import com.newoether.agora.model.MessageStatus
-import com.newoether.agora.model.Participant
 import com.newoether.agora.util.Constants
 
 data class ConversationUiState(
@@ -13,54 +11,62 @@ data class ConversationUiState(
     val selectedChildren: Map<String?, String> = emptyMap()
 ) {
     companion object {
-        /** Walk the conversation tree to produce the visible path. */
+        private fun isSynthetic(message: ChatMessage): Boolean =
+            message.id.startsWith(Constants.TOOL_MSG_PREFIX) ||
+                message.id.startsWith(Constants.RESULT_MSG_PREFIX)
+
+        /** Resolve every loaded component so a bounded window cannot render as a blank chat. */
         fun resolvePath(
             allMessages: List<ChatMessage>,
             streamingMsg: ChatMessage?,
             selectedChildren: Map<String?, String>
         ): List<ChatMessage> {
-            val path = mutableListOf<ChatMessage>()
+            if (allMessages.isEmpty()) return streamingMsg?.let(::listOf) ?: emptyList()
+
             val messagesByParent = allMessages.groupBy { it.parentId }
                 .mapValues { (_, list) -> list.sortedBy { it.timestamp } }
-            // A bounded DB window may start in the middle of a long branch. Start from the
-            // earliest loaded orphan instead of requiring the root message to be resident.
             val loadedIds = allMessages.asSequence().map { it.id }.toHashSet()
-            var cursor: String? = allMessages
-                .filter { it.parentId != null && it.parentId !in loadedIds }
-                .minByOrNull { it.timestamp }
-                ?.parentId
 
-            while (true) {
-                val siblings = messagesByParent[cursor] ?: break
-                if (siblings.isEmpty()) break
-
-                val selectedId = selectedChildren[cursor]
-                val visibleSiblings = siblings.filter {
-                    !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX)
+            fun walk(startCursor: String?): List<ChatMessage> {
+                val path = mutableListOf<ChatMessage>()
+                val visited = HashSet<String>()
+                var cursor = startCursor
+                while (true) {
+                    val siblings = messagesByParent[cursor] ?: break
+                    val visible = siblings.filterNot(::isSynthetic)
+                    val selectedId = selectedChildren[cursor]
+                    var selected = if (visible.isNotEmpty()) {
+                        visible.find { it.id == selectedId } ?: visible.last()
+                    } else {
+                        siblings.find { it.id == selectedId } ?: siblings.last()
+                    }
+                    if (!visited.add(selected.id)) break
+                    if (streamingMsg?.id == selected.id) selected = streamingMsg
+                    if (!isSynthetic(selected) || selected.id == streamingMsg?.id) path += selected
+                    cursor = selected.id
                 }
-                var selected = if (visibleSiblings.isNotEmpty()) {
-                    visibleSiblings.find { it.id == selectedId } ?: visibleSiblings.last()
-                } else {
-                    siblings.find { it.id == selectedId } ?: siblings.last()
-                }
-                // Substitute streaming message if it matches
-                if (streamingMsg != null && selected.id == streamingMsg.id) {
-                    selected = streamingMsg
-                }
-                val isSynthetic = selected.id.startsWith(Constants.TOOL_MSG_PREFIX) ||
-                    selected.id.startsWith(Constants.RESULT_MSG_PREFIX)
-                if (!isSynthetic || (streamingMsg != null && selected.id == streamingMsg.id)) {
-                    path.add(selected)
-                }
-                cursor = selected.id
+                return path
             }
-            // Append streaming message if not yet in path
+
+            val entryCursors = buildList<String?> {
+                if (messagesByParent.containsKey(null)) add(null)
+                allMessages.asSequence()
+                    .mapNotNull { it.parentId?.takeIf { parent -> parent !in loadedIds } }
+                    .distinct().forEach(::add)
+            }
+
+            var path = entryCursors.asSequence().map(::walk).filter { it.isNotEmpty() }
+                .maxWithOrNull(compareBy<List<ChatMessage>> { it.maxOf { msg -> msg.timestamp } }
+                    .thenBy { it.size }) ?: emptyList()
+
             if (streamingMsg != null && path.none { it.id == streamingMsg.id }) {
                 val lastId = path.lastOrNull()?.id
-                if (streamingMsg.parentId == lastId || (streamingMsg.parentId == null && path.isEmpty())) {
-                    path.add(streamingMsg)
-                }
+                if (streamingMsg.parentId == lastId ||
+                    (streamingMsg.parentId == null && path.isEmpty()) ||
+                    (path.isEmpty() && streamingMsg.parentId !in loadedIds)
+                ) path = path + streamingMsg
             }
+            if (path.isEmpty()) path = allMessages.filterNot(::isSynthetic).sortedBy { it.timestamp }
             return path
         }
     }
