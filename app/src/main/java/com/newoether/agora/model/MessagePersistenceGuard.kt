@@ -1,90 +1,166 @@
 package com.newoether.agora.model
 
+import com.newoether.agora.data.local.MessageEntity
 import com.newoether.agora.util.Constants
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
- * Bounds the size of a single persisted `messages` row so it can never exceed the platform
- * CursorWindow (~2MB) and trigger `SQLiteBlobTooBigException` / `Row too big to fit into
- * CursorWindow` (issue #51).
+ * Single persistence boundary for every messages-row write.
  *
- * Individual tool results are already clipped at capture time
- * ([Constants.MAX_TOOL_RESULT_LENGTH]), but a *model* message aggregates many tool rounds into a
- * single `toolCallJson` column — and the model answer `text` column is otherwise unbounded. This
- * guard bounds both: [clipText] caps a text column, and [encodeSegmentsBounded] encodes a segment
- * list while progressively trimming the largest stored fields until the encoded row fits the
- * budget.
- *
- * When trimming is needed, the largest tool-result (then, if still over, the largest content)
- * is halved with a truncation marker. Losing fidelity in the oldest/largest tool results is the
- * correct trade-off: they are already far back in the conversation (likely falling out of the
- * context window) and the alternative is a crash. The algorithm strictly reduces the largest
- * field each iteration and gives up once every field is at the floor, so it always terminates.
+ * CursorWindow applies to the complete projected row, not to each TEXT column independently.
+ * Therefore text, thoughts, toolCallJson and attachmentMeta must share one UTF-8 budget. All write
+ * paths (normal completion, Stop, user messages and tool rows) pass through [sanitize].
  */
 object MessagePersistenceGuard {
-
-    /** Floor below which a field is no longer trimmed (keeps a useful residual instead of a
-     *  uselessly tiny one, and guarantees termination when a row has many small segments). */
-    private const val TRIM_FLOOR_CHARS = 2000
-
+    private const val TRIM_FLOOR_CHARS = 2_000
     private const val TRUNCATION_MARKER = "\n…[truncated for persistence]"
+    private const val ROW_BUDGET_BYTES = 1_200_000
+    private const val STRUCTURAL_RESERVE_BYTES = 64_000
+    private const val ATTACHMENT_TEXT_CHARS = 24_000
+    private const val ATTACHMENT_META_BUDGET_BYTES = 160_000
 
-    /** Trim a persisted text column to a safe length. Preserves the un-truncated text otherwise. */
-    fun clipText(text: String): String =
-        if (text.length <= Constants.MAX_PERSISTED_TEXT_CHARS) text
-        else text.take(Constants.MAX_PERSISTED_TEXT_CHARS) + TRUNCATION_MARKER
+    private val json = Json { ignoreUnknownKeys = true }
 
-    /**
-     * Encode [segments] to JSON, bounded to [maxBytes] UTF-8 bytes. When the encoded form would
-     * exceed the budget, the largest trimmable field (a tool result, then a non-tool content) is
-     * halved with a marker and the list re-encoded, repeating until it fits or every field is at
-     * the floor. Returns `null` for an empty list so the column stays SQL NULL (matching prior
-     * behaviour where callers passed `null` for "no segments").
-     */
+    fun clipText(text: String): String = clipChars(text, Constants.MAX_PERSISTED_TEXT_CHARS)
+
+    /** Sanitize the complete row. The returned entity always has a bounded combined payload. */
+    fun sanitize(entity: MessageEntity): MessageEntity {
+        var text = clipText(entity.text)
+        var thoughts = entity.thoughts
+        var toolJson = boundSegmentsJson(entity.toolCallJson, 520_000)
+        var attachmentJson = boundAttachmentJson(entity.attachmentMeta)
+
+        fun payloadBytes(): Int = utf8Size(text) + utf8Size(thoughts.orEmpty()) +
+            utf8Size(toolJson.orEmpty()) + utf8Size(attachmentJson.orEmpty())
+
+        val budget = ROW_BUDGET_BYTES - STRUCTURAL_RESERVE_BYTES
+        while (payloadBytes() > budget) {
+            val candidates = listOf(
+                "tool" to utf8Size(toolJson.orEmpty()),
+                "thoughts" to utf8Size(thoughts.orEmpty()),
+                "text" to utf8Size(text),
+                "attachment" to utf8Size(attachmentJson.orEmpty()),
+            )
+            when (candidates.maxByOrNull { it.second }?.first) {
+                "tool" -> {
+                    val decoded = toolJson?.let { runCatching { json.decodeFromString<List<MessageSegment>>(it) }.getOrNull() }
+                    toolJson = if (!decoded.isNullOrEmpty()) {
+                        encodeSegmentsBounded(decoded, maxOf(96_000, utf8Size(toolJson.orEmpty()) / 2))
+                    } else null
+                }
+                "thoughts" -> thoughts = thoughts?.let(::halveWithMarker)
+                "text" -> text = halveWithMarker(text)
+                "attachment" -> attachmentJson = null
+                else -> break
+            }
+            if (text.length <= TRIM_FLOOR_CHARS &&
+                (thoughts == null || thoughts.length <= TRIM_FLOOR_CHARS) &&
+                utf8Size(toolJson.orEmpty()) <= 96_000 && attachmentJson == null
+            ) break
+        }
+
+        // Last-resort deterministic bound. This should only be reached for pathological UTF-8.
+        if (payloadBytes() > budget) {
+            toolJson = null
+            attachmentJson = null
+            thoughts = thoughts?.let { clipUtf8(it, 180_000) }
+            text = clipUtf8(text, 700_000)
+        }
+
+        return entity.copy(
+            text = text,
+            thoughts = thoughts,
+            toolCallJson = toolJson,
+            attachmentMeta = attachmentJson,
+        )
+    }
+
     fun encodeSegmentsBounded(
         segments: List<MessageSegment>?,
-        maxBytes: Int = Constants.MAX_PERSISTED_ROW_BYTES,
+        maxBytes: Int = 520_000,
     ): String? {
         if (segments.isNullOrEmpty()) return null
-        var current: List<MessageSegment> = segments
+        var current = segments
         while (true) {
-            val json = Json.encodeToString(current)
-            if (utf8Size(json) <= maxBytes) return json
-            val pick = current.withIndex().maxByOrNull { (_, s) -> trimmableSize(s) } ?: return json
-            val seg = pick.value
-            if (!canTrim(seg)) return json // every field already at the floor; can't shrink further
-            current = current.toMutableList().also { it[pick.index] = trimLargest(seg) }
+            val encoded = Json.encodeToString(current)
+            if (utf8Size(encoded) <= maxBytes) return encoded
+            val pick = current.withIndex().maxByOrNull { (_, segment) -> trimmableSize(segment) }
+                ?: return null
+            if (!canTrim(pick.value)) return null
+            current = current.toMutableList().also { it[pick.index] = trimLargest(pick.value) }
         }
     }
 
-    /** Size of the field that trimming would shrink — drives "largest first" selection. */
-    private fun trimmableSize(s: MessageSegment): Int {
-        val result = s.toolResult?.length ?: 0
-        val content = if (s.type == "tool") 0 else s.content.length
-        return maxOf(result, content)
+    private fun boundSegmentsJson(raw: String?, maxBytes: Int): String? {
+        if (raw.isNullOrBlank()) return null
+        if (utf8Size(raw) <= maxBytes) return raw
+        val segments = runCatching { json.decodeFromString<List<MessageSegment>>(raw) }.getOrNull()
+            ?: return null
+        return encodeSegmentsBounded(segments, maxBytes)
     }
 
-    private fun canTrim(s: MessageSegment): Boolean =
-        (s.toolResult != null && s.toolResult.length > TRIM_FLOOR_CHARS) ||
-            (s.type != "tool" && s.content.length > TRIM_FLOOR_CHARS)
-
-    /** Halve the largest trimmable field of [s], preferring the tool result on ties. */
-    private fun trimLargest(s: MessageSegment): MessageSegment {
-        val result = s.toolResult
-        if (result != null && result.length >= s.content.length && result.length > TRIM_FLOOR_CHARS) {
-            return s.copy(toolResult = halveWithMarker(result))
-        }
-        if (s.type != "tool" && s.content.length > TRIM_FLOOR_CHARS) {
-            return s.copy(content = halveWithMarker(s.content))
-        }
-        return s
+    private fun boundAttachmentJson(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val meta = runCatching { json.decodeFromString<AttachmentMeta>(raw) }.getOrNull()
+            ?: return null
+        val bounded = meta.copy(items = meta.items.map { item ->
+            item.copy(
+                textContent = item.textContent?.let { clipChars(it, ATTACHMENT_TEXT_CHARS) },
+                transcription = item.transcription?.let { clipChars(it, ATTACHMENT_TEXT_CHARS) },
+            )
+        })
+        val encoded = Json.encodeToString(bounded)
+        return encoded.takeIf { utf8Size(it) <= ATTACHMENT_META_BUDGET_BYTES }
+            ?: Json.encodeToString(bounded.copy(items = bounded.items.map {
+                it.copy(textContent = null, transcription = null)
+            })).takeIf { utf8Size(it) <= ATTACHMENT_META_BUDGET_BYTES }
     }
+
+    private fun trimmableSize(segment: MessageSegment): Int = maxOf(
+        segment.toolResult?.length ?: 0,
+        segment.toolArgs?.length ?: 0,
+        if (segment.type == "tool") 0 else segment.content.length,
+    )
+
+    private fun canTrim(segment: MessageSegment): Boolean =
+        (segment.toolResult?.length ?: 0) > TRIM_FLOOR_CHARS ||
+            (segment.toolArgs?.length ?: 0) > TRIM_FLOOR_CHARS ||
+            (segment.type != "tool" && segment.content.length > TRIM_FLOOR_CHARS)
+
+    private fun trimLargest(segment: MessageSegment): MessageSegment {
+        val fields = listOf(
+            "result" to (segment.toolResult?.length ?: 0),
+            "args" to (segment.toolArgs?.length ?: 0),
+            "content" to if (segment.type == "tool") 0 else segment.content.length,
+        )
+        return when (fields.maxByOrNull { it.second }?.first) {
+            "result" -> segment.copy(toolResult = segment.toolResult?.let(::halveWithMarker))
+            "args" -> segment.copy(toolArgs = segment.toolArgs?.let(::halveWithMarker))
+            "content" -> segment.copy(content = halveWithMarker(segment.content))
+            else -> segment
+        }
+    }
+
+    private fun clipChars(value: String, maxChars: Int): String =
+        if (value.length <= maxChars) value else value.take(maxChars) + TRUNCATION_MARKER
 
     private fun halveWithMarker(value: String): String {
-        val target = maxOf(value.length / 2, TRIM_FLOOR_CHARS)
-        return if (value.length <= target) value else value.take(target) + TRUNCATION_MARKER
+        if (value.length <= TRIM_FLOOR_CHARS) return value
+        return value.take(maxOf(value.length / 2, TRIM_FLOOR_CHARS)) + TRUNCATION_MARKER
     }
 
-    private fun utf8Size(s: String): Int = s.toByteArray(Charsets.UTF_8).size
+    private fun clipUtf8(value: String, maxBytes: Int): String {
+        if (utf8Size(value) <= maxBytes) return value
+        var low = 0
+        var high = value.length
+        while (low < high) {
+            val mid = (low + high + 1) ushr 1
+            if (utf8Size(value.take(mid)) <= maxBytes) low = mid else high = mid - 1
+        }
+        return value.take(low) + TRUNCATION_MARKER
+    }
+
+    private fun utf8Size(value: String): Int = value.toByteArray(Charsets.UTF_8).size
 }
