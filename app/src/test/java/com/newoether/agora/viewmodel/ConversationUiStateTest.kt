@@ -43,10 +43,9 @@ class ConversationUiStateTest {
     fun branchSelection_followsSelectedChild() {
         val msgs = listOf(
             msg("u1", null, "q1"),
-            msg("m1a", "u1", "a1a", Participant.MODEL), // first sibling
-            msg("m1b", "u1", "a1b", Participant.MODEL)  // second sibling (regenerated)
+            msg("m1a", "u1", "a1a", Participant.MODEL),
+            msg("m1b", "u1", "a1b", Participant.MODEL)
         )
-        // Select the first sibling
         val path = ConversationUiState.resolvePath(msgs, null, mapOf("u1" to "m1a"))
         assertEquals(2, path.size)
         assertEquals("m1a", path[1].id)
@@ -59,7 +58,6 @@ class ConversationUiStateTest {
             msg("m1a", "u1", "a1a", Participant.MODEL),
             msg("m1b", "u1", "a1b", Participant.MODEL)
         )
-        // No selection → last sibling
         val path = ConversationUiState.resolvePath(msgs, null, emptyMap())
         assertEquals(2, path.size)
         assertEquals("m1b", path[1].id)
@@ -82,12 +80,12 @@ class ConversationUiStateTest {
     @Test
     fun boundedWindow_withoutRoot_startsAtEarliestLoadedOrphan() {
         val msgs = listOf(
-            msg(u50, missing-parent, q50),
-            msg(m50, u50, a50, Participant.MODEL),
-            msg(u51, m50, q51)
+            msg("u50", "missing-parent", "q50"),
+            msg("m50", "u50", "a50", Participant.MODEL),
+            msg("u51", "m50", "q51")
         )
         val path = ConversationUiState.resolvePath(msgs, null, emptyMap())
-        assertEquals(listOf(u50, m50, u51), path.map { it.id })
+        assertEquals(listOf("u50", "m50", "u51"), path.map { it.id })
     }
 
     @Test
