@@ -23,26 +23,16 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Register controlled clone provider
-        if: github.ref == 'refs/heads/workbench/consolidate-clone-tool'
+      - name: Apply conversation-loss v5 phase1
+        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5'
         run: |
-          python3 scripts/register_github_clone_tool.py
+          python3 scripts/apply_conversation_loss_v5_phase1.py
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
           git add app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt
           git diff --cached --check
-          git commit -m 'feat: register controlled GitHub clone tool'
-          git push origin HEAD:workbench/consolidate-clone-tool
-      - name: Apply client resilience source integration
-        if: github.ref == 'refs/heads/workbench/integrate-client-resilience-fixes'
-        run: |
-          python3 scripts/apply_client_resilience_integration.py
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app
-          git diff --cached --check
-          git commit -m 'fix: integrate client white-screen and durability resilience'
-          git push origin HEAD:workbench/integrate-client-resilience-fixes
+          git commit -m 'fix: preserve coherent conversations across switching failures'
+          git push origin HEAD:workbench/root-fix-conversation-loss-v5
       - name: Verify checked-out identity
         run: |
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
@@ -59,34 +49,11 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Test and build F-Droid debug APK
-        id: gradle
-        continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug 2>&1 | tee gradle-build.log
-      - name: Persist bounded Gradle failure summary
-        if: steps.gradle.outcome == 'failure' && startsWith(github.ref, 'refs/heads/workbench/fix-client-resilience-ci-')
-        shell: bash
-        run: |
-          {
-            echo "run_id=${GITHUB_RUN_ID}"
-            echo "head_sha=$(git rev-parse HEAD)"
-            echo
-            grep -E '(^e: |^w: |FAILURE:|What went wrong|Execution failed|Compilation error|There were failing tests|Caused by:)' gradle-build.log | tail -n 200 || true
-            echo
-            echo '--- tail ---'
-            tail -n 160 gradle-build.log
-          } > ci-failure-summary.txt
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add ci-failure-summary.txt
-          git commit -m "ci: capture bounded failure summary for run ${GITHUB_RUN_ID}"
-          git push origin HEAD:${GITHUB_REF_NAME}
-      - name: Enforce Gradle success
-        if: steps.gradle.outcome == 'failure'
-        run: exit 1
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
       - name: Prepare traceable APK and manifest
         id: package
         shell: bash
@@ -105,14 +72,6 @@ jobs:
           cat > release/build-manifest.json <<EOF
           {"repository":"${GITHUB_REPOSITORY}","branch":"${GITHUB_REF_NAME}","commit":"${build_sha}","versionName":"${version_name}","versionCode":${version_code},"runId":${GITHUB_RUN_ID},"runAttempt":${GITHUB_RUN_ATTEMPT},"builtAtUtc":"${built_at}","apk":"${apk_name}","sha256":"${apk_sha256}"}
           EOF
-          cat > release/RELEASE_NOTES.md <<EOF
-          Automated Agora Workbench build from the exact checked-out commit.
-          - Version: ${version_name} (code ${version_code})
-          - Branch: ${GITHUB_REF_NAME}
-          - Commit: ${build_sha}
-          - Actions run: ${GITHUB_RUN_ID}
-          - SHA-256: ${apk_sha256}
-          EOF
           echo "artifact_name=Agora-Workbench-${version_name}-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
       - name: Upload Actions artifact
@@ -130,7 +89,6 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: Agora Workbench ${{ steps.package.outputs.version_name }} (${{ github.sha }})
           make_latest: true
-          body_path: release/RELEASE_NOTES.md
           files: |
             release/*.apk
             release/*.sha256
