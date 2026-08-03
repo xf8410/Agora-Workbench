@@ -260,7 +260,10 @@ class ChatViewModel(
             providers = providerRegistry.all,
             context = appContext,
             sandboxFactory = sandboxFactory,
-            additionalToolProviders = listOf(automationToolProvider),
+            additionalToolProviders = listOf(
+                automationToolProvider,
+                com.newoether.agora.tool.GitHubCloneToolProvider(appContext, sandboxFactory),
+            ),
         ).also { gm ->
             gm.onMessagePersisted = { messageId, text ->
                 if (settings.autoCacheEnabled.value && (settings.modelSearchMethod.value == Constants.SEARCH_METHOD_RAG || settings.manualSearchMethod.value == Constants.SEARCH_METHOD_RAG)) {
