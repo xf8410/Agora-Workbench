@@ -50,8 +50,7 @@ object MessagePersistenceGuard {
     }
 
     fun encodeSegmentsBounded(segments: List<MessageSegment>?, maxBytes: Int = 520_000): String? {
-        if (segments.isNullOrEmpty()) return null
-        var current = segments
+        var current: List<MessageSegment> = segments?.takeIf { it.isNotEmpty() } ?: return null
         while (true) {
             val encoded = Json.encodeToString(current)
             if (utf8Size(encoded) <= maxBytes) return encoded
