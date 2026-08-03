@@ -49,9 +49,34 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Test and build F-Droid debug APK
+        id: gradle
+        continue-on-error: true
+        shell: bash
         run: |
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug 2>&1 | tee gradle-build.log
+      - name: Persist bounded Gradle failure summary
+        if: steps.gradle.outcome == 'failure' && startsWith(github.ref, 'refs/heads/workbench/fix-client-resilience-ci-')
+        shell: bash
+        run: |
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "head_sha=$(git rev-parse HEAD)"
+            echo
+            grep -E '(^e: |^w: |FAILURE:|What went wrong|Execution failed|Compilation error|There were failing tests|Caused by:)' gradle-build.log | tail -n 200 || true
+            echo
+            echo '--- tail ---'
+            tail -n 160 gradle-build.log
+          } > ci-failure-summary.txt
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add ci-failure-summary.txt
+          git commit -m "ci: capture bounded failure summary for run ${GITHUB_RUN_ID}"
+          git push origin HEAD:${GITHUB_REF_NAME}
+      - name: Enforce Gradle success
+        if: steps.gradle.outcome == 'failure'
+        run: exit 1
       - name: Prepare traceable APK and manifest
         id: package
         shell: bash
