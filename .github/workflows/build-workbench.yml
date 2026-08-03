@@ -23,6 +23,16 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+      - name: Register controlled clone provider
+        if: github.ref == 'refs/heads/workbench/consolidate-clone-tool'
+        run: |
+          python3 scripts/register_github_clone_tool.py
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt
+          git diff --cached --check
+          git commit -m 'feat: register controlled GitHub clone tool'
+          git push origin HEAD:workbench/consolidate-clone-tool
       - name: Apply client resilience source integration
         if: github.ref == 'refs/heads/workbench/integrate-client-resilience-fixes'
         run: |
