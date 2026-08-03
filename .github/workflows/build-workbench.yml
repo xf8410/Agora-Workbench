@@ -23,16 +23,16 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply conversation-loss v5 phase1
-        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5'
+      - name: Apply conversation-loss v5 phase2
+        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5-phase2'
         run: |
-          python3 scripts/apply_conversation_loss_v5_phase1.py
+          python3 scripts/apply_conversation_loss_v5_phase2.py
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt
+          git add app/src/main/java/com/newoether/agora/ui/chat/ChatApp.kt app/src/main/java/com/newoether/agora/ui/chat/MessageList.kt
           git diff --cached --check
-          git commit -m 'fix: preserve coherent conversations across switching failures'
-          git push origin HEAD:workbench/root-fix-conversation-loss-v5
+          git commit -m 'fix: remove reply whitespace and open conversations at latest reply'
+          git push origin HEAD:workbench/root-fix-conversation-loss-v5-phase2
       - name: Verify checked-out identity
         run: |
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
@@ -62,18 +62,13 @@ jobs:
           version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$BUILD_FILE" | head -n1)"
           version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$BUILD_FILE" | head -n1)"
           build_sha="$(git rev-parse HEAD)"; short_sha="${build_sha:0:12}"
-          built_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$source_apk"; mkdir -p release
           apk_name="Agora-Workbench-${version_name}-vc${version_code}-${short_sha}-run${GITHUB_RUN_ID}.apk"
           cp "$source_apk" "release/$apk_name"
           apk_sha256="$(sha256sum "release/$apk_name" | awk '{print $1}')"
           printf '%s  %s\n' "$apk_sha256" "$apk_name" > "release/$apk_name.sha256"
-          cat > release/build-manifest.json <<EOF
-          {"repository":"${GITHUB_REPOSITORY}","branch":"${GITHUB_REF_NAME}","commit":"${build_sha}","versionName":"${version_name}","versionCode":${version_code},"runId":${GITHUB_RUN_ID},"runAttempt":${GITHUB_RUN_ATTEMPT},"builtAtUtc":"${built_at}","apk":"${apk_name}","sha256":"${apk_sha256}"}
-          EOF
           echo "artifact_name=Agora-Workbench-${version_name}-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
-          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
       - name: Upload Actions artifact
         uses: actions/upload-artifact@v4
         with:
@@ -81,17 +76,3 @@ jobs:
           path: release/*
           if-no-files-found: error
           retention-days: 14
-      - name: Publish only verified main HEAD
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: workbench-latest
-          target_commitish: ${{ github.sha }}
-          name: Agora Workbench ${{ steps.package.outputs.version_name }} (${{ github.sha }})
-          make_latest: true
-          files: |
-            release/*.apk
-            release/*.sha256
-            release/build-manifest.json
-          fail_on_unmatched_files: true
-          overwrite_files: true
