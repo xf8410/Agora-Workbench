@@ -1,0 +1,256 @@
+run_id=30776666129
+head_sha=bb92a6b246f3bd769eb22c43bb8eb9b53755fa9d
+
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt:404:41 The corresponding parameter in the supertype 'SandboxManager' is named 'command'. This may cause problems when calling this function with named arguments.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt:404:54 The corresponding parameter in the supertype 'SandboxManager' is named 'workdir'. This may cause problems when calling this function with named arguments.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt:404:66 The corresponding parameter in the supertype 'SandboxManager' is named 'timeoutMs'. This may cause problems when calling this function with named arguments.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:92:31 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:93:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:94:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:95:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:96:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:97:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:98:34 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:99:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:100:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:101:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:102:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:529:33 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/DuckDuckGoScraper.kt:205:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:161:58 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:163:32 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:239:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:241:81 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:253:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:264:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:189:61 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:195:52 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:217:76 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:221:48 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/ollama/OllamaProvider.kt:108:46 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/ollama/OllamaProvider.kt:108:91 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/ollama/OllamaProvider.kt:108:116 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/ollama/OllamaProvider.kt:109:77 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/ollama/OllamaProvider.kt:117:78 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/ollama/OllamaProvider.kt:137:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/openai/ToolCallTextParser.kt:92:13 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/util/MessageConverter.kt:76:38 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/util/MessageConverter.kt:104:38 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/data/ExportExtraSettings.kt:157:32 Unnecessary safe call on a non-null receiver of type 'JsonPrimitive'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/AdvancedSettingsDialog.kt:236:40 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Int'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/AttachmentThumbnail.kt:145:49 Unnecessary safe call on a non-null receiver of type '(String, String) -> Unit'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/bottombar/ChatBottomBar.kt:266:21 'fun ExposedDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = ..., scrollState: ScrollState = ..., focusable: Boolean = ..., matchTextFieldWidth: Boolean = ..., shape: Shape = ..., containerColor: Color = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ..., border: BorderStroke? = ..., content: ComposableFunction1<ColumnScope, Unit>): Unit' is deprecated. The `focusable` parameter is unused. Pass the proper ExposedDropdownMenuAnchorType to Modifier.menuAnchor instead, which will handle focusability automatically.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/bottombar/ChatBottomBar.kt:365:21 'fun ExposedDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = ..., scrollState: ScrollState = ..., focusable: Boolean = ..., matchTextFieldWidth: Boolean = ..., shape: Shape = ..., containerColor: Color = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ..., border: BorderStroke? = ..., content: ComposableFunction1<ColumnScope, Unit>): Unit' is deprecated. The `focusable` parameter is unused. Pass the proper ExposedDropdownMenuAnchorType to Modifier.menuAnchor instead, which will handle focusability automatically.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/bottombar/ChatBottomBar.kt:426:21 'fun ExposedDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = ..., scrollState: ScrollState = ..., focusable: Boolean = ..., matchTextFieldWidth: Boolean = ..., shape: Shape = ..., containerColor: Color = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ..., border: BorderStroke? = ..., content: ComposableFunction1<ColumnScope, Unit>): Unit' is deprecated. The `focusable` parameter is unused. Pass the proper ExposedDropdownMenuAnchorType to Modifier.menuAnchor instead, which will handle focusability automatically.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/bottombar/ChatBottomBarComponents.kt:29:60 Redundant call of conversion method.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt:332:63 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Long'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/message/MessageDialogs.kt:37:39 Unnecessary safe call on a non-null receiver of type 'String'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/message/MessageItemTimeline.kt:242:53 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Long'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/components/DialogWindowEdgeToEdge.kt:23:16 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsAboutPage.kt:70:59 'val Icons.Filled.MenuBook: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.MenuBook.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsImageGenPage.kt:135:74 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsLanguagePage.kt:58:32 'fun overridePendingTransition(p0: Int, p1: Int): Unit' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsMemoryPage.kt:118:71 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsModelsPage.kt:112:73 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsModelsPage.kt:115:60 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsProviderDetailPage.kt:191:75 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsScreen.kt:153:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsScreen.kt:154:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsScreen.kt:166:107 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:34:56 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:101:71 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:181:67 'val Icons.Filled.ManageSearch: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ManageSearch.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:231:71 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:250:56 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Pair<Int, Int>'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:250:76 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Pair<Int, Int>'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:250:136 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Pair<Int, Int>'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:250:156 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Pair<Int, Int>'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsSearchPage.kt:278:69 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Pair<Int, Int>'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsShellPage.kt:301:45 'fun Modifier.menuAnchor(): Modifier' is deprecated. Use overload that takes ExposedDropdownMenuAnchorType and enabled parameters.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTitleGenPage.kt:67:75 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTranscriptionPage.kt:78:86 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTranscriptionPage.kt:97:71 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt:660:47 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:85:17 Unresolved reference 'u50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:85:22 Unresolved reference 'missing'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:85:30 Unresolved reference 'parent'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:85:38 Unresolved reference 'q50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:86:17 Unresolved reference 'm50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:86:22 Unresolved reference 'u50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:86:27 Unresolved reference 'a50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:87:17 Unresolved reference 'u51'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:87:22 Unresolved reference 'm50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:87:27 Unresolved reference 'q51'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:90:22 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:90:29 Unresolved reference 'u50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:90:34 Unresolved reference 'm50'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/viewmodel/ConversationUiStateTest.kt:90:39 Unresolved reference 'u51'.
+FAILURE: Build failed with an exception.
+* What went wrong:
+Execution failed for task ':app:compileFdroidDebugUnitTestKotlin' (registered by plugin 'com.android.internal.application').
+   > Compilation error. See log for more details
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileFdroidDebugUnitTestKotlin' (registered by plugin 'com.android.internal.application').
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+
+--- tail ---
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:286)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:130)
+	at org.gradle.composite.internal.DefaultBuildController.doRun(DefaultBuildController.java:182)
+	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.lambda$run$0(DefaultBuildController.java:199)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.run(DefaultBuildController.java:199)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+	at org.gradle.workers.internal.DefaultWorkerExecutor$WorkItemExecution.waitForCompletion(DefaultWorkerExecutor.java:278)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$2(DefaultAsyncWorkTracker.java:132)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$withoutLocksBlocking$3(DefaultWorkerLeaseService.java:410)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:43)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocksBlocking(DefaultWorkerLeaseService.java:405)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.blocking(DefaultWorkerLeaseService.java:255)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.blocking(DefaultWorkerLeaseService.java:237)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$3(DefaultAsyncWorkTracker.java:128)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.resources.AbstractResourceLockRegistry.whileDisallowingLockChanges(AbstractResourceLockRegistry.java:50)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.whileDisallowingProjectLockChanges(DefaultWorkerLeaseService.java:260)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:127)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:93)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForAll(DefaultAsyncWorkTracker.java:79)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForCompletion(DefaultAsyncWorkTracker.java:67)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:267)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:30)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:27)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:48)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:244)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:227)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:210)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:176)
+	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:167)
+	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:47)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:137)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:134)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:134)
+	at org.gradle.internal.execution.steps.ExecuteStep$Mutable.execute(ExecuteStep.java:80)
+	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:42)
+	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:75)
+	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:51)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:29)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:67)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:39)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:42)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:24)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:69)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:46)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:28)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:76)
+	at org.gradle.internal.Either$Right.fold(Either.java:176)
+	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:74)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:49)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:46)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.executeMutable(StoreExecutionStateStep.java:35)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:75)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:35)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:70)
+	at org.gradle.internal.execution.steps.ResolveMutableCachingStateStep.executeDelegate(ResolveMutableCachingStateStep.java:32)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:69)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:37)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:63)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:34)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:79)
+	at org.gradle.internal.execution.steps.ValidateStep$Mutable.executeDelegate(ValidateStep.java:65)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:99)
+	at org.gradle.internal.execution.steps.ValidateStep$Mutable.execute(ValidateStep.java:65)
+	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.executeMutable(CaptureMutableStateBeforeExecutionStep.java:86)
+	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:65)
+	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:45)
+	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeWithNonEmptySources(SkipEmptyMutableWorkStep.java:210)
+	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:90)
+	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:53)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:36)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.executeMutable(LoadPreviousExecutionStateStep.java:23)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$executeMutable$0(AssignMutableWorkspaceStep.java:34)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:305)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:30)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.executeMutable(AssignMutableWorkspaceStep.java:21)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:56)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:38)
+	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
+	... 61 more
+Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:21)
+	at org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork.execute(BuildToolsApiCompilationWork.kt:295)
+	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:68)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:64)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:61)
+	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:102)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:61)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:58)
+	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:174)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:191)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$500(DefaultConditionalExecutionQueue.java:112)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:168)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$runAndReleaseLocks$0(DefaultWorkerLeaseService.java:300)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:43)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAndReleaseLocks(DefaultWorkerLeaseService.java:298)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:294)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:286)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:130)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:135)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:163)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:125)
+	... 2 more
+
+
+BUILD FAILED in 9m 24s
+38 actionable tasks: 38 executed
