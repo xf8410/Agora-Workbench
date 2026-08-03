@@ -88,21 +88,10 @@ fun MessageList(
             .mapValues { (_, v) -> v.sortedBy { it.timestamp } }
     }
 
-    val extraPadding = if (!isLoading || lastUserMessageIndex == -1 || viewportHeight == 0) {
-        0.dp
-    } else {
-        with(density) {
-            val vDp = viewportHeight.toDp()
-            val targetTopDp = 140.dp
-            val availableSpaceDp = vDp - targetTopDp - (bottomBarHeight + 8.dp)
-            var contentHeightPx = 0
-            for (i in lastUserMessageIndex until messages.list.size) {
-                contentHeightPx += messageHeights[messages.list[i].id] ?: 0
-            }
-            val contentHeightDp = contentHeightPx.toDp()
-            (availableSpaceDp - contentHeightDp).coerceAtLeast(0.dp)
-        }
-    }
+    // The list already has bottom contentPadding for the composer. A viewport-filling tail
+    // spacer leaves a large blank region after the newest reply and also makes "scroll to bottom"
+    // stop on whitespace instead of the actual final message.
+    val extraPadding = 0.dp
 
     Box(modifier = modifier) {
         if (loadError != null && messages.list.isEmpty()) {
