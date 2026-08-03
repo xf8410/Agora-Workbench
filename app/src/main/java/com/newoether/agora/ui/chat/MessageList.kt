@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -80,9 +81,6 @@ fun MessageList(
         messages.list.indexOfLast { it.participant == Participant.USER }
     }
 
-    // Precompute branch siblings grouped by parent once per allMessages change.
-    // Previously this filter+sort ran per visible item (O(n²) and re-run on every
-    // streaming-token recomposition of the active message).
     val siblingsByParent = remember(allMessages) {
         allMessages.list
             .filter { !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX) }
@@ -135,8 +133,6 @@ fun MessageList(
                 val branchIndex = siblings.indexOfFirst { it.id == message.id }
                 val totalBranches = siblings.size
 
-                // Fade newly-appended messages in. Placement/fade-out left off so this
-                // doesn't fight the manual height/scroll padding management below.
                 Box(modifier = if (isLoading) Modifier else Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = null)) {
                 MessageItem(
                     message = message,
@@ -144,7 +140,6 @@ fun MessageList(
                         onEditMessage(id, text)
                         editingMessageId = null
                     },
-                    // isStreaming driven by message status, not isLoading flag
                     isStreaming = isLastMessage && message.participant == Participant.MODEL
                         && message.status in setOf(MessageStatus.SENDING, MessageStatus.THINKING, MessageStatus.TOOL_CALLING, MessageStatus.TRANSCRIBING),
                     isLoading = isLoading,
