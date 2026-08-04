@@ -517,6 +517,7 @@ class GenerationManager(
             val roundToolSegments = mutableListOf<MessageSegment>()
 
             var lastEmitMs = 0L
+            var lastCheckpointMs = 0L
 
             fun modelMessage() = ChatMessage(
                 id = modelMessageId, parentId = parentId,
@@ -556,6 +557,37 @@ class GenerationManager(
                     currentThoughtSignature = null
                 }
                 currentThoughtDurationMs = 0L
+            }
+
+            suspend fun checkpointStreamingMessage(force: Boolean = false) {
+                val now = System.currentTimeMillis()
+                if (!force && now - lastCheckpointMs < 2_000L) return
+                if (!isLatestPersist()) return
+                if (conversations.getConversation(conversationId) == null) return
+                val liveSegments = buildLiveSegments(
+                    segments,
+                    currentAnswerBuf,
+                    currentThoughtBuf,
+                    currentThoughtSignature,
+                    liveThoughtDurationMs()
+                )
+                conversations.upsertMessage(MessageEntity(
+                    id = modelMessageId,
+                    conversationId = conversationId,
+                    parentId = parentId,
+                    text = totalText,
+                    images = generatedImages.toList(),
+                    thoughts = totalThoughts.ifBlank { null },
+                    thoughtTitle = totalThoughtTitle,
+                    tokenCount = totalTokenCount,
+                    status = currentStatus,
+                    participant = Participant.MODEL,
+                    timestamp = startTime,
+                    thoughtTimeMs = totalThoughtTimeMs,
+                    modelName = modelName,
+                    toolCallJson = MessagePersistenceGuard.encodeSegmentsBounded(liveSegments),
+                ))
+                lastCheckpointMs = now
             }
 
             suspend fun handleStreamEvent(event: StreamEvent) {
@@ -671,6 +703,10 @@ class GenerationManager(
                     onStreamUpdate(modelMessage())
                     lastEmitMs = now
                 }
+                // Durable progress belongs to the originating conversation even while it is not
+                // open. A process death or collector switch can therefore recover recent text
+                // instead of the original empty SENDING placeholder.
+                checkpointStreamingMessage(force = isSignificant)
             }
 
             val projectedPath = projectAssistantImagesToLatestUserMessage(currentPath, providerConfig.includeImages)
@@ -822,14 +858,40 @@ class GenerationManager(
                             // text column — together they can exceed the 2MB CursorWindow otherwise.
                             val segmentsJson = MessagePersistenceGuard.encodeSegmentsBounded(finalSegments)
                             val effectiveParentId = parentId
-                            conversations.upsertMessage(MessageEntity(
+                            val terminalEntity = MessageEntity(
                                 id = modelMessageId, conversationId = conversationId, parentId = effectiveParentId,
-                                text = MessagePersistenceGuard.clipText(totalText), images = generatedImages.toList(),
+                                text = totalText, images = generatedImages.toList(),
                                 thoughts = totalThoughts.ifBlank { null },
                                 thoughtTitle = totalThoughtTitle, tokenCount = totalTokenCount,
                                 status = currentStatus, participant = Participant.MODEL, timestamp = startTime,
                                 thoughtTimeMs = totalThoughtTimeMs, modelName = modelName, toolCallJson = segmentsJson
-                            ))
+                            )
+                            var verified = false
+                            var lastFailure: Throwable? = null
+                            repeat(3) { attempt ->
+                                try {
+                                    conversations.upsertMessage(terminalEntity)
+                                    val stored = conversations.getMessagesByIds(listOf(modelMessageId)).firstOrNull()
+                                    val expected = MessagePersistenceGuard.sanitize(terminalEntity)
+                                    verified = stored != null &&
+                                        stored.conversationId == conversationId &&
+                                        stored.status == expected.status &&
+                                        stored.text == expected.text &&
+                                        stored.thoughts == expected.thoughts &&
+                                        stored.toolCallJson == expected.toolCallJson
+                                    if (verified) return@repeat
+                                    lastFailure = IllegalStateException("terminal message verification mismatch (attempt ${attempt + 1})")
+                                } catch (failure: Throwable) {
+                                    if (failure is CancellationException) throw failure
+                                    lastFailure = failure
+                                }
+                            }
+                            if (!verified) {
+                                throw IllegalStateException(
+                                    "Terminal message was not durably verified for $conversationId/$modelMessageId",
+                                    lastFailure,
+                                )
+                            }
                         }
                     }
                 } catch (e: Exception) {
