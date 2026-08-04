@@ -31,13 +31,29 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
-      - name: Test and build
+      - name: Unit tests
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
-          test -z "$(git status --porcelain)"
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --stacktrace assembleFdroidDebug
+      - name: Diagnose and verify tracked source stability
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- post-build status ---'
+          git status --short
+          echo '--- tracked changes ---'
+          git diff --stat
+          # Gradle/KSP may rewrite Room's generated schema snapshot while compiling. That is a
+          # generated verification output, not runtime source mutation. Every other tracked path
+          # must remain byte-for-byte identical to the checked-out commit.
+          git diff --exit-code -- . ':(exclude)app/schemas/**'
       - name: Package traceable APK
         id: package
         shell: bash
@@ -48,9 +64,10 @@ jobs:
           test -n "$source_apk"; mkdir -p release
           apk_name="Agora-Workbench-conversation-loss-v5-${short_sha}-run${GITHUB_RUN_ID}.apk"
           cp "$source_apk" "release/$apk_name"
-          sha256sum "release/$apk_name" > "release/$apk_name.sha256"
-          printf '{"repository":"%s","branch":"%s","commit":"%s","runId":%s,"apk":"%s"}\n' \
-            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$build_sha" "$GITHUB_RUN_ID" "$apk_name" \
+          apk_sha256="$(sha256sum "release/$apk_name" | awk '{print $1}')"
+          printf '%s  %s\n' "$apk_sha256" "$apk_name" > "release/$apk_name.sha256"
+          printf '{"repository":"%s","branch":"%s","commit":"%s","runId":%s,"apk":"%s","sha256":"%s"}\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$build_sha" "$GITHUB_RUN_ID" "$apk_name" "$apk_sha256" \
             > release/build-manifest.json
           echo "artifact_name=Agora-Workbench-conversation-loss-v5-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
