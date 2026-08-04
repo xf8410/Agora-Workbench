@@ -1,10 +1,18 @@
 name: Build Agora Workbench APK
 
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: build-workbench-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -14,28 +22,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
-      - name: Apply final integration cleanup
-        run: python3 scripts/finalize_main_integration.py
-      - name: Validate cleaned integration tree
+      - name: Enforce non-mutating workflow policy
         run: |
           set -euo pipefail
-          test ! -e ci-failure-summary.txt
-          test ! -e .github/workflows/apply-conversation-loss-v5-phase1.yml
-          test ! -e .github/workflows/integrate-client-resilience-once.yml
-          test ! -e .github/workflows/register-github-clone-tool-once.yml
-          test ! -e .github/workflows/finalize-main-integration-once.yml
-          git diff --check
-      - name: Commit cleaned integration tree
-        run: |
-          set -euo pipefail
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add -A
-          git diff --cached --check
-          git commit -m 'ci: enforce non-mutating main integration gate'
-      - name: Push cleaned integration tree
-        run: git push origin HEAD:workbench/fix-reply-disappears-on-next-send
+          if grep -R -nE 'git[[:space:]]+push|gh[[:space:]]+api.*(contents|git/refs)' .github/workflows; then
+            echo 'Self-mutating workflow command is forbidden.' >&2
+            exit 1
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -53,7 +46,7 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-final-integration-${{ github.run_id }}
+          name: Agora-Workbench-${{ github.sha }}-run${{ github.run_id }}
           path: app/build/outputs/apk/fdroid/debug/*.apk
           if-no-files-found: error
           retention-days: 14
