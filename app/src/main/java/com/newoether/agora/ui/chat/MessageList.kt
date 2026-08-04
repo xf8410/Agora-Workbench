@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -58,15 +59,36 @@ fun MessageList(
     onPdfPagesClick: ((pages: List<String>, startIndex: Int) -> Unit)? = null,
     thoughtExpandedStates: SnapshotStateMap<String, Boolean> = remember { mutableStateMapOf() },
     hasOlderMessages: Boolean = false,
-    onLoadOlder: () -> Unit = {}
+    onLoadOlder: () -> Unit = {},
+    loadError: String? = null,
+    onRetryLoad: () -> Unit = {},
 ) {
     var editingMessageId by remember { mutableStateOf<String?>(null) }
+    var pendingHistoryAnchor by remember { mutableStateOf<Pair<String, Int>?>(null) }
     LaunchedEffect(isLoading) { if (isLoading) editingMessageId = null }
     LaunchedEffect(state, hasOlderMessages) {
         snapshotFlow { state.firstVisibleItemIndex }
             .distinctUntilChanged()
-            .filter { it <= 2 && hasOlderMessages }
-            .collect { onLoadOlder() }
+            .filter { it <= 2 && hasOlderMessages && pendingHistoryAnchor == null }
+            .collect {
+                val first = state.layoutInfo.visibleItemsInfo.firstOrNull()
+                val anchorId = first?.key as? String
+                if (anchorId != null) {
+                    pendingHistoryAnchor = anchorId to state.firstVisibleItemScrollOffset
+                    onLoadOlder()
+                }
+            }
+    }
+    // Re-anchor the same stable message after older rows are prepended. This avoids the viewport
+    // jumping upward by one page even on Compose versions that do not retain a key automatically.
+    LaunchedEffect(allMessages, messages) {
+        val (anchorId, offset) = pendingHistoryAnchor ?: return@LaunchedEffect
+        val anchorIndex = messages.list.indexOfFirst { it.id == anchorId }
+        if (anchorIndex >= 0) state.scrollToItem(anchorIndex, offset)
+        pendingHistoryAnchor = null
+    }
+    LaunchedEffect(loadError, hasOlderMessages) {
+        if (loadError != null || !hasOlderMessages) pendingHistoryAnchor = null
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
 
@@ -78,9 +100,6 @@ fun MessageList(
         messages.list.indexOfLast { it.participant == Participant.USER }
     }
 
-    // Precompute branch siblings grouped by parent once per allMessages change.
-    // Previously this filter+sort ran per visible item (O(n²) and re-run on every
-    // streaming-token recomposition of the active message).
     val siblingsByParent = remember(allMessages) {
         allMessages.list
             .filter { !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX) }
@@ -88,23 +107,26 @@ fun MessageList(
             .mapValues { (_, v) -> v.sortedBy { it.timestamp } }
     }
 
-    val extraPadding = if (lastUserMessageIndex == -1 || viewportHeight == 0) {
-        0.dp
-    } else {
-        with(density) {
-            val vDp = viewportHeight.toDp()
-            val targetTopDp = 140.dp
-            val availableSpaceDp = vDp - targetTopDp - (bottomBarHeight + 8.dp)
-            var contentHeightPx = 0
-            for (i in lastUserMessageIndex until messages.list.size) {
-                contentHeightPx += messageHeights[messages.list[i].id] ?: 0
-            }
-            val contentHeightDp = contentHeightPx.toDp()
-            (availableSpaceDp - contentHeightDp).coerceAtLeast(0.dp)
-        }
-    }
+    // The list already has bottom contentPadding for the composer. A viewport-filling tail
+    // spacer leaves a large blank region after the newest reply and also makes "scroll to bottom"
+    // stop on whitespace instead of the actual final message.
+    val extraPadding = 0.dp
 
     Box(modifier = modifier) {
+        if (loadError != null && messages.list.isEmpty()) {
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            ) {
+                androidx.compose.material3.Text("Conversation history could not be loaded")
+                androidx.compose.material3.Text(loadError, modifier = Modifier.padding(top = 8.dp))
+                androidx.compose.material3.Button(onClick = onRetryLoad, modifier = Modifier.padding(top = 16.dp)) {
+                    androidx.compose.material3.Text("Retry")
+                }
+            }
+            return@Box
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = contentPadding,
@@ -119,8 +141,6 @@ fun MessageList(
                 val branchIndex = siblings.indexOfFirst { it.id == message.id }
                 val totalBranches = siblings.size
 
-                // Fade newly-appended messages in. Placement/fade-out left off so this
-                // doesn't fight the manual height/scroll padding management below.
                 Box(modifier = if (isLoading) Modifier else Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = null)) {
                 MessageItem(
                     message = message,
@@ -128,7 +148,6 @@ fun MessageList(
                         onEditMessage(id, text)
                         editingMessageId = null
                     },
-                    // isStreaming driven by message status, not isLoading flag
                     isStreaming = isLastMessage && message.participant == Participant.MODEL
                         && message.status in setOf(MessageStatus.SENDING, MessageStatus.THINKING, MessageStatus.TOOL_CALLING, MessageStatus.TRANSCRIBING),
                     isLoading = isLoading,

@@ -1,0 +1,14 @@
+name: Deprecated - integration finalizer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'Disabled: integration policy is enforced by the read-only build workflow. This workflow cannot modify repository content.'

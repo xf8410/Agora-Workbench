@@ -1,0 +1,14 @@
+name: Deprecated - conversation loss phase1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'Disabled: the phase1 source is already integrated. This workflow cannot modify repository content.'

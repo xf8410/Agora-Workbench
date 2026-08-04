@@ -577,12 +577,22 @@ class MessageGenerationController(
             // Set streamingMessage BEFORE allMessages, so when the combine
             // re-evaluates on the allMessages change, streamingMessage is already
             // visible — eliminating the single-frame gap.
+            val userMessage = ChatMessage(
+                id = userMessageId, parentId = lastMessageId, text = text,
+                images = allImages, participant = Participant.USER,
+                status = MessageStatus.SUCCESS, timestamp = startTime - 1,
+                attachmentMeta = attachmentMeta
+            )
             val placeholder = ChatMessage(
                 id = modelMessageId, parentId = userMessageId, text = "", participant = Participant.MODEL,
                 status = MessageStatus.SENDING, timestamp = startTime, modelName = modelId
             )
             state.streamUpdate(myUiToken, placeholder)
-            ifOpenOn(genId) { allMessages.update { it.filter { m -> m.id != modelMessageId } + placeholder } }
+            ifOpenOn(genId) {
+                allMessages.update {
+                    ConversationTurnAppend.append(it, userMessage, placeholder)
+                }
+            }
             val newChildren = selectedBeforeSend.toMutableMap()
             newChildren[userMessageId] = modelMessageId
             onPersistSelectedChildren(currentId, newChildren)

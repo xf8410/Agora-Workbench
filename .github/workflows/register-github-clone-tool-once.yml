@@ -1,0 +1,14 @@
+name: Deprecated - clone tool registration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'Disabled: the clone tool is registered in source. This workflow cannot modify repository content.'

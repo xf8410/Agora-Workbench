@@ -19,8 +19,8 @@ android {
         applicationId = "com.newoether.agora.workbench"
         minSdk = 24
         targetSdk = 36
-        versionCode = 32
-        versionName = "1.4.4-workbench"
+        versionCode = 33
+        versionName = "1.4.5-workbench"
 
         ndk {
             abiFilters += listOf("arm64-v8a")

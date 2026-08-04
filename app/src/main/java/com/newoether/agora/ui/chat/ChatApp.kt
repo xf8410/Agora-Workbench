@@ -113,6 +113,7 @@ fun ChatApp(
     val messages by viewModel.messages.collectAsState()
     val allMessages by viewModel.allMessages.collectAsState()
     val hasOlderMessages by viewModel.hasOlderMessages.collectAsState()
+    val historyLoadError by viewModel.historyLoadError.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val queuedSends by viewModel.queuedSends.collectAsState()
     val currentConversationId by viewModel.currentConversationId.collectAsState()
@@ -358,36 +359,20 @@ fun ChatApp(
                     snapshotFlow { messages }.filter { it.isNotEmpty() }.first()
                 }
             }
-            val targetIndex = messages.indexOfLast { it.participant == Participant.USER }
-
-            if (targetIndex != -1) {
+            if (messages.isNotEmpty()) {
                 try {
                     withTimeout(4000) {
                         snapshotFlow {
-                            val sum = messageHeights.values.sum()
-                            Triple(messages, sum, viewportHeightPx)
-                        }.collectLatest { data ->
-                            val currentMsgs = data.component1()
-                            val vHeight = data.component3()
-
-                            val currentTargetIndex = currentMsgs.indexOfLast { it.participant == Participant.USER }
-
-                            if (currentTargetIndex != -1 && vHeight > 0) {
-                                with(density) {
-                                    var totalHeightBeforePx = 0
-                                    for (i in 0 until currentTargetIndex) {
-                                        totalHeightBeforePx += messageHeights[currentMsgs[i].id] ?: 0
-                                    }
-                                    listState.scrollToItem(currentTargetIndex, 0)
-                                }
-                            }
-
-                            delay(32)
-                            this@withTimeout.cancel()
-                        }
+                            Triple(messages, listState.layoutInfo.totalItemsCount, viewportHeightPx)
+                        }.filter { (currentMsgs, itemCount, height) ->
+                            currentMsgs.isNotEmpty() && itemCount >= currentMsgs.size && height > 0
+                        }.first()
                     }
+                    // MessageList has one trailing spacer item. Scroll to it so the newest MODEL
+                    // reply is fully visible immediately when an existing conversation is opened.
+                    listState.scrollToItem(messages.size, 0)
                 } catch (e: Exception) {
-                    // Timeout or intended cancellation
+                    // Timeout or intended cancellation; release switching below.
                 }
             }
             viewModel.setSwitching(false)
@@ -621,6 +606,8 @@ fun ChatApp(
                                 thoughtExpandedStates = thoughtExpandedStates,
                                 hasOlderMessages = hasOlderMessages,
                                 onLoadOlder = viewModel::loadOlderMessages,
+                                loadError = historyLoadError,
+                                onRetryLoad = { currentConversationId?.let { id -> viewModel.createNewChat(); viewModel.selectConversation(id) } },
                                 contentPadding = PaddingValues(
                                     start = 8.dp,
                                     end = 8.dp,
