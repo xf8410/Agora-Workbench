@@ -212,6 +212,28 @@ interface ChatDao {
         maxAttachmentMetaChars: Int = 32768,
     ): Flow<List<MessageEntity>>
 
+    @Query("""
+        SELECT * FROM messages
+        WHERE conversationId = :conversationId
+        ORDER BY timestamp DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getNewestMessagesPage(conversationId: String, limit: Int): List<MessageEntity>
+
+    @Query("""
+        SELECT * FROM messages
+        WHERE conversationId = :conversationId
+          AND (timestamp < :beforeTimestamp OR (timestamp = :beforeTimestamp AND id < :beforeId))
+        ORDER BY timestamp DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getOlderMessagesPage(
+        conversationId: String,
+        beforeTimestamp: Long,
+        beforeId: String,
+        limit: Int,
+    ): List<MessageEntity>
+
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
     fun getMessageCountForConversation(conversationId: String): Flow<Int>
 
