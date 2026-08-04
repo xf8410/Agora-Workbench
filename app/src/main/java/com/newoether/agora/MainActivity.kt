@@ -456,7 +456,11 @@ fun MainNavigation(
     // Full-screen media viewer (and settings) drop the snackbar to the bottom (nav-bar inset only);
     // in chat it floats above the bottom bar. The animateDpAsState below turns the change into a
     // rise/fall animation as the viewer opens/closes.
-    val targetSnackbarPadding = if (showSettings || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
+    // Layout callbacks and inset changes can briefly produce a negative Dp while the
+    // bottom bar is being removed or recomposed. Compose padding rejects negatives.
+    val targetSnackbarPadding = (
+        if (showSettings || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
+    ).coerceAtLeast(0.dp)
     val snackbarBottomPadding by animateDpAsState(
         targetValue = targetSnackbarPadding,
         animationSpec = spring(dampingRatio = 1.0f, stiffness = 1000f),
@@ -911,7 +915,11 @@ fun MainNavigation(
                 visible = showing,
                 enter = fadeIn(tween(400)) + scaleIn(tween(400), initialScale = 0.8f),
                 exit = fadeOut(tween(400)) + scaleOut(tween(400), targetScale = 0.8f),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = snackbarBottomPadding + 2.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    // Defensive clamp at the padding boundary as spring animations may
+                    // transiently overshoot below zero even with a non-negative target.
+                    .padding(bottom = (snackbarBottomPadding + 2.dp).coerceAtLeast(0.dp))
             ) {
                 content?.let { data ->
                     Snackbar(
