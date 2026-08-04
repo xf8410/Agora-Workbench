@@ -1,27 +1,14 @@
-name: Apply conversation loss v5 phase1
+name: Deprecated - conversation loss phase1
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply:
-    if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5'
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: workbench/root-fix-conversation-loss-v5
-          fetch-depth: 0
-      - name: Apply deterministic patch
-        run: python3 scripts/apply_conversation_loss_v5_phase1.py
-      - name: Commit source changes
-        run: |
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt
-          git diff --cached --check
-          git commit -m 'fix: preserve coherent conversations across switching failures'
-          git push origin HEAD:workbench/root-fix-conversation-loss-v5
+      - run: |
+          echo 'Disabled: the phase1 source is already integrated. This workflow cannot modify repository content.'
