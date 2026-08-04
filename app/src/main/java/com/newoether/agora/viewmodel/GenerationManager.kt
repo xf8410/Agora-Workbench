@@ -174,6 +174,7 @@ class GenerationManager(
             onConfirmGitHubAction?.invoke(repository, summary) ?: false
         }
     }
+    private val githubWatchToolProvider = com.newoether.agora.tool.GitHubWatchToolProvider(app)
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
         // Forward to the ViewModel-provided gate at call time (read the var lazily).
@@ -181,7 +182,7 @@ class GenerationManager(
     }
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
-        githubToolProvider, umaToolProvider, shellToolProvider
+        githubToolProvider, githubWatchToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
