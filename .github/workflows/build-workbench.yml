@@ -15,16 +15,17 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply reply preservation patch
+      - name: Apply reply preservation patch and verified documentation
         if: github.ref == 'refs/heads/workbench/fix-reply-disappears-on-next-send'
         run: |
           python3 scripts/apply_reply_disappears_fix.py
+          python3 scripts/sync_verified_intro_to_root_readme.py
           if ! git diff --quiet; then
             git config user.name 'Agora Workbench Bot'
             git config user.email 'agora-workbench@users.noreply.github.com'
-            git add app/src/main/java/com/newoether/agora/viewmodel/MessageGenerationController.kt
+            git add app/src/main/java/com/newoether/agora/viewmodel/MessageGenerationController.kt README.md
             git diff --cached --check
-            git commit -m 'fix: keep completed reply visible when sending next message'
+            git commit -m 'docs: prepend verified fixes and preserve existing introduction'
             git push origin HEAD:workbench/fix-reply-disappears-on-next-send
           fi
       - uses: actions/setup-java@v4
