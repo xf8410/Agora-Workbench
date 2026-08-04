@@ -1,5 +1,6 @@
 package com.newoether.agora.viewmodel
 
+import android.content.Context
 import com.newoether.agora.util.Constants
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
@@ -7,10 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeout
-import java.util.Collections
 
-/** Fail-safe confirmation gate for GitHub mutations requested by the assistant. */
-class GitHubConfirmationController {
+/** Fail-safe confirmation gate for GitHub mutations requested by the assistant.
+ *  "Always allow" is persisted across app restarts and shared across all conversations/windows. */
+class GitHubConfirmationController(context: Context) {
     data class PendingGitHubAction(
         val repository: String,
         val summary: String,
@@ -20,11 +21,29 @@ class GitHubConfirmationController {
     private val _pendingAction = MutableStateFlow<PendingGitHubAction?>(null)
     val pendingAction: StateFlow<PendingGitHubAction?> = _pendingAction.asStateFlow()
 
-    /** Repositories approved for all mutations until this app process ends. */
-    private val sessionAllowedRepositories = Collections.synchronizedSet(mutableSetOf<String>())
+    private val prefs = context.getSharedPreferences("github_confirmation", Context.MODE_PRIVATE)
+
+    /** Persistently approved repositories — survives app restarts, shared across all windows. */
+    private fun allowedSet(): Set<String> = prefs.getStringSet("allowed_repositories", emptySet()) ?: emptySet()
+
+    private fun addAllowed(repository: String) {
+        val current = allowedSet().toMutableSet()
+        current.add(repository)
+        prefs.edit().putStringSet("allowed_repositories", current).apply()
+    }
+
+    /** Revoke a repository from the persistent allow-list (for settings UI). */
+    fun revokeAllowed(repository: String) {
+        val current = allowedSet().toMutableSet()
+        current.remove(repository)
+        prefs.edit().putStringSet("allowed_repositories", current).apply()
+    }
+
+    /** Snapshot of all persistently approved repositories (for settings UI). */
+    fun allowedRepositories(): Set<String> = allowedSet()
 
     suspend fun confirm(repository: String, summary: String): Boolean {
-        if (sessionAllowedRepositories.contains(repository)) return true
+        if (allowedSet().contains(repository)) return true
         if (_pendingAction.value != null) return false
         val deferred = CompletableDeferred<Boolean>()
         val pending = PendingGitHubAction(repository, summary, deferred)
@@ -38,10 +57,10 @@ class GitHubConfirmationController {
         }
     }
 
-    /** Called by the UI. "Always allow" is process/session scoped, not permanently persisted. */
+    /** Called by the UI. "Always allow" is persisted permanently across restarts and windows. */
     fun resolve(allow: Boolean, alwaysAllowRepository: Boolean = false) {
         val pending = _pendingAction.value ?: return
-        if (allow && alwaysAllowRepository) sessionAllowedRepositories.add(pending.repository)
+        if (allow && alwaysAllowRepository) addAllowed(pending.repository)
         pending.deferred.complete(allow)
         _pendingAction.value = null
     }

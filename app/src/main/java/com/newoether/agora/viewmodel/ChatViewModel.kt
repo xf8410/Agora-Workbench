@@ -325,7 +325,7 @@ class ChatViewModel(
 
     // ── Remote shell command confirmation gate ───────────────────────────
     /** Shell-command confirmation policy + pending-prompt handshake (see [ShellConfirmationController]). */
-    private val shellConfirmation = ShellConfirmationController(settings)
+    private val shellConfirmation = ShellConfirmationController(appContext, settings)
     val pendingShellCommand: StateFlow<ShellConfirmationController.PendingShellCommand?>
         get() = shellConfirmation.pendingShellCommand
 
@@ -336,7 +336,7 @@ class ChatViewModel(
     fun setShellConfirmEnabled(enabled: Boolean) = shellConfirmation.setEnabled(enabled)
 
     // ── GitHub mutation confirmation gate ────────────────────────
-    private val githubConfirmation = GitHubConfirmationController()
+    private val githubConfirmation = GitHubConfirmationController(appContext)
     val pendingGitHubAction: StateFlow<GitHubConfirmationController.PendingGitHubAction?>
         get() = githubConfirmation.pendingAction
 
