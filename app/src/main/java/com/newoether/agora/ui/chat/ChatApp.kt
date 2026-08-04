@@ -243,6 +243,39 @@ fun ChatApp(
     }
 
 
+    suspend fun scrollToBottom(animate: Boolean = true) {
+        if (messages.isEmpty() || viewportHeightPx == 0) return
+        val lastIndex = messages.lastIndex
+        if (lastIndex < 0) return
+        with(density) {
+            val bottomBarHeightPx = bottomBarHeight.toPx().toInt()
+            // Compute the scroll offset so the last message sits just above the bottom bar,
+            // with a small top padding so it doesn't flush against the screen edge.
+            var totalHeightBeforePx = 0
+            for (i in 0 until lastIndex) {
+                totalHeightBeforePx += messageHeights[messages[i].id] ?: 0
+            }
+            val lastHeight = messageHeights[messages[lastIndex].id] ?: 0
+            val visibleContentPx = viewportHeightPx - bottomBarHeightPx
+            val targetScrollPx = (totalHeightBeforePx + lastHeight - visibleContentPx + 16f).coerceAtLeast(0f)
+
+            if (animate) {
+                var currentOffsetPx = listState.firstVisibleItemScrollOffset.toFloat()
+                for (i in 0 until listState.firstVisibleItemIndex) {
+                    if (i < messages.size) {
+                        currentOffsetPx += (messageHeights[messages[i].id] ?: 0)
+                    }
+                }
+                val diff = targetScrollPx - currentOffsetPx
+                if (kotlin.math.abs(diff) > 2) {
+                    listState.animateScrollBy(diff, tween(600, easing = FastOutSlowInEasing))
+                }
+            } else {
+                listState.scrollToItem(0, targetScrollPx.toInt())
+            }
+        }
+    }
+
     suspend fun scrollToLastUserMessage(animate: Boolean = true, targetMessageId: String? = null, easing: Easing = FastOutSlowInEasing) {
         if (messages.isEmpty() || viewportHeightPx == 0) return
 
@@ -359,9 +392,8 @@ fun ChatApp(
                     snapshotFlow { messages }.filter { it.isNotEmpty() }.first()
                 }
             }
-            val targetIndex = messages.indexOfLast { it.participant == Participant.USER }
 
-            if (targetIndex != -1) {
+            if (messages.isNotEmpty()) {
                 try {
                     withTimeout(4000) {
                         snapshotFlow {
@@ -371,16 +403,8 @@ fun ChatApp(
                             val currentMsgs = data.component1()
                             val vHeight = data.component3()
 
-                            val currentTargetIndex = currentMsgs.indexOfLast { it.participant == Participant.USER }
-
-                            if (currentTargetIndex != -1 && vHeight > 0) {
-                                with(density) {
-                                    var totalHeightBeforePx = 0
-                                    for (i in 0 until currentTargetIndex) {
-                                        totalHeightBeforePx += messageHeights[currentMsgs[i].id] ?: 0
-                                    }
-                                    listState.scrollToItem(currentTargetIndex, 0)
-                                }
+                            if (currentMsgs.isNotEmpty() && vHeight > 0) {
+                                scrollToBottom(animate = false)
                             }
 
                             delay(32)
@@ -810,8 +834,10 @@ fun ChatApp(
                                     // direct sends and the deferred pending-send auto-fire; buzzing
                                     // again here would double-buzz the direct-send path.
                                     scope.launch {
-                                        delay(200)
-                                        scrollToLastUserMessage(animate = true)
+                                        // Wait for the user message to appear in the list before
+                                        // scrolling, otherwise the scroll lands on a stale position.
+                                        snapshotFlow { messages.size }.filter { it > 0 }.first()
+                                        scrollToBottom(animate = true)
                                     }
                                 }
                             }
