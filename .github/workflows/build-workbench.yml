@@ -15,17 +15,18 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply phase5 integration
-        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5-phase5-tests-scroll-anchor'
+      - name: Apply reply preservation patch
+        if: github.ref == 'refs/heads/workbench/fix-reply-disappears-on-next-send'
         run: |
-          python3 scripts/apply_conversation_loss_v5_phase5.py
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt \
-            app/src/main/java/com/newoether/agora/ui/chat/MessageList.kt
-          git diff --cached --check
-          git commit -m 'fix: preserve viewport while prepending tested history pages'
-          git push origin HEAD:workbench/root-fix-conversation-loss-v5-phase5-tests-scroll-anchor
+          python3 scripts/apply_reply_disappears_fix.py
+          if ! git diff --quiet; then
+            git config user.name 'Agora Workbench Bot'
+            git config user.email 'agora-workbench@users.noreply.github.com'
+            git add app/src/main/java/com/newoether/agora/viewmodel/MessageGenerationController.kt
+            git diff --cached --check
+            git commit -m 'fix: keep completed reply visible when sending next message'
+            git push origin HEAD:workbench/fix-reply-disappears-on-next-send
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -43,7 +44,7 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-conversation-loss-v5-phase5-${{ github.run_id }}
+          name: Agora-Workbench-reply-preservation-${{ github.run_id }}
           path: app/build/outputs/apk/fdroid/debug/*.apk
           if-no-files-found: error
           retention-days: 14
