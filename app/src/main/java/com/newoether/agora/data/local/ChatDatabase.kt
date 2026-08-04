@@ -213,15 +213,56 @@ interface ChatDao {
     ): Flow<List<MessageEntity>>
 
     @Query("""
-        SELECT * FROM messages
+        SELECT id, conversationId, parentId,
+          CASE WHEN length(text) > :maxTextChars
+            THEN substr(text, 1, :maxTextChars) || '
+
+[… message preview truncated for stability]'
+            ELSE text END AS text,
+          images,
+          CASE WHEN thoughts IS NOT NULL AND length(thoughts) > :maxThoughtChars
+            THEN substr(thoughts, 1, :maxThoughtChars) || '
+
+[… thoughts preview truncated]'
+            ELSE thoughts END AS thoughts,
+          thoughtTitle, tokenCount, status, participant, timestamp, thoughtTimeMs, modelName,
+          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) > :maxToolJsonChars
+            THEN NULL ELSE toolCallJson END AS toolCallJson,
+          CASE WHEN attachmentMeta IS NOT NULL AND length(attachmentMeta) > :maxAttachmentMetaChars
+            THEN NULL ELSE attachmentMeta END AS attachmentMeta
+        FROM messages
         WHERE conversationId = :conversationId
         ORDER BY timestamp DESC, id DESC
         LIMIT :limit
     """)
-    suspend fun getNewestMessagesPage(conversationId: String, limit: Int): List<MessageEntity>
+    suspend fun getNewestMessagesPage(
+        conversationId: String,
+        limit: Int,
+        maxTextChars: Int,
+        maxThoughtChars: Int,
+        maxToolJsonChars: Int,
+        maxAttachmentMetaChars: Int,
+    ): List<MessageEntity>
 
     @Query("""
-        SELECT * FROM messages
+        SELECT id, conversationId, parentId,
+          CASE WHEN length(text) > :maxTextChars
+            THEN substr(text, 1, :maxTextChars) || '
+
+[… message preview truncated for stability]'
+            ELSE text END AS text,
+          images,
+          CASE WHEN thoughts IS NOT NULL AND length(thoughts) > :maxThoughtChars
+            THEN substr(thoughts, 1, :maxThoughtChars) || '
+
+[… thoughts preview truncated]'
+            ELSE thoughts END AS thoughts,
+          thoughtTitle, tokenCount, status, participant, timestamp, thoughtTimeMs, modelName,
+          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) > :maxToolJsonChars
+            THEN NULL ELSE toolCallJson END AS toolCallJson,
+          CASE WHEN attachmentMeta IS NOT NULL AND length(attachmentMeta) > :maxAttachmentMetaChars
+            THEN NULL ELSE attachmentMeta END AS attachmentMeta
+        FROM messages
         WHERE conversationId = :conversationId
           AND (timestamp < :beforeTimestamp OR (timestamp = :beforeTimestamp AND id < :beforeId))
         ORDER BY timestamp DESC, id DESC
@@ -232,6 +273,10 @@ interface ChatDao {
         beforeTimestamp: Long,
         beforeId: String,
         limit: Int,
+        maxTextChars: Int,
+        maxThoughtChars: Int,
+        maxToolJsonChars: Int,
+        maxAttachmentMetaChars: Int,
     ): List<MessageEntity>
 
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")

@@ -75,8 +75,11 @@ class ConversationRepository(
         chatDao.getMessagesForConversation(conversationId, limit.coerceIn(1, 500), 65_536, 32_768, 131_072, 32_768)
 
     suspend fun getNewestMessagesPage(conversationId: String, limit: Int = 24): List<MessageEntity> =
-        chatDao.getNewestMessagesPage(conversationId, limit.coerceIn(1, 100))
-            .sortedWith(compareBy<MessageEntity> { it.timestamp }.thenBy { it.id })
+        chatDao.getNewestMessagesPage(
+            conversationId, limit.coerceIn(1, 100),
+            maxTextChars = 65_536, maxThoughtChars = 32_768,
+            maxToolJsonChars = 131_072, maxAttachmentMetaChars = 32_768,
+        ).sortedWith(compareBy<MessageEntity> { it.timestamp }.thenBy { it.id })
 
     suspend fun getOlderMessagesPage(
         conversationId: String,
@@ -84,7 +87,9 @@ class ConversationRepository(
         beforeId: String,
         limit: Int = 24,
     ): List<MessageEntity> = chatDao.getOlderMessagesPage(
-        conversationId, beforeTimestamp, beforeId, limit.coerceIn(1, 100)
+        conversationId, beforeTimestamp, beforeId, limit.coerceIn(1, 100),
+        maxTextChars = 65_536, maxThoughtChars = 32_768,
+        maxToolJsonChars = 131_072, maxAttachmentMetaChars = 32_768,
     ).sortedWith(compareBy<MessageEntity> { it.timestamp }.thenBy { it.id })
 
     fun getMessageCountForConversation(conversationId: String): Flow<Int> =

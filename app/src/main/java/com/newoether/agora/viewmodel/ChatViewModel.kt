@@ -759,7 +759,6 @@ class ChatViewModel(
                                 _isSwitching.value = false
                             }
                         }
-                        }
                     }
                 } else {
                     _allMessages.value = emptyList()
