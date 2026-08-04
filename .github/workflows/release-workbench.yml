@@ -1,0 +1,73 @@
+name: Release Agora Workbench APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 1.4.7-workbench)'
+        required: true
+      version_code:
+        description: 'Version code (integer, e.g. 35)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-workbench
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify on latest main SHA
+        run: |
+          echo "Building release from ${{ github.sha }}"
+          git log --oneline -1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;28.2.13676358'
+
+      - name: Set version
+        run: |
+          sed -i "s/versionCode = .*/versionCode = ${{ inputs.version_code }}/" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"${{ inputs.version_name }}\"/" app/build.gradle.kts
+          grep -E "versionCode|versionName" app/build.gradle.kts
+
+      - name: Unit tests
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
+
+      - name: Build Release APK
+        run: ./gradlew --no-daemon --stacktrace assembleFdroidRelease
+
+      - name: Create tag
+        run: |
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git tag -a "v${{ inputs.version_name }}" -m "Release ${{ inputs.version_name }} (code ${{ inputs.version_code }})"
+          git push origin "v${{ inputs.version_name }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ inputs.version_name }}"
+          name: "Agora Workbench ${{ inputs.version_name }}"
+          generate_release_notes: true
+          files: |
+            app/build/outputs/apk/fdroid/release/*.apk

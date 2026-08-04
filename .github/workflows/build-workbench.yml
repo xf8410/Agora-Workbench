@@ -5,10 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -23,19 +22,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply copy action visibility fix
-        if: github.ref == 'refs/heads/workbench/fix-reply-disappears-on-next-send'
-        run: |
-          set -euo pipefail
-          python3 scripts/apply_copy_action_visibility.py
-          if ! git diff --quiet; then
-            git config user.name 'Agora Workbench Bot'
-            git config user.email 'agora-workbench@users.noreply.github.com'
-            git add app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt
-            git diff --cached --check
-            git commit -m 'fix: keep copy action visible after reply text is available'
-            git push origin HEAD:workbench/fix-reply-disappears-on-next-send
-          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -49,7 +35,7 @@ jobs:
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
-      - name: Build APK
+      - name: Build APK (verify main SHA compiles)
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - uses: actions/upload-artifact@v4
         with:
