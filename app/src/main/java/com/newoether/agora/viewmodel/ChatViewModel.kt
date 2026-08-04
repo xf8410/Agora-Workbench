@@ -675,7 +675,26 @@ class ChatViewModel(
                                 convRepo.getMessagesForConversation(id, limit)
                             },
                             convRepo.getMessageCountForConversation(id)
-                        ) { entities, total -> entities to total }.collect { (entities, total) ->
+                        ) { entities, total -> entities to total }
+                            .retryWhen { cause, attempt ->
+                                if (cause is CancellationException) return@retryWhen false
+                                DebugLog.e("ChatViewModel", "History load failed for $id (attempt $attempt)", cause)
+                                _historyLoadError.value = cause.message ?: "Unable to load conversation history"
+                                if (attempt < 2) {
+                                    delay(150L * (attempt + 1))
+                                    true
+                                } else false
+                            }
+                            .catch { cause ->
+                                if (cause is CancellationException) throw cause
+                                DebugLog.e("ChatViewModel", "History load stopped for $id", cause)
+                                _historyLoadError.value = cause.message ?: "Unable to load conversation history"
+                                _allMessages.value = emptyList()
+                                _hasOlderMessages.value = false
+                                _isSwitching.value = false
+                            }
+                            .collect { (entities, total) ->
+                            _historyLoadError.value = null
                             _hasOlderMessages.value = entities.size < total && messageWindowSize.value < MAX_MESSAGE_WINDOW
                             val mapped = entities.map {
                                 ChatMessage(
