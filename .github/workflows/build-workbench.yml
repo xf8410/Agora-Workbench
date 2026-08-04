@@ -10,7 +10,7 @@ concurrency:
   group: agora-workbench-${{ github.ref }}
   cancel-in-progress: true
 permissions:
-  contents: write
+  contents: read
 env:
   BUILD_FILE: app/build.gradle.kts
 
@@ -23,23 +23,14 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply conversation-loss v5 phase2
-        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5-phase2'
-        run: |
-          python3 scripts/apply_conversation_loss_v5_phase2.py
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/ui/chat/ChatApp.kt app/src/main/java/com/newoether/agora/ui/chat/MessageList.kt
-          git diff --cached --check
-          git commit -m 'fix: remove reply whitespace and open conversations at latest reply'
-          git push origin HEAD:workbench/root-fix-conversation-loss-v5-phase2
       - name: Verify checked-out identity
+        shell: bash
         run: |
-          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-            git fetch origin main
-            test "$(git rev-parse origin/main)" = "${GITHUB_SHA}"
-          fi
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          git fetch origin "${GITHUB_REF_NAME}"
+          test "$(git rev-parse FETCH_HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain)"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -54,7 +45,7 @@ jobs:
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
-      - name: Prepare traceable APK and manifest
+      - name: Prepare traceable APK
         id: package
         shell: bash
         run: |
@@ -68,6 +59,9 @@ jobs:
           cp "$source_apk" "release/$apk_name"
           apk_sha256="$(sha256sum "release/$apk_name" | awk '{print $1}')"
           printf '%s  %s\n' "$apk_sha256" "$apk_name" > "release/$apk_name.sha256"
+          printf '{"repository":"%s","branch":"%s","commit":"%s","versionName":"%s","versionCode":%s,"runId":%s,"apk":"%s","sha256":"%s"}\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$build_sha" "$version_name" "$version_code" "$GITHUB_RUN_ID" "$apk_name" "$apk_sha256" \
+            > release/build-manifest.json
           echo "artifact_name=Agora-Workbench-${version_name}-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
       - name: Upload Actions artifact
         uses: actions/upload-artifact@v4
