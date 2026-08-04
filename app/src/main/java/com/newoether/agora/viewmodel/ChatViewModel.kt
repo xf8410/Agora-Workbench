@@ -696,36 +696,42 @@ class ChatViewModel(
                             .collect { (entities, total) ->
                             _historyLoadError.value = null
                             _hasOlderMessages.value = entities.size < total && messageWindowSize.value < MAX_MESSAGE_WINDOW
-                            val mapped = entities.map {
-                                ChatMessage(
-                                    id = it.id,
-                                    parentId = it.parentId,
-                                    text = SearchResultFormatter.format(it.text, appContext),
-                                    images = it.images,
-                                    thoughts = it.thoughts,
-                                    thoughtTitle = it.thoughtTitle,
-                                    tokenCount = it.tokenCount,
-                                    status = it.status,
-                                    participant = it.participant,
-                                    timestamp = it.timestamp,
-                                    thoughtTimeMs = it.thoughtTimeMs,
-                                    modelName = it.modelName,
-                                    segments = it.toolCallJson?.let { json ->
-                                        try { Json.decodeFromString<List<MessageSegment>>(json) } catch (_: Exception) { null }
-                                    } ?: it.thoughts?.takeIf { t -> t.isNotBlank() }?.let { listOf(MessageSegment(type = "thought", content = it)) },
-                                    toolCall = it.toolCallJson?.let { json ->
-                                        try {
-                                            val segs = Json.decodeFromString<List<MessageSegment>>(json)
-                                            segs.lastOrNull { s -> s.type == "tool" }?.let { s ->
-                                                val rawResult = s.toolResult ?: ""
-                                                ToolCallData(s.toolName ?: "", s.toolArgs ?: "{}", SearchResultFormatter.format(rawResult, appContext))
-                                            }
-                                        } catch (_: Exception) { null }
-                                    },
-                                    attachmentMeta = it.attachmentMeta?.let { json ->
-                                        try { Json.decodeFromString<AttachmentMeta>(json) } catch (_: Exception) { null }
+                            // Keep formatting/JSON decoding off Main and decode tool JSON once.
+                            val mapped = withContext(Dispatchers.Default) {
+                                entities.map { entity ->
+                                    val decodedSegments = entity.toolCallJson?.let { raw ->
+                                        try { Json.decodeFromString<List<MessageSegment>>(raw) }
+                                        catch (_: Exception) { null }
                                     }
-                                )
+                                    ChatMessage(
+                                        id = entity.id,
+                                        parentId = entity.parentId,
+                                        text = SearchResultFormatter.format(entity.text, appContext),
+                                        images = entity.images,
+                                        thoughts = entity.thoughts,
+                                        thoughtTitle = entity.thoughtTitle,
+                                        tokenCount = entity.tokenCount,
+                                        status = entity.status,
+                                        participant = entity.participant,
+                                        timestamp = entity.timestamp,
+                                        thoughtTimeMs = entity.thoughtTimeMs,
+                                        modelName = entity.modelName,
+                                        segments = decodedSegments ?: entity.thoughts
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?.let { listOf(MessageSegment(type = "thought", content = it)) },
+                                        toolCall = decodedSegments?.lastOrNull { it.type == "tool" }?.let { seg ->
+                                            ToolCallData(
+                                                seg.toolName.orEmpty(),
+                                                seg.toolArgs ?: "{}",
+                                                SearchResultFormatter.format(seg.toolResult.orEmpty(), appContext)
+                                            )
+                                        },
+                                        attachmentMeta = entity.attachmentMeta?.let { raw ->
+                                            try { Json.decodeFromString<AttachmentMeta>(raw) }
+                                            catch (_: Exception) { null }
+                                        }
+                                    )
+                                }
                             }
                             // Backfill toolCall for old result_ messages persisted without toolCallJson.
                             // They inherit the parent tool_ message's ToolCallData so the provider can
