@@ -616,7 +616,7 @@ internal fun AssistantMessageContent(
 
                 if (message.participant == Participant.MODEL) {
                     AnimatedVisibility(
-                        visible = !isStreaming,
+                        visible = shouldShowAssistantActions(isStreaming, message.text),
                         enter = fadeIn(tween(400)) + expandVertically(tween(400)),
                         exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
                     ) {
