@@ -1,107 +1,14 @@
-name: Finalize main integration once
+name: Deprecated - integration finalizer
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  finalize:
-    if: github.ref == 'refs/heads/workbench/fix-reply-disappears-on-next-send'
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Remove one-shot mutation machinery and diagnostics
-        run: |
-          set -euo pipefail
-          rm -f \
-            .github/workflows/apply-conversation-loss-v5-phase1.yml \
-            .github/workflows/integrate-client-resilience-once.yml \
-            .github/workflows/register-github-clone-tool-once.yml \
-            .github/workflows/finalize-main-integration-once.yml \
-            scripts/apply_client_resilience_integration.py \
-            scripts/apply_conversation_loss_v5_phase1.py \
-            scripts/apply_conversation_loss_v5_phase2.py \
-            scripts/apply_conversation_loss_v5_phase3.py \
-            scripts/apply_conversation_loss_v5_phase4.py \
-            scripts/apply_conversation_loss_v5_phase4_bounded.py \
-            scripts/apply_conversation_loss_v5_phase5.py \
-            scripts/apply_reply_disappears_fix.py \
-            scripts/register_github_clone_tool.py \
-            scripts/sync_verified_intro_to_root_readme.py \
-            ci-failure-summary.txt
-          cat > .github/workflows/build-workbench.yml <<'YAML'
-          name: Build Agora Workbench APK
-
-          on:
-            pull_request:
-              branches: [main]
-            push:
-              branches: [main]
-            workflow_dispatch:
-
-          permissions:
-            contents: read
-
-          concurrency:
-            group: build-workbench-${{ github.ref }}
-            cancel-in-progress: true
-
-          jobs:
-            build:
-              runs-on: ubuntu-latest
-              timeout-minutes: 45
-              steps:
-                - uses: actions/checkout@v4
-                  with:
-                    submodules: recursive
-                - name: Reject self-mutating workflow commands
-                  run: |
-                    set -euo pipefail
-                    if grep -R -nE 'git[[:space:]]+push|gh[[:space:]]+api.*(contents|git/refs)' .github/workflows; then
-                      echo 'Self-mutating workflow command is forbidden.' >&2
-                      exit 1
-                    fi
-                - uses: actions/setup-java@v4
-                  with:
-                    distribution: temurin
-                    java-version: '21'
-                    cache: gradle
-                - uses: android-actions/setup-android@v3
-                - name: Install Android NDK
-                  run: sdkmanager 'ndk;28.2.13676358'
-                - name: Unit tests
-                  run: |
-                    set -euo pipefail
-                    chmod +x gradlew
-                    ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
-                - name: Build APK
-                  run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
-                - uses: actions/upload-artifact@v4
-                  with:
-                    name: Agora-Workbench-${{ github.sha }}-run${{ github.run_id }}
-                    path: app/build/outputs/apk/fdroid/debug/*.apk
-                    if-no-files-found: error
-                    retention-days: 14
-          YAML
-      - name: Verify integration policy
-        run: |
-          set -euo pipefail
-          test ! -e ci-failure-summary.txt
-          test ! -e .github/workflows/apply-conversation-loss-v5-phase1.yml
-          test ! -e .github/workflows/integrate-client-resilience-once.yml
-          test ! -e .github/workflows/register-github-clone-tool-once.yml
-          ! grep -R -nE 'git[[:space:]]+push|gh[[:space:]]+api.*(contents|git/refs)' .github/workflows
-          git diff --check
-      - name: Commit final integration source
-        run: |
-          set -euo pipefail
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add -A
-          git diff --cached --check
-          git commit -m 'ci: enforce non-mutating main integration gate'
-          git push origin HEAD:workbench/fix-reply-disappears-on-next-send
+      - run: |
+          echo 'Disabled: integration policy is enforced by the read-only build workflow. This workflow cannot modify repository content.'
