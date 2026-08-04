@@ -23,18 +23,18 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply copy action visibility fix
-        if: github.ref == 'refs/heads/workbench/fix-reply-disappears-on-next-send'
+      - name: Apply 1.4.6 release metadata
+        if: github.ref == 'refs/heads/workbench/release-1.4.6-current-main'
         run: |
           set -euo pipefail
-          python3 scripts/apply_copy_action_visibility.py
+          python3 scripts/apply_release_1_4_6.py
           if ! git diff --quiet; then
             git config user.name 'Agora Workbench Bot'
             git config user.email 'agora-workbench@users.noreply.github.com'
-            git add app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt
+            git add app/build.gradle.kts app/src/main/java/com/newoether/agora/ui/settings/SettingsAboutPage.kt
             git diff --cached --check
-            git commit -m 'fix: keep copy action visible after reply text is available'
-            git push origin HEAD:workbench/fix-reply-disappears-on-next-send
+            git commit -m 'release: bump Workbench to 1.4.6 and fix project links'
+            git push origin HEAD:workbench/release-1.4.6-current-main
           fi
       - uses: actions/setup-java@v4
         with:
@@ -44,16 +44,54 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
-      - name: Unit tests
+      - name: Test and build APK
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
-      - name: Build APK
-        run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
+      - name: Prepare traceable APK and manifest
+        id: release
+        run: |
+          set -euo pipefail
+          source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$source_apk"
+          version_name="$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)"
+          version_code="$(sed -n 's/.*versionCode = \([0-9][0-9]*\).*/\1/p' app/build.gradle.kts | head -1)"
+          short_sha="${GITHUB_SHA:0:12}"
+          mkdir -p release
+          apk="release/Agora-Workbench-${version_name}-vc${version_code}-${short_sha}-run${GITHUB_RUN_ID}.apk"
+          cp "$source_apk" "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          sha256="$(cut -d' ' -f1 "$apk.sha256")"
+          cat > release/manifest.txt <<EOF
+          repository=xf8410/Agora-Workbench
+          ref=${GITHUB_REF}
+          commit=${GITHUB_SHA}
+          run_id=${GITHUB_RUN_ID}
+          version_name=${version_name}
+          version_code=${version_code}
+          apk=$(basename "$apk")
+          sha256=${sha256}
+          built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
       - uses: actions/upload-artifact@v4
         with:
           name: Agora-Workbench-${{ github.sha }}-run${{ github.run_id }}
-          path: app/build/outputs/apk/fdroid/debug/*.apk
+          path: release/*
           if-no-files-found: error
           retention-days: 14
+      - name: Publish rolling Workbench release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: workbench-latest
+          name: Agora Workbench 1.4.6
+          prerelease: true
+          make_latest: true
+          body: |
+            Verified rolling build from main commit `${{ github.sha }}`.
+            Actions Run: `${{ github.run_id }}`.
+            See `manifest.txt` and the `.sha256` file for exact provenance.
+          files: release/*
+          fail_on_unmatched_files: true
+          overwrite_files: true
