@@ -468,23 +468,34 @@ fun MainNavigation(
     // GitHub mutation confirmation gate. Read-only GitHub tools do not prompt.
     val pendingGitHubAction by viewModel.pendingGitHubAction.collectAsState()
     pendingGitHubAction?.let { pending ->
+        var alwaysAllow by remember(pending) { mutableStateOf(false) }
         AlertDialog(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             onDismissRequest = { viewModel.resolveGitHubConfirmation(allow = false) },
             icon = { Icon(Icons.Default.Lock, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary) },
             title = { Text(stringResource(R.string.github_confirm_title, pending.repository), fontWeight = FontWeight.Bold) },
             text = {
-                Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                    Text(
-                        pending.summary,
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                    )
+                Column {
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                        Text(
+                            pending.summary,
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { alwaysAllow = !alwaysAllow } },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = alwaysAllow, onCheckedChange = { alwaysAllow = it })
+                        Text(stringResource(R.string.github_confirm_always), style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.resolveGitHubConfirmation(allow = true) }) {
+                TextButton(onClick = { viewModel.resolveGitHubConfirmation(allow = true, alwaysAllowRepository = alwaysAllow) }) {
                     Text(stringResource(R.string.github_confirm_allow))
                 }
             },

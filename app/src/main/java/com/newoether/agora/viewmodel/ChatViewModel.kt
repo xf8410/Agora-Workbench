@@ -340,7 +340,8 @@ class ChatViewModel(
     val pendingGitHubAction: StateFlow<GitHubConfirmationController.PendingGitHubAction?>
         get() = githubConfirmation.pendingAction
 
-    fun resolveGitHubConfirmation(allow: Boolean) = githubConfirmation.resolve(allow)
+    fun resolveGitHubConfirmation(allow: Boolean, alwaysAllowRepository: Boolean = false) =
+        githubConfirmation.resolve(allow, alwaysAllowRepository)
 
     // ── Tasks (automation) ────────────────────────────────────
     /** Saved automation tasks; CRUD + run-now delegate to the app-scoped [taskManager]. */

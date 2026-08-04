@@ -921,6 +921,10 @@
     <string name="shell_confirm_allow">允許一次</string>
     <string name="shell_confirm_always">總是允許此伺服器</string>
     <string name="shell_confirm_deny">拒絕</string>
+    <string name="github_confirm_title">允許在 \"%1$s\" 上執行 GitHub 操作？</string>
+    <string name="github_confirm_allow">允許一次</string>
+    <string name="github_confirm_always">總是允許此倉庫</string>
+    <string name="github_confirm_deny">拒絕</string>
     <string name="shell_confirm_setting">確認遠端 Shell 操作</string>
     <string name="shell_confirm_setting_desc">在助手於遠端 SSH/Conch 伺服器上執行命令或寫入檔案前詢問</string>
 

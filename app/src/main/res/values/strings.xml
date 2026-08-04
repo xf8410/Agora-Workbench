@@ -921,6 +921,7 @@
     <string name="shell_confirm_deny">Deny</string>
     <string name="github_confirm_title">Allow GitHub change in \"%1$s\"?</string>
     <string name="github_confirm_allow">Allow once</string>
+    <string name="github_confirm_always">Always allow this repository</string>
     <string name="github_confirm_deny">Deny</string>
     <string name="shell_confirm_setting">Confirm remote shell actions</string>
     <string name="shell_confirm_setting_desc">Ask before the assistant runs commands or writes files on remote SSH/Conch servers</string>
