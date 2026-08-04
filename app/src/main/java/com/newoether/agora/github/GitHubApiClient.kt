@@ -122,7 +122,7 @@ class GitHubApiClient(context: Context) {
         while (out.length < limit) { val count = read(buffer, 0, minOf(buffer.size, limit - out.length)); if (count < 0) break; out.append(buffer, 0, count) }
         return out.toString()
     }
-    private fun encodeSegment(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    fun encodeSegment(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
     private fun encodePath(value: String) = value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { encodeSegment(it) }
     private companion object {
         val REPO_PATTERN = Regex("[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}")

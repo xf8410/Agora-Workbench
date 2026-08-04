@@ -33,6 +33,7 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         "github_list_branches", "github_list_commits", "github_get_tree",
         "github_search_code", "github_compare_refs", "github_get_pull_request",
         "github_get_workflow_run_details", "github_list_workflow_artifacts",
+        "github_list_user_repositories", "github_search_repositories", "github_get_repository",
     )
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
@@ -40,6 +41,17 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         fun integer(description: String) = ToolProperty("integer", description)
         return listOf(
             tool("github_list_repositories", "List up to 100 repositories accessible to the signed-in GitHub account.", emptyMap()),
+            tool("github_list_user_repositories", "List public repositories belonging to any GitHub user or organization.", mapOf(
+                "owner" to string("GitHub user or organization login."),
+                "limit" to integer("Maximum repositories, 1-50. Defaults to 30."),
+            ), listOf("owner")),
+            tool("github_search_repositories", "Search public GitHub repositories by name, owner, topic, language, or GitHub search qualifiers.", mapOf(
+                "query" to string("GitHub repository search query, for example 'agora language:kotlin'."),
+                "limit" to integer("Maximum results, 1-20. Defaults to 10."),
+            ), listOf("query")),
+            tool("github_get_repository", "Get metadata and the default branch for any public repository, or an accessible private repository.", mapOf(
+                "repo" to string("Repository in owner/name form."),
+            ), listOf("repo")),
             tool("github_create_repository", "Create a repository after explicit user confirmation.", mapOf(
                 "name" to string("Repository name, 1-100 safe characters."),
                 "description" to string("Optional description."),
@@ -98,6 +110,9 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         return runCatching {
             when (name) {
                 "github_list_repositories" -> listRepositories()
+                "github_list_user_repositories" -> listUserRepositories(arg("owner"), intArg("limit", 30))
+                "github_search_repositories" -> searchRepositories(arg("query"), intArg("limit", 10))
+                "github_get_repository" -> getRepository(arg("repo"))
                 "github_create_repository" -> {
                     if (!confirmMutation(arg("name"), "Create GitHub repository ${arg("name")}")) deniedJson()
                     createRepository(arg("name"), arg("description"), boolArg("private", true), boolArg("auto_init", true))
@@ -159,6 +174,43 @@ class GitHubToolProvider(context: Context) : ToolProvider {
             val o = item.jsonObject
             add(buildJsonObject { put("full_name", o.str("full_name")); put("private", o.bool("private")); put("default_branch", o.str("default_branch", "main")); put("updated_at", o.str("updated_at")) })
         } } }.toString()
+    }
+
+    private suspend fun listUserRepositories(owner: String, limit: Int): String {
+        val safeLimit = limit.coerceIn(1, 50)
+        val array = client.publicRequest("GET", "/users/${client.encodeSegment(owner)}/repos?sort=updated&per_page=$safeLimit").let { resp ->
+            if (resp.code !in 200..299) throw IllegalStateException("GitHub HTTP ${resp.code}: ${resp.body.take(300)}")
+            json.parseToJsonElement(resp.body).jsonArray
+        }
+        return buildJsonObject { put("owner", owner); putJsonArray("repositories") { array.forEach { item ->
+            val o = item.jsonObject
+            add(buildJsonObject { put("full_name", o.str("full_name")); put("description", o.str("description")); put("default_branch", o.str("default_branch", "main")); put("language", o.str("language")); put("stars", o.long("stargazers_count")); put("updated_at", o.str("updated_at")) })
+        } } }.toString()
+    }
+
+    private suspend fun searchRepositories(query: String, limit: Int): String {
+        val safeLimit = limit.coerceIn(1, 20)
+        val resp = client.publicRequest("GET", "/search/repositories?q=${client.encodeSegment(query)}&per_page=$safeLimit")
+        if (resp.code !in 200..299) throw IllegalStateException("GitHub HTTP ${resp.code}: ${resp.body.take(300)}")
+        val obj = json.parseToJsonElement(resp.body).jsonObject
+        val array = obj["items"]?.jsonArray ?: JsonArray(emptyList())
+        return buildJsonObject { put("total_count", obj.long("total_count")); putJsonArray("repositories") { array.forEach { item ->
+            val o = item.jsonObject
+            add(buildJsonObject { put("full_name", o.str("full_name")); put("description", o.str("description")); put("default_branch", o.str("default_branch", "main")); put("language", o.str("language")); put("stars", o.long("stargazers_count")); put("url", o.str("html_url")) })
+        } } }.toString()
+    }
+
+    private suspend fun getRepository(repo: String): String {
+        val safeRepo = client.validateRepo(repo)
+        val o = client.repository(safeRepo)
+        return buildJsonObject {
+            put("full_name", o.str("full_name")); put("description", o.str("description"))
+            put("private", o.bool("private")); put("default_branch", o.str("default_branch", "main"))
+            put("language", o.str("language")); put("stars", o.long("stargazers_count"))
+            put("forks", o.long("forks_count")); put("open_issues", o.long("open_issues_count"))
+            put("created_at", o.str("created_at")); put("updated_at", o.str("updated_at"))
+            put("url", o.str("html_url"))
+        }.toString()
     }
 
     private suspend fun readFileOrDirectory(repo: String, path: String, ref: String): String {
