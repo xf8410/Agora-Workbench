@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -15,18 +15,14 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply bounded keyset repair
-        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5-phase4-bounded'
+      - name: Verify exact clean checkout
+        shell: bash
         run: |
-          python3 scripts/apply_conversation_loss_v5_phase4_bounded.py
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/data/local/ChatDatabase.kt \
-            app/src/main/java/com/newoether/agora/data/repository/ConversationRepository.kt \
-            app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt
-          git diff --cached --check
-          git commit -m 'fix: bound keyset rows and repair history collector structure'
-          git push origin HEAD:workbench/root-fix-conversation-loss-v5-phase4-bounded
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch origin "$GITHUB_REF_NAME"
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -36,13 +32,30 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Test and build
+        shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
+          test -z "$(git status --porcelain)"
+      - name: Package traceable APK
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_sha="$(git rev-parse HEAD)"; short_sha="${build_sha:0:12}"
+          source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$source_apk"; mkdir -p release
+          apk_name="Agora-Workbench-conversation-loss-v5-${short_sha}-run${GITHUB_RUN_ID}.apk"
+          cp "$source_apk" "release/$apk_name"
+          sha256sum "release/$apk_name" > "release/$apk_name.sha256"
+          printf '{"repository":"%s","branch":"%s","commit":"%s","runId":%s,"apk":"%s"}\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$build_sha" "$GITHUB_RUN_ID" "$apk_name" \
+            > release/build-manifest.json
+          echo "artifact_name=Agora-Workbench-conversation-loss-v5-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-conversation-loss-v5-phase4-bounded-${{ github.run_id }}
-          path: app/build/outputs/apk/fdroid/debug/*.apk
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: release/*
           if-no-files-found: error
           retention-days: 14
