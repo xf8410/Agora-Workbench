@@ -12,23 +12,18 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.newoether.agora.uma.UmaProtocolCapture
 import com.newoether.agora.uma.UmaWorkbenchService
 import com.newoether.agora.viewmodel.ChatViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     fun send(action: String) = context.startService(
         Intent(context, UmaWorkbenchService::class.java).setAction(action))
     fun ensureOverlayThenStart() {
@@ -55,23 +50,19 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                 { SettingsItem(headlineContent={Text("立即刷新")}, supportingContent={Text("只请求当前 /summary，不调用模型")},
                     leadingContent={Icon(Icons.Default.Refresh,null,tint=MaterialTheme.colorScheme.primary)},
                     modifier=Modifier.clickable{send(UmaWorkbenchService.ACTION_REFRESH)}) },
-                { SettingsItem(headlineContent={Text("停止工作台")}, supportingContent={Text("停止后台监听并移除 Agora 浮窗")},
+                { SettingsItem(headlineContent={Text("停止工作台")}, supportingContent={Text("停止后台监听、通信观测并移除 Agora 浮窗")},
                     leadingContent={Icon(Icons.Default.Stop,null,tint=MaterialTheme.colorScheme.error)},
                     modifier=Modifier.clickable{UmaWorkbenchService.stop(context)}) }
             ))
-            SettingsGroup(title = "通信协议观测（手动开启）", items = listOf(
-                { SettingsItem(headlineContent={Text("开始通信观测")},
-                    supportingContent={Text("仅用于你自己的正常游戏流程。Agora 模型只能看到路径、方向、大小和本地序号，不会收到正文、Hex、Header、Cookie 或 Token")},
+            SettingsGroup(title = "通信协议观测", items = listOf(
+                { SettingsItem(headlineContent={Text("在游戏浮窗中控制")},
+                    supportingContent={Text("浮窗底部可直接开始或停止观测。SO 未连接时会进入准备状态，游戏启动后自动开启；临时断线后也会自动恢复。")},
                     leadingContent={Icon(Icons.Default.Visibility,null,tint=MaterialTheme.colorScheme.primary)},
-                    modifier=Modifier.clickable{scope.launch{runCatching{UmaProtocolCapture.setEnabled(true)}
-                        .onSuccess{viewModel.emitSnackbar("通信观测已开启，请回游戏执行一个正常步骤")}
-                        .onFailure{viewModel.emitSnackbar("开启失败：${it.message}")}}}) },
-                { SettingsItem(headlineContent={Text("停止通信观测")},
-                    supportingContent={Text("停止 SO 抓取。随后可在聊天中让 Agora 调用 uma_protocol_metadata 读取完整端点清单")},
-                    leadingContent={Icon(Icons.Default.VisibilityOff,null,tint=MaterialTheme.colorScheme.error)},
-                    modifier=Modifier.clickable{scope.launch{runCatching{UmaProtocolCapture.setEnabled(false)}
-                        .onSuccess{viewModel.emitSnackbar("通信观测已停止")}
-                        .onFailure{viewModel.emitSnackbar("停止失败：${it.message}")}}}) }
+                    modifier=Modifier.clickable{
+                        ensureOverlayThenStart()
+                        send(UmaWorkbenchService.ACTION_TOGGLE_CAPTURE)
+                        viewModel.emitSnackbar("已切换通信观测；可回到游戏后继续用浮窗控制")
+                    }) }
             ))
             SettingsGroup(title = "怎么读取", items = listOf({
                 SettingsItem(headlineContent={Text("在 Agora 对话中直接说")},
@@ -79,7 +70,7 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
             }))
             SettingsGroup(title = "数据范围", items = listOf({
                 SettingsItem(headlineContent={Text("完整通信数据交给模型")},
-                    supportingContent={Text("协议观测返回完整的 path、header、cookie、token、payload 和 hex，无脱敏。")})
+                    supportingContent={Text("协议观测返回完整的 path、header、cookie、token、payload 和 hex，无脱敏。本地采集容量由 hlpatch 单独管理。")})
             }))
         }
     }

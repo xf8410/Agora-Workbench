@@ -45,6 +45,7 @@ class UmaWorkbenchService : Service() {
         private const val NOTIFICATION = 18765
         private const val PREFS = "uma_workbench"
         private const val KEY_AUTO = "auto_analyze"
+        private const val KEY_CAPTURE_DESIRED = "protocol_capture_desired"
         private const val KEY_CONVERSATION = "conversation_id"
         private const val KEY_LAST_ANALYZED = "last_analyzed_signature"
         private const val MIN_ANALYSIS_INTERVAL_MS = 20_000L
@@ -53,6 +54,7 @@ class UmaWorkbenchService : Service() {
         const val ACTION_REFRESH = "com.newoether.agora.uma.REFRESH"
         const val ACTION_ANALYZE = "com.newoether.agora.uma.ANALYZE"
         const val ACTION_TOGGLE_AUTO = "com.newoether.agora.uma.TOGGLE_AUTO"
+        const val ACTION_TOGGLE_CAPTURE = "com.newoether.agora.uma.TOGGLE_CAPTURE"
 
         fun start(context: Context) {
             val i = Intent(context, UmaWorkbenchService::class.java).setAction(ACTION_START)
@@ -65,14 +67,18 @@ class UmaWorkbenchService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val analyzing = AtomicBoolean(false)
+    private val captureRequestInFlight = AtomicBoolean(false)
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private var monitorJob: Job? = null
     private var windowManager: WindowManager? = null
     private var overlay: View? = null
     private var statusText: TextView? = null
+    private var captureButton: TextView? = null
     private var lastSignature = ""
     private var latestDisplay = "Uma Workbench\n正在连接 SO…"
     private var lastAnalysisAt = 0L
+    @Volatile private var soConnected = false
+    @Volatile private var captureEnabledForConnection = false
 
     override fun onCreate() {
         super.onCreate()
@@ -80,32 +86,89 @@ class UmaWorkbenchService : Service() {
         startForeground(NOTIFICATION, notification("等待连接 127.0.0.1:18765"))
         if (Settings.canDrawOverlays(this)) showOverlay()
         startMonitor()
+        refreshCaptureUi()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
+            ACTION_STOP -> {
+                prefs.edit().putBoolean(KEY_CAPTURE_DESIRED, false).apply()
+                scope.launch {
+                    runCatching { UmaProtocolCapture.setEnabled(false) }
+                    stopSelf()
+                }
+                return START_NOT_STICKY
+            }
             ACTION_REFRESH -> scope.launch { pollOnce(true) }
             ACTION_ANALYZE -> scope.launch { analyzeNow(manual = true) }
             ACTION_TOGGLE_AUTO -> {
                 prefs.edit().putBoolean(KEY_AUTO, !prefs.getBoolean(KEY_AUTO, false)).apply()
                 updateStatus(latestDisplay, notificationLabel())
             }
-            else -> { if (overlay == null && Settings.canDrawOverlays(this)) showOverlay(); startMonitor() }
+            ACTION_TOGGLE_CAPTURE -> toggleCaptureDesired()
+            else -> {
+                if (overlay == null && Settings.canDrawOverlays(this)) showOverlay()
+                startMonitor()
+            }
         }
         return START_STICKY
     }
 
+    private fun toggleCaptureDesired() {
+        val desired = !prefs.getBoolean(KEY_CAPTURE_DESIRED, false)
+        prefs.edit().putBoolean(KEY_CAPTURE_DESIRED, desired).apply()
+        refreshCaptureUi()
+        if (desired) {
+            // ARMED mode: if the game/SO is not ready yet, the monitor retries after connection.
+            requestCaptureState(true)
+        } else {
+            requestCaptureState(false)
+        }
+    }
+
+    private fun requestCaptureState(enabled: Boolean) {
+        if (!captureRequestInFlight.compareAndSet(false, true)) return
+        scope.launch {
+            try {
+                UmaProtocolCapture.setEnabled(enabled)
+                soConnected = true
+                captureEnabledForConnection = enabled
+            } catch (_: Exception) {
+                if (enabled) {
+                    // Keep the user intent armed. A later successful /summary poll retries it.
+                    soConnected = false
+                    captureEnabledForConnection = false
+                }
+            } finally {
+                captureRequestInFlight.set(false)
+                refreshCaptureUi()
+            }
+        }
+    }
+
     private fun startMonitor() {
         if (monitorJob?.isActive == true) return
-        monitorJob = scope.launch { while (isActive) { pollOnce(false); delay(2_000) } }
+        monitorJob = scope.launch {
+            while (isActive) {
+                pollOnce(false)
+                delay(2_000)
+            }
+        }
     }
 
     private suspend fun pollOnce(force: Boolean) {
         val raw = runCatching { httpGet("/summary", 128 * 1024) }.getOrElse {
+            soConnected = false
+            captureEnabledForConnection = false
+            refreshCaptureUi()
             updateStatus("SO 未连接\n${it.message ?: "18765 无响应"}", "SO 未连接")
             return
         }
+        soConnected = true
+        if (prefs.getBoolean(KEY_CAPTURE_DESIRED, false) && !captureEnabledForConnection) {
+            requestCaptureState(true)
+        }
+        refreshCaptureUi()
         val changes = runCatching { UmaRuntimeState.update(raw) }.getOrElse {
             updateStatus("SO 响应解析失败\n${it.message}", "响应解析失败")
             return
@@ -142,7 +205,7 @@ class UmaWorkbenchService : Service() {
         val line = if (stats != null) "速${stats.optInt("speed")} 耐${stats.optInt("stamina")} " +
             "力${stats.optInt("power")} 根${stats.optInt("guts")} 智${stats.optInt("wiz")}" else "已读取 summary"
         return "SO ●  $scenario${if (turn >= 0) "  T$turn" else ""}\n$line\n" +
-            "自动:${if (prefs.getBoolean(KEY_AUTO, false)) "开" else "关"} · 点开 Agora · 长按拖动"
+            "自动:${if (prefs.getBoolean(KEY_AUTO, false)) "开" else "关"} · 点状态打开 Agora · 长按拖动"
     }
 
     private suspend fun analyzeNow(manual: Boolean) {
@@ -211,40 +274,125 @@ class UmaWorkbenchService : Service() {
     private fun showOverlay() {
         if (overlay != null || !Settings.canDrawOverlays(this)) return
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val text = TextView(this).apply { setTextColor(Color.WHITE); setBackgroundColor(0xDD15171C.toInt())
-            textSize = 13f; setPadding(24, 18, 24, 18); text = latestDisplay }
+        val text = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setBackgroundColor(0xDD15171C.toInt())
+            textSize = 13f
+            setPadding(24, 18, 24, 14)
+            text = latestDisplay
+        }
         statusText = text
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(text); elevation = 12f }
-        val p = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT
+        val capture = TextView(this).apply {
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setPadding(24, 14, 24, 16)
+            setOnClickListener { toggleCaptureDesired() }
+        }
+        captureButton = capture
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text)
+            addView(capture, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            elevation = 12f
+        }
+        val p = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.END; x = 24; y = 180 }
-        var dx0=0f; var dy0=0f; var ox=0; var oy=0; var moved=false
-        box.setOnTouchListener { _, e -> when(e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { dx0=e.rawX; dy0=e.rawY; ox=p.x; oy=p.y; moved=false; true }
-            MotionEvent.ACTION_MOVE -> { val dx=e.rawX-dx0; val dy=e.rawY-dy0; if(kotlin.math.abs(dx)+kotlin.math.abs(dy)>12)moved=true
-                p.x=ox-dx.toInt(); p.y=oy+dy.toInt(); runCatching{windowManager?.updateViewLayout(box,p)}; true }
-            MotionEvent.ACTION_UP -> { if(!moved) openAgora(); true }; else -> false } }
-        runCatching { windowManager?.addView(box, p); overlay=box }
+        var dx0 = 0f; var dy0 = 0f; var ox = 0; var oy = 0; var moved = false
+        text.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { dx0=e.rawX; dy0=e.rawY; ox=p.x; oy=p.y; moved=false; true }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx=e.rawX-dx0; val dy=e.rawY-dy0
+                    if (kotlin.math.abs(dx)+kotlin.math.abs(dy)>12) moved=true
+                    p.x=ox-dx.toInt(); p.y=oy+dy.toInt()
+                    runCatching { windowManager?.updateViewLayout(box,p) }
+                    true
+                }
+                MotionEvent.ACTION_UP -> { if (!moved) openAgora(); true }
+                else -> false
+            }
+        }
+        runCatching { windowManager?.addView(box, p); overlay=box; refreshCaptureUi() }
+    }
+
+    private fun refreshCaptureUi() {
+        scope.launch(Dispatchers.Main) {
+            val desired = prefs.getBoolean(KEY_CAPTURE_DESIRED, false)
+            captureButton?.apply {
+                when {
+                    desired && soConnected && captureEnabledForConnection -> {
+                        text = "● 通信观测中 · 点击停止"
+                        setTextColor(Color.WHITE)
+                        setBackgroundColor(0xDDAD2020.toInt())
+                    }
+                    desired -> {
+                        text = "◌ 已准备 · 等待 SO 后自动开启"
+                        setTextColor(Color.WHITE)
+                        setBackgroundColor(0xDD8A6500.toInt())
+                    }
+                    !soConnected -> {
+                        text = "○ 通信观测关闭 · 点击准备"
+                        setTextColor(0xFFCCCCCC.toInt())
+                        setBackgroundColor(0xDD303238.toInt())
+                    }
+                    else -> {
+                        text = "◎ 开始通信观测"
+                        setTextColor(Color.WHITE)
+                        setBackgroundColor(0xDD075FB8.toInt())
+                    }
+                }
+            }
+        }
     }
 
     private fun openAgora() = startActivity(Intent(this, MainActivity::class.java).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP) })
 
-    private fun notificationLabel() = "SO 已连接 · 自动${if (prefs.getBoolean(KEY_AUTO, false)) "开" else "关"}"
-    private fun updateStatus(text: String, note: String) { scope.launch(Dispatchers.Main) { statusText?.text=text }
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(note)) }
+    private fun notificationLabel(): String {
+        val capture = when {
+            prefs.getBoolean(KEY_CAPTURE_DESIRED, false) && captureEnabledForConnection -> " · 通信观测中"
+            prefs.getBoolean(KEY_CAPTURE_DESIRED, false) -> " · 通信待连接"
+            else -> ""
+        }
+        return "SO 已连接 · 自动${if (prefs.getBoolean(KEY_AUTO, false)) "开" else "关"}$capture"
+    }
 
-    private fun servicePending(action: String, request: Int) = PendingIntent.getService(this, request,
-        Intent(this, UmaWorkbenchService::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    private fun updateStatus(text: String, note: String) {
+        scope.launch(Dispatchers.Main) { statusText?.text=text }
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(note))
+    }
+
+    private fun servicePending(action: String, request: Int) = PendingIntent.getService(
+        this, request, Intent(this, UmaWorkbenchService::class.java).setAction(action),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
     private fun notification(text: String) = NotificationCompat.Builder(this, CHANNEL)
-        .setSmallIcon(R.drawable.ic_notification).setContentTitle("Agora · 赛马娘工作台").setContentText(text)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setContentTitle("Agora · 赛马娘工作台")
+        .setContentText(text)
         .setOngoing(true).setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentIntent(PendingIntent.getActivity(this, NOTIFICATION, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        .addAction(0,"分析",servicePending(ACTION_ANALYZE,1)).addAction(0,"自动开关",servicePending(ACTION_TOGGLE_AUTO,2))
-        .addAction(0,"停止",servicePending(ACTION_STOP,3)).build()
-    private fun createChannel() { if(Build.VERSION.SDK_INT>=26) getSystemService(NotificationManager::class.java)
-        .createNotificationChannel(NotificationChannel(CHANNEL,"Uma Workbench",NotificationManager.IMPORTANCE_LOW)) }
-    override fun onDestroy() { monitorJob?.cancel(); overlay?.let{runCatching{windowManager?.removeView(it)}}; scope.cancel(); super.onDestroy() }
+        .addAction(0, "分析", servicePending(ACTION_ANALYZE, 1))
+        .addAction(0, "通信开关", servicePending(ACTION_TOGGLE_CAPTURE, 2))
+        .addAction(0, "停止", servicePending(ACTION_STOP, 3)).build()
+
+    private fun createChannel() {
+        if (Build.VERSION.SDK_INT >= 26) getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(NotificationChannel(CHANNEL,"Uma Workbench",NotificationManager.IMPORTANCE_LOW))
+    }
+
+    override fun onDestroy() {
+        monitorJob?.cancel()
+        overlay?.let { runCatching { windowManager?.removeView(it) } }
+        scope.cancel()
+        super.onDestroy()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 }

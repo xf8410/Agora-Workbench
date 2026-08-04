@@ -456,9 +456,7 @@ fun MainNavigation(
     // Full-screen media viewer (and settings) drop the snackbar to the bottom (nav-bar inset only);
     // in chat it floats above the bottom bar. The animateDpAsState below turns the change into a
     // rise/fall animation as the viewer opens/closes.
-    val targetSnackbarPadding = (
-        if (showSettings || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
-    ).coerceAtLeast(0.dp)
+    val targetSnackbarPadding = if (showSettings || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
     val snackbarBottomPadding by animateDpAsState(
         targetValue = targetSnackbarPadding,
         animationSpec = spring(dampingRatio = 1.0f, stiffness = 1000f),
@@ -466,6 +464,38 @@ fun MainNavigation(
     )
     val focusManager = LocalFocusManager.current
     val ratingScope = rememberCoroutineScope()
+
+    // GitHub mutation confirmation gate. Read-only GitHub tools do not prompt.
+    val pendingGitHubAction by viewModel.pendingGitHubAction.collectAsState()
+    pendingGitHubAction?.let { pending ->
+        AlertDialog(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            onDismissRequest = { viewModel.resolveGitHubConfirmation(allow = false) },
+            icon = { Icon(Icons.Default.Lock, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary) },
+            title = { Text(stringResource(R.string.github_confirm_title, pending.repository), fontWeight = FontWeight.Bold) },
+            text = {
+                Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Text(
+                        pending.summary,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.resolveGitHubConfirmation(allow = true) }) {
+                    Text(stringResource(R.string.github_confirm_allow))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.resolveGitHubConfirmation(allow = false) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text(stringResource(R.string.github_confirm_deny)) }
+            }
+        )
+    }
 
     // Remote shell action confirmation gate
     val pendingShellCommand by viewModel.pendingShellCommand.collectAsState()
@@ -870,8 +900,7 @@ fun MainNavigation(
                 visible = showing,
                 enter = fadeIn(tween(400)) + scaleIn(tween(400), initialScale = 0.8f),
                 exit = fadeOut(tween(400)) + scaleOut(tween(400), targetScale = 0.8f),
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .padding(bottom = (snackbarBottomPadding + 2.dp).coerceAtLeast(0.dp))
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = snackbarBottomPadding + 2.dp)
             ) {
                 content?.let { data ->
                     Snackbar(

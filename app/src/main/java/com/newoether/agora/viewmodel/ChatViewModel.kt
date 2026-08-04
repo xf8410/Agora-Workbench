@@ -94,8 +94,8 @@ class ChatViewModel(
 ) : AndroidViewModel(application) {
 
     companion object {
-        private const val INITIAL_MESSAGE_WINDOW = 24
-        private const val MESSAGE_WINDOW_STEP = 24
+        private const val INITIAL_MESSAGE_WINDOW = 100
+        private const val MESSAGE_WINDOW_STEP = 100
         private const val MAX_MESSAGE_WINDOW = 500
 
         /** Overlay fade duration for conversation-switch transitions. */
@@ -268,6 +268,7 @@ class ChatViewModel(
                 }
             }
             gm.onConfirmShellCommand = { server, summary -> shellConfirmation.confirm(server, summary) }
+            gm.onConfirmGitHubAction = { repository, summary -> githubConfirmation.confirm(repository, summary) }
         }
     }
 
@@ -334,6 +335,13 @@ class ChatViewModel(
 
     fun setShellConfirmEnabled(enabled: Boolean) = shellConfirmation.setEnabled(enabled)
 
+    // ── GitHub mutation confirmation gate ────────────────────────
+    private val githubConfirmation = GitHubConfirmationController()
+    val pendingGitHubAction: StateFlow<GitHubConfirmationController.PendingGitHubAction?>
+        get() = githubConfirmation.pendingAction
+
+    fun resolveGitHubConfirmation(allow: Boolean) = githubConfirmation.resolve(allow)
+
     // ── Tasks (automation) ────────────────────────────────────
     /** Saved automation tasks; CRUD + run-now delegate to the app-scoped [taskManager]. */
     val tasks: StateFlow<List<com.newoether.agora.data.local.TaskEntity>> get() = taskManager.tasks
@@ -394,9 +402,6 @@ class ChatViewModel(
     private val messageWindowSize = MutableStateFlow(INITIAL_MESSAGE_WINDOW)
     private val _hasOlderMessages = MutableStateFlow(false)
     val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
-
-    private val _historyLoadError = MutableStateFlow<String?>(null)
-    val historyLoadError: StateFlow<String?> = _historyLoadError.asStateFlow()
 
     /** Load one older bounded window. The hard cap prevents a long scroll from rebuilding
      * the original unbounded Room/Compose heap pressure on Android OEM builds. */
@@ -639,7 +644,12 @@ class ChatViewModel(
                         // generation in the target conversation would be misread as idle and its
                         // in-flight SENDING message wrongly marked STOPPED.
                         if (!state.generating.value) {
-                            convRepo.fixStuckMessages(id)
+                            val stuckMessages = convRepo.getMessagesForConversation(id).first()
+                                .filter { it.status == MessageStatus.SENDING || it.status == MessageStatus.THINKING || it.status == MessageStatus.TOOL_CALLING || it.status == MessageStatus.TRANSCRIBING }
+
+                            stuckMessages.forEach { msg ->
+                                convRepo.upsertMessage(msg.copy(status = MessageStatus.STOPPED))
+                            }
                         }
 
                         // Restore selected branches
@@ -662,68 +672,48 @@ class ChatViewModel(
                                 convRepo.getMessagesForConversation(id, limit)
                             },
                             convRepo.getMessageCountForConversation(id)
-                        ) { entities, total -> entities to total }
-                            .retryWhen { cause, attempt ->
-                                if (cause is CancellationException) return@retryWhen false
-                                DebugLog.e("ChatViewModel", "History load failed for $id (attempt $attempt)", cause)
-                                _historyLoadError.value = cause.message ?: "Unable to load conversation history"
-                                if (attempt < 2) {
-                                    delay(150L * (attempt + 1))
-                                    true
-                                } else false
-                            }
-                            .catch { cause ->
-                                if (cause is CancellationException) throw cause
-                                DebugLog.e("ChatViewModel", "History load stopped for $id", cause)
-                                _historyLoadError.value = cause.message ?: "Unable to load conversation history"
-                                _allMessages.value = emptyList()
-                                _hasOlderMessages.value = false
-                                _isSwitching.value = false
-                            }
-                            .collect { (entities, total) ->
-                            _historyLoadError.value = null
+                        ) { entities, total -> entities to total }.collect { (entities, total) ->
                             _hasOlderMessages.value = entities.size < total && messageWindowSize.value < MAX_MESSAGE_WINDOW
-                            // Keep formatting/JSON decoding off Main and decode tool JSON once.
-                            val mapped = withContext(Dispatchers.Default) {
-                                entities.map { entity ->
-                                    val decodedSegments = entity.toolCallJson?.let { raw ->
-                                        try { Json.decodeFromString<List<MessageSegment>>(raw) }
-                                        catch (_: Exception) { null }
+                            val mapped = entities.map {
+                                ChatMessage(
+                                    id = it.id,
+                                    parentId = it.parentId,
+                                    text = SearchResultFormatter.format(it.text, appContext),
+                                    images = it.images,
+                                    thoughts = it.thoughts,
+                                    thoughtTitle = it.thoughtTitle,
+                                    tokenCount = it.tokenCount,
+                                    status = it.status,
+                                    participant = it.participant,
+                                    timestamp = it.timestamp,
+                                    thoughtTimeMs = it.thoughtTimeMs,
+                                    modelName = it.modelName,
+                                    segments = it.toolCallJson?.let { json ->
+                                        try { Json.decodeFromString<List<MessageSegment>>(json) } catch (_: Exception) { null }
+                                    } ?: it.thoughts?.takeIf { t -> t.isNotBlank() }?.let { listOf(MessageSegment(type = "thought", content = it)) },
+                                    toolCall = it.toolCallJson?.let { json ->
+                                        try {
+                                            val segs = Json.decodeFromString<List<MessageSegment>>(json)
+                                            segs.lastOrNull { s -> s.type == "tool" }?.let { s ->
+                                                val rawResult = s.toolResult ?: ""
+                                                ToolCallData(s.toolName ?: "", s.toolArgs ?: "{}", SearchResultFormatter.format(rawResult, appContext))
+                                            }
+                                        } catch (_: Exception) { null }
+                                    },
+                                    attachmentMeta = it.attachmentMeta?.let { json ->
+                                        try { Json.decodeFromString<AttachmentMeta>(json) } catch (_: Exception) { null }
                                     }
-                                    ChatMessage(
-                                        id = entity.id,
-                                        parentId = entity.parentId,
-                                        text = SearchResultFormatter.format(entity.text, appContext),
-                                        images = entity.images,
-                                        thoughts = entity.thoughts,
-                                        thoughtTitle = entity.thoughtTitle,
-                                        tokenCount = entity.tokenCount,
-                                        status = entity.status,
-                                        participant = entity.participant,
-                                        timestamp = entity.timestamp,
-                                        thoughtTimeMs = entity.thoughtTimeMs,
-                                        modelName = entity.modelName,
-                                        segments = decodedSegments ?: entity.thoughts
-                                            ?.takeIf { it.isNotBlank() }
-                                            ?.let { listOf(MessageSegment(type = "thought", content = it)) },
-                                        toolCall = decodedSegments?.lastOrNull { it.type == "tool" }?.let { seg ->
-                                            ToolCallData(
-                                                seg.toolName.orEmpty(),
-                                                seg.toolArgs ?: "{}",
-                                                SearchResultFormatter.format(seg.toolResult.orEmpty(), appContext)
-                                            )
-                                        },
-                                        attachmentMeta = entity.attachmentMeta?.let { raw ->
-                                            try { Json.decodeFromString<AttachmentMeta>(raw) }
-                                            catch (_: Exception) { null }
-                                        }
-                                    )
-                                }
+                                )
                             }
-                            val mappedById = mapped.associateBy { it.id }
+                            // Backfill toolCall for old result_ messages persisted without toolCallJson.
+                            // They inherit the parent tool_ message's ToolCallData so the provider can
+                            // format them as proper "tool" role messages with matching tool_call_id.
                             _allMessages.value = mapped.map { msg ->
                                 if (msg.id.startsWith(Constants.RESULT_MSG_PREFIX) && msg.toolCall == null) {
-                                    mappedById[msg.parentId]?.toolCall?.let { msg.copy(toolCall = it) } ?: msg
+                                    val parentTool = mapped.find { it.id == msg.parentId }
+                                    if (parentTool != null && parentTool.toolCall != null) {
+                                        msg.copy(toolCall = parentTool.toolCall)
+                                    } else msg
                                 } else msg
                             }
                             if (!generationMirrorStarted) {
@@ -750,6 +740,14 @@ class ChatViewModel(
             }
         }
         
+        viewModelScope.launch {
+            _selectedChildren.collect { childrenMap ->
+                val id = _currentConversationId.value
+                if (id != null) {
+                    persistSelectedChildren(id, childrenMap)
+                }
+            }
+        }
     }
 
     private suspend fun persistSelectedChildren(conversationId: String, childrenMap: Map<String?, String>) {
@@ -895,44 +893,41 @@ class ChatViewModel(
     }
 
     fun createNewChat() {
-    if (_isNewChatMode.value) return
-    switchingJob?.cancel()
-    _pendingSystemPromptId.value = null
-    _isNewChatMode.value = true
-    _isTransitioningToNewChat.value = true
-    _isSwitching.value = true
-
-    // Identity changes are synchronous. A delayed reset could otherwise clear the id
-    // of a conversation created by a fast first Send during the fade animation.
-    _currentConversationId.value = null
-    _currentActiveModel.value = null
-    _pendingConversationSettings.value = null
-    _allMessages.value = emptyList()
-    _selectedChildren.value = emptyMap()
-    _branchSwitchTrigger.value = null
-
-    switchingJob = viewModelScope.launch {
-        kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS)
-        _isSwitching.value = false
-        _isTransitioningToNewChat.value = false
+        // Already on the new-chat screen: ignore (both the drawer and the top-bar capsule route
+        // here; behaviour must be identical and a no-op when there's nothing to reset).
+        if (_isNewChatMode.value) return
+        switchingJob?.cancel()
+        if (!_isNewChatMode.value) {
+            _pendingSystemPromptId.value = null
+        }
+        _isNewChatMode.value = true
+        _isTransitioningToNewChat.value = true
+        _isSwitching.value = true
+        switchingJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS) // Allow overlay to fade in
+            _currentConversationId.value = null
+            _currentActiveModel.value = null
+            _pendingConversationSettings.value = null
+            _allMessages.value = emptyList()
+            _selectedChildren.value = emptyMap()
+            _branchSwitchTrigger.value = null
+            _isSwitching.value = false
+            _isTransitioningToNewChat.value = false
+        }
     }
-}
 
-fun selectConversation(id: String) {
+    fun selectConversation(id: String) {
         if (_currentConversationId.value == id && !_isNewChatMode.value) return
 
         switchingJob?.cancel()
         _isTransitioningToNewChat.value = false
         _isSwitching.value = true
-        // Query Room immediately; animate the switching overlay concurrently.
-        _isNewChatMode.value = false
-        _branchSwitchTrigger.value = null
-        messageWindowSize.value = INITIAL_MESSAGE_WINDOW
-        _historyLoadError.value = null
-        _allMessages.value = emptyList()
-        _hasOlderMessages.value = false
-        _currentConversationId.value = id
         switchingJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(SWITCH_OVERLAY_FADE_MS) // Allow overlay to fade in
+            _isNewChatMode.value = false
+            _branchSwitchTrigger.value = null
+            messageWindowSize.value = INITIAL_MESSAGE_WINDOW
+            _currentConversationId.value = id
             val conversation = convRepo.getConversation(id)
             _currentActiveModel.value = conversation?.modelId
             triggerScrollToMessage()
@@ -1050,8 +1045,7 @@ fun selectConversation(id: String) {
     fun regenerate(messageId: String) = generationController.regenerate(messageId)
 
     fun switchBranch(parentId: String?, currentMessageId: String, direction: Int) {
-    val conversationId = _currentConversationId.value ?: return
-    if (_isLoading.value && _generatingInConversationId.value == conversationId) return
+        if (_isLoading.value && _generatingInConversationId.value == _currentConversationId.value) return
         val siblings = _allMessages.value.filter { it.parentId == parentId && !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX) }.sortedBy { it.timestamp }
         if (siblings.size < 2) return
         var currentIndex = siblings.indexOfFirst { it.id == currentMessageId }
@@ -1070,13 +1064,7 @@ fun selectConversation(id: String) {
             val newMap = _selectedChildren.value.toMutableMap()
             val targetMessage = siblings[newIndex]
             newMap[parentId] = targetMessage.id
-    // Bind persistence to the conversation where the action started.
-    persistSelectedChildren(conversationId, newMap)
-    if (_currentConversationId.value != conversationId) {
-        _isSwitching.value = false
-        return@launch
-    }
-    _selectedChildren.value = newMap
+            _selectedChildren.value = newMap
             
             _branchSwitchTrigger.value = null
             _branchSwitchTrigger.value = targetMessage.id
