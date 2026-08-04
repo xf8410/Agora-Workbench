@@ -81,28 +81,28 @@ fun SettingsAboutPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                     headlineContent = { Text(stringResource(R.string.about_github), modifier = Modifier.padding(vertical = 6.dp)) },
                     leadingContent = { Icon(Icons.Default.Code, contentDescription = null) },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
-                    modifier = Modifier.clickable { openUrl("https://github.com/newo-ether/Agora") }
+                    modifier = Modifier.clickable { openUrl("https://github.com/xf8410/Agora-Workbench") }
                 )
             }, {
                 SettingsItem(
                     headlineContent = { Text(stringResource(R.string.about_issue_tracker), modifier = Modifier.padding(vertical = 6.dp)) },
                     leadingContent = { Icon(Icons.Default.BugReport, contentDescription = null) },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
-                    modifier = Modifier.clickable { openUrl("https://github.com/newo-ether/Agora/issues") }
+                    modifier = Modifier.clickable { openUrl("https://github.com/xf8410/Agora-Workbench/issues") }
                 )
             }, {
                 SettingsItem(
                     headlineContent = { Text(stringResource(R.string.about_contribute), modifier = Modifier.padding(vertical = 6.dp)) },
                     leadingContent = { Icon(Icons.Default.VolunteerActivism, contentDescription = null) },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
-                    modifier = Modifier.clickable { openUrl("https://github.com/newo-ether/Agora/pulls") }
+                    modifier = Modifier.clickable { openUrl("https://github.com/xf8410/Agora-Workbench/pulls") }
                 )
             }, {
                 SettingsItem(
                     headlineContent = { Text(stringResource(R.string.about_privacy_policy), modifier = Modifier.padding(vertical = 6.dp)) },
                     leadingContent = { Icon(Icons.Default.VerifiedUser, contentDescription = null) },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
-                    modifier = Modifier.clickable { openUrl("https://github.com/newo-ether/Agora/blob/master/PRIVACY.md") }
+                    modifier = Modifier.clickable { openUrl("https://github.com/xf8410/Agora-Workbench/blob/main/PRIVACY.md") }
                 )
             }))
 
