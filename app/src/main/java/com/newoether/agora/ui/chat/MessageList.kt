@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -64,31 +63,12 @@ fun MessageList(
     onRetryLoad: () -> Unit = {},
 ) {
     var editingMessageId by remember { mutableStateOf<String?>(null) }
-    var pendingHistoryAnchor by remember { mutableStateOf<Pair<String, Int>?>(null) }
     LaunchedEffect(isLoading) { if (isLoading) editingMessageId = null }
     LaunchedEffect(state, hasOlderMessages) {
         snapshotFlow { state.firstVisibleItemIndex }
             .distinctUntilChanged()
-            .filter { it <= 2 && hasOlderMessages && pendingHistoryAnchor == null }
-            .collect {
-                val first = state.layoutInfo.visibleItemsInfo.firstOrNull()
-                val anchorId = first?.key as? String
-                if (anchorId != null) {
-                    pendingHistoryAnchor = anchorId to state.firstVisibleItemScrollOffset
-                    onLoadOlder()
-                }
-            }
-    }
-    // Re-anchor the same stable message after older rows are prepended. This avoids the viewport
-    // jumping upward by one page even on Compose versions that do not retain a key automatically.
-    LaunchedEffect(allMessages, messages) {
-        val (anchorId, offset) = pendingHistoryAnchor ?: return@LaunchedEffect
-        val anchorIndex = messages.list.indexOfFirst { it.id == anchorId }
-        if (anchorIndex >= 0) state.scrollToItem(anchorIndex, offset)
-        pendingHistoryAnchor = null
-    }
-    LaunchedEffect(loadError, hasOlderMessages) {
-        if (loadError != null || !hasOlderMessages) pendingHistoryAnchor = null
+            .filter { it <= 2 && hasOlderMessages }
+            .collect { onLoadOlder() }
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
 
@@ -107,10 +87,24 @@ fun MessageList(
             .mapValues { (_, v) -> v.sortedBy { it.timestamp } }
     }
 
-    // The list already has bottom contentPadding for the composer. A viewport-filling tail
-    // spacer leaves a large blank region after the newest reply and also makes "scroll to bottom"
-    // stop on whitespace instead of the actual final message.
-    val extraPadding = 0.dp
+    // The spacer is useful while an answer is streaming: it keeps the latest user turn near
+    // the top and reserves room for incoming tokens. Once generation stops it must disappear,
+    // otherwise a short stored reply leaves a large scrollable blank area below the message.
+    val extraPadding = if (!isLoading || lastUserMessageIndex == -1 || viewportHeight == 0) {
+        0.dp
+    } else {
+        with(density) {
+            val vDp = viewportHeight.toDp()
+            val targetTopDp = 140.dp
+            val availableSpaceDp = vDp - targetTopDp - (bottomBarHeight + 8.dp)
+            var contentHeightPx = 0
+            for (i in lastUserMessageIndex until messages.list.size) {
+                contentHeightPx += messageHeights[messages.list[i].id] ?: 0
+            }
+            val contentHeightDp = contentHeightPx.toDp()
+            (availableSpaceDp - contentHeightDp).coerceAtLeast(0.dp)
+        }
+    }
 
     Box(modifier = modifier) {
         if (loadError != null && messages.list.isEmpty()) {
@@ -120,10 +114,15 @@ fun MessageList(
                 horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
             ) {
                 androidx.compose.material3.Text("Conversation history could not be loaded")
-                androidx.compose.material3.Text(loadError, modifier = Modifier.padding(top = 8.dp))
-                androidx.compose.material3.Button(onClick = onRetryLoad, modifier = Modifier.padding(top = 16.dp)) {
-                    androidx.compose.material3.Text("Retry")
-                }
+                androidx.compose.material3.Text(
+                    loadError,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                androidx.compose.material3.Button(
+                    onClick = onRetryLoad,
+                    modifier = Modifier.padding(top = 16.dp),
+                ) { androidx.compose.material3.Text("Retry") }
             }
             return@Box
         }
@@ -142,35 +141,35 @@ fun MessageList(
                 val totalBranches = siblings.size
 
                 Box(modifier = if (isLoading) Modifier else Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = null)) {
-                MessageItem(
-                    message = message,
-                    onEdit = { id, text ->
-                        onEditMessage(id, text)
-                        editingMessageId = null
-                    },
-                    isStreaming = isLastMessage && message.participant == Participant.MODEL
-                        && message.status in setOf(MessageStatus.SENDING, MessageStatus.THINKING, MessageStatus.TOOL_CALLING, MessageStatus.TRANSCRIBING),
-                    isLoading = isLoading,
-                    isEditingAllowed = (editingMessageId == null || editingMessageId == message.id) && !isLoading,
-                    isEditing = editingMessageId == message.id,
-                    isSwitching = isSwitching,
-                    isInContext = isInContext,
-                    modelAliases = modelAliases,
-                    visualizeContextRollout = visualizeContextRollout,
-                    toolCallDisplayMode = toolCallDisplayMode,
-                    onStartEdit = { editingMessageId = message.id },
-                    onCancelEdit = { editingMessageId = null },
-                    branchIndex = branchIndex,
-                    totalBranches = totalBranches,
-                    onSwitchBranch = { direction -> onSwitchBranch(message.parentId, message.id, direction) },
-                    onRegenerate = onRegenerate,
-                    onDelete = onDelete,
-                    onMediaClick = onMediaClick,
-                    onFileContentClick = onFileContentClick,
-                    onPdfPagesClick = onPdfPagesClick,
-                    onHeightChanged = { height -> messageHeights[message.id] = height },
-                    thoughtExpandedStates = thoughtExpandedStates
-                )
+                    MessageItem(
+                        message = message,
+                        onEdit = { id, text ->
+                            onEditMessage(id, text)
+                            editingMessageId = null
+                        },
+                        isStreaming = isLastMessage && message.participant == Participant.MODEL
+                            && message.status in setOf(MessageStatus.SENDING, MessageStatus.THINKING, MessageStatus.TOOL_CALLING, MessageStatus.TRANSCRIBING),
+                        isLoading = isLoading,
+                        isEditingAllowed = (editingMessageId == null || editingMessageId == message.id) && !isLoading,
+                        isEditing = editingMessageId == message.id,
+                        isSwitching = isSwitching,
+                        isInContext = isInContext,
+                        modelAliases = modelAliases,
+                        visualizeContextRollout = visualizeContextRollout,
+                        toolCallDisplayMode = toolCallDisplayMode,
+                        onStartEdit = { editingMessageId = message.id },
+                        onCancelEdit = { editingMessageId = null },
+                        branchIndex = branchIndex,
+                        totalBranches = totalBranches,
+                        onSwitchBranch = { direction -> onSwitchBranch(message.parentId, message.id, direction) },
+                        onRegenerate = onRegenerate,
+                        onDelete = onDelete,
+                        onMediaClick = onMediaClick,
+                        onFileContentClick = onFileContentClick,
+                        onPdfPagesClick = onPdfPagesClick,
+                        onHeightChanged = { height -> messageHeights[message.id] = height },
+                        thoughtExpandedStates = thoughtExpandedStates
+                    )
                 }
             }
             item {

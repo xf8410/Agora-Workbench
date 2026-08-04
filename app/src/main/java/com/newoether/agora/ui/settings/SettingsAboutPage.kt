@@ -106,27 +106,6 @@ fun SettingsAboutPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                 )
             }))
 
-            // -- Rating Section (title + card as one unit so the title stays tight to the card) --
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = stringResource(R.string.rating_category),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
-                Surface(
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 1.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
-                    ) {
-                        RatingForm()
-                    }
-                }
-            }
             }
     }
 }

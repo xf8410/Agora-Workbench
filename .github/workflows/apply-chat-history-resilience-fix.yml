@@ -1,0 +1,22 @@
+name: Apply chat history resilience fix
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/fix-chat-history-white-screen
+      - name: Apply source patch
+        run: python3 scripts/apply_chat_history_resilience_fix.py
+      - name: Commit source changes
+        run: |
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java app/build.gradle.kts
+          git diff --cached --check
+          git commit -m 'fix: make chat history loading bounded and recoverable'
+          git push origin HEAD:workbench/fix-chat-history-white-screen

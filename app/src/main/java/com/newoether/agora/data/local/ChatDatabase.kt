@@ -193,91 +193,37 @@ interface ChatDao {
 
     @Query("""
         SELECT id, conversationId, parentId,
-          CASE WHEN length(text) > :maxTextChars THEN substr(text, 1, :maxTextChars) || '
+          CASE WHEN length(text) > :maxTextChars
+            THEN substr(text, 1, :maxTextChars) || '
 
-[… message preview truncated for stability]' ELSE text END AS text,
+[… message preview truncated for stability]'
+            ELSE text END AS text,
           images,
-          CASE WHEN thoughts IS NOT NULL AND length(thoughts) > :maxThoughtChars THEN substr(thoughts, 1, :maxThoughtChars) || '
+          CASE WHEN thoughts IS NOT NULL AND length(thoughts) > :maxThoughtChars
+            THEN substr(thoughts, 1, :maxThoughtChars) || '
 
-[… thoughts preview truncated]' ELSE thoughts END AS thoughts,
+[… thoughts preview truncated]'
+            ELSE thoughts END AS thoughts,
           thoughtTitle, tokenCount, status, participant, timestamp, thoughtTimeMs, modelName,
-          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) > :maxToolJsonChars THEN NULL ELSE toolCallJson END AS toolCallJson,
-          CASE WHEN attachmentMeta IS NOT NULL AND length(attachmentMeta) > :maxAttachmentMetaChars THEN NULL ELSE attachmentMeta END AS attachmentMeta
-        FROM (SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT :limit)
+          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) > :maxToolJsonChars
+            THEN NULL ELSE toolCallJson END AS toolCallJson,
+          CASE WHEN attachmentMeta IS NOT NULL AND length(attachmentMeta) > :maxAttachmentMetaChars
+            THEN NULL ELSE attachmentMeta END AS attachmentMeta
+        FROM (
+          SELECT * FROM messages
+          WHERE conversationId = :conversationId
+          ORDER BY timestamp DESC LIMIT :limit
+        )
         ORDER BY timestamp ASC
     """)
     fun getMessagesForConversation(
-        conversationId: String, limit: Int = 200, maxTextChars: Int = 65536,
-        maxThoughtChars: Int = 32768, maxToolJsonChars: Int = 131072,
+        conversationId: String,
+        limit: Int = 200,
+        maxTextChars: Int = 65536,
+        maxThoughtChars: Int = 32768,
+        maxToolJsonChars: Int = 131072,
         maxAttachmentMetaChars: Int = 32768,
     ): Flow<List<MessageEntity>>
-
-    @Query("""
-        SELECT id, conversationId, parentId,
-          CASE WHEN length(text) > :maxTextChars
-            THEN substr(text, 1, :maxTextChars) || '
-
-[… message preview truncated for stability]'
-            ELSE text END AS text,
-          images,
-          CASE WHEN thoughts IS NOT NULL AND length(thoughts) > :maxThoughtChars
-            THEN substr(thoughts, 1, :maxThoughtChars) || '
-
-[… thoughts preview truncated]'
-            ELSE thoughts END AS thoughts,
-          thoughtTitle, tokenCount, status, participant, timestamp, thoughtTimeMs, modelName,
-          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) > :maxToolJsonChars
-            THEN NULL ELSE toolCallJson END AS toolCallJson,
-          CASE WHEN attachmentMeta IS NOT NULL AND length(attachmentMeta) > :maxAttachmentMetaChars
-            THEN NULL ELSE attachmentMeta END AS attachmentMeta
-        FROM messages
-        WHERE conversationId = :conversationId
-        ORDER BY timestamp DESC, id DESC
-        LIMIT :limit
-    """)
-    suspend fun getNewestMessagesPage(
-        conversationId: String,
-        limit: Int,
-        maxTextChars: Int,
-        maxThoughtChars: Int,
-        maxToolJsonChars: Int,
-        maxAttachmentMetaChars: Int,
-    ): List<MessageEntity>
-
-    @Query("""
-        SELECT id, conversationId, parentId,
-          CASE WHEN length(text) > :maxTextChars
-            THEN substr(text, 1, :maxTextChars) || '
-
-[… message preview truncated for stability]'
-            ELSE text END AS text,
-          images,
-          CASE WHEN thoughts IS NOT NULL AND length(thoughts) > :maxThoughtChars
-            THEN substr(thoughts, 1, :maxThoughtChars) || '
-
-[… thoughts preview truncated]'
-            ELSE thoughts END AS thoughts,
-          thoughtTitle, tokenCount, status, participant, timestamp, thoughtTimeMs, modelName,
-          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) > :maxToolJsonChars
-            THEN NULL ELSE toolCallJson END AS toolCallJson,
-          CASE WHEN attachmentMeta IS NOT NULL AND length(attachmentMeta) > :maxAttachmentMetaChars
-            THEN NULL ELSE attachmentMeta END AS attachmentMeta
-        FROM messages
-        WHERE conversationId = :conversationId
-          AND (timestamp < :beforeTimestamp OR (timestamp = :beforeTimestamp AND id < :beforeId))
-        ORDER BY timestamp DESC, id DESC
-        LIMIT :limit
-    """)
-    suspend fun getOlderMessagesPage(
-        conversationId: String,
-        beforeTimestamp: Long,
-        beforeId: String,
-        limit: Int,
-        maxTextChars: Int,
-        maxThoughtChars: Int,
-        maxToolJsonChars: Int,
-        maxAttachmentMetaChars: Int,
-    ): List<MessageEntity>
 
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
     fun getMessageCountForConversation(conversationId: String): Flow<Int>
