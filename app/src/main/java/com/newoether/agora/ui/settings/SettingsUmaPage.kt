@@ -49,7 +49,7 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                     leadingContent={Icon(Icons.Default.Sync,null,tint=MaterialTheme.colorScheme.primary)},
                     modifier=Modifier.clickable{send(UmaWorkbenchService.ACTION_TOGGLE_AUTO)}) },
                 { SettingsItem(headlineContent={Text("立即分析")},
-                    supportingContent={Text("读取一致快照，并让默认模型使用 uma_* 白名单工具分析")},
+                    supportingContent={Text("读取一致快照，并让默认模型使用全部 uma_* 工具分析")},
                     leadingContent={Icon(Icons.Default.AutoAwesome,null,tint=MaterialTheme.colorScheme.primary)},
                     modifier=Modifier.clickable{send(UmaWorkbenchService.ACTION_ANALYZE)}) },
                 { SettingsItem(headlineContent={Text("立即刷新")}, supportingContent={Text("只请求当前 /summary，不调用模型")},
@@ -67,7 +67,7 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                         .onSuccess{viewModel.emitSnackbar("通信观测已开启，请回游戏执行一个正常步骤")}
                         .onFailure{viewModel.emitSnackbar("开启失败：${it.message}")}}}) },
                 { SettingsItem(headlineContent={Text("停止通信观测")},
-                    supportingContent={Text("停止 SO 抓取。随后可在聊天中让 Agora 调用 uma_protocol_metadata 读取脱敏端点清单")},
+                    supportingContent={Text("停止 SO 抓取。随后可在聊天中让 Agora 调用 uma_protocol_metadata 读取完整端点清单")},
                     leadingContent={Icon(Icons.Default.VisibilityOff,null,tint=MaterialTheme.colorScheme.error)},
                     modifier=Modifier.clickable{scope.launch{runCatching{UmaProtocolCapture.setEnabled(false)}
                         .onSuccess{viewModel.emitSnackbar("通信观测已停止")}
@@ -77,9 +77,9 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                 SettingsItem(headlineContent={Text("在 Agora 对话中直接说")},
                     supportingContent={Text("“读取最近的赛马娘通信端点并按顺序整理”。模型会调用 uma_protocol_metadata；要读业务状态则调用 uma_get_snapshot、uma_event_observations 等。")})
             }))
-            SettingsGroup(title = "安全边界", items = listOf({
-                SettingsItem(headlineContent={Text("原始通信内容不交给模型")},
-                    supportingContent={Text("禁止 /scan、/il2cpp/classes、原始 sniff 输出和递归 dump；协议观测最多返回最近 20 条脱敏元数据。")})
+            SettingsGroup(title = "数据范围", items = listOf({
+                SettingsItem(headlineContent={Text("完整通信数据交给模型")},
+                    supportingContent={Text("协议观测返回完整的 path、header、cookie、token、payload 和 hex，无脱敏。")})
             }))
         }
     }

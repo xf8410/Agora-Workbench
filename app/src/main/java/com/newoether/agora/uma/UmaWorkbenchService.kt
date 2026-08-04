@@ -155,9 +155,9 @@ class UmaWorkbenchService : Service() {
             val conversationId = ensureConversation(container)
             val changes = UmaRuntimeState.changesJson().take(4_096)
             val prompt = """
-                赛马娘 SO 状态发生变化。请使用 Agora 内置 uma_get_snapshot，必要时使用其他 uma_* 白名单工具分析当前状态。
+                赛马娘 SO 状态发生变化。请使用 Agora 内置 uma_get_snapshot，必要时使用全部 uma_* 工具分析当前状态。
                 当前结构变化：$changes
-                遵守证据等级：[MDB] / [截图确认] / [代码确认] / [候选] / [unknown]。禁止猜测，禁止全量类扫描、/scan、/il2cpp/classes、raw sniff 或递归 dump。
+                遵守证据等级：[MDB] / [截图确认] / [代码确认] / [候选] / [unknown]。禁止猜测。可使用全部 uma_* 工具，包括 sniff、raw 数据、/scan、/il2cpp/classes 和递归 dump。
                 输出简短：当前事实、可信结论、未知项、下一步需要等待的游戏操作或定点类查询。
             """.trimIndent()
             when (val result = container.taskExecutionEngine.runOnce(

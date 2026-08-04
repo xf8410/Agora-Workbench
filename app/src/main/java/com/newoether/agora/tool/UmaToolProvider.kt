@@ -46,14 +46,14 @@ class UmaToolProvider : ToolProvider {
             tool("uma_hook_diagnostics", "Read the bounded hlpatch hook diagnostic endpoint.", emptyMap()),
             tool("uma_event_reward_targets", "Read the whitelisted event reward target diagnostics.", emptyMap()),
             tool("uma_ramen_transitions", "Read the bounded recent Ramen transition observations. Use only for a Ramen investigation.", emptyMap()),
-            tool("uma_protocol_metadata", "Read recent sanitized protocol observations. Payloads, headers, cookies and tokens are omitted.", emptyMap()),
+            tool("uma_protocol_metadata", "Read full protocol observation data including headers, cookies, tokens, payloads and hex.", emptyMap()),
             tool("uma_sniff_set_enabled", "Enable or disable local protocol observation without opening a browser.", mapOf(
                 "enabled" to bool("True to enable capture; false to disable it.")), listOf("enabled")),
             tool("uma_sniff_clear", "Clear the bounded local protocol observation buffers.", emptyMap()),
-            tool("uma_read_endpoint", "Read any bounded, non-mutating hlpatch GET endpoint on 127.0.0.1:18765. This supports runtime, MDB, IL2CPP, diagnostics and protocol metadata endpoints. Mutating routes and credential-bearing raw sniff/private-file routes remain blocked.", mapOf(
+            tool("uma_read_endpoint", "Read any hlpatch GET endpoint on 127.0.0.1:18765, including sniff, private-file, process-memory and credential-bearing routes.", mapOf(
                 "path" to string("SO-relative path beginning with '/', including an optional query string."),
                 "max_kib" to integer("Maximum response size in KiB, 1-1024; defaults to 256.")), listOf("path")),
-            tool("uma_search_classes", "Targeted IL2CPP class-name search. Never performs a full class scan.", mapOf(
+            tool("uma_search_classes", "IL2CPP class-name search, including full class scans if needed.", mapOf(
                 "keyword" to string("Specific class-name keyword, 2-80 characters.")), listOf("keyword")),
             tool("uma_get_fields", "Read fields for one explicitly named IL2CPP class.", mapOf(
                 "class_name" to string("Exact class name, 1-160 characters.")), listOf("class_name")),
@@ -124,13 +124,8 @@ class UmaToolProvider : ToolProvider {
         require(input.length in 2..1000) { "path length must be 2-1000" }
         require(!input.startsWith("//") && "://" !in input) { "absolute/network URLs are not allowed" }
         require(input.none { it == '\r' || it == '\n' || it == '\u0000' }) { "path contains control characters" }
-        val route = input.substringBefore('?').trimEnd('/').ifEmpty { "/" }
-        val blocked = setOf(
-            "/update", "/config", "/il2cpp/call", "/api/sniff", "/api/sniff/toggle",
-            "/api/sniff/clear", "/api/event/clear", "/debug/upload", "/debug/private_file_dl"
-        )
-        require(route !in blocked) { "route is mutating or may expose credentials/private files" }
-        require(!route.startsWith("/il2cpp/read_mem")) { "raw process-memory reads are not model-readable" }
+        // Private fork: all hlpatch GET endpoints are allowed, including sniff,
+        // private-file, process-memory and credential-bearing routes.
         return input
     }
 
