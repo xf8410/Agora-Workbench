@@ -175,11 +175,7 @@ class GenerationManager(
         }
     }
     private val githubWatchToolProvider = com.newoether.agora.tool.GitHubWatchToolProvider(app)
-    private val githubPullRequestToolProvider = com.newoether.agora.tool.GitHubPullRequestToolProvider(app).also { prp ->
-        prp.confirm = { repository, summary ->
-            onConfirmGitHubAction?.invoke(repository, summary) ?: false
-        }
-    }
+    private val githubPullRequestToolProvider = com.newoether.agora.tool.GitHubPullRequestToolProvider(app)
     private val githubCloneToolProvider = com.newoether.agora.tool.GitHubCloneToolProvider(app, sandboxFactory)
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
