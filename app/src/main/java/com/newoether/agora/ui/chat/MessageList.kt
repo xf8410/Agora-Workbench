@@ -64,12 +64,31 @@ fun MessageList(
     onRetryLoad: () -> Unit = {},
 ) {
     var editingMessageId by remember { mutableStateOf<String?>(null) }
+    var pendingHistoryAnchor by remember { mutableStateOf<Pair<String, Int>?>(null) }
     LaunchedEffect(isLoading) { if (isLoading) editingMessageId = null }
     LaunchedEffect(state, hasOlderMessages) {
         snapshotFlow { state.firstVisibleItemIndex }
             .distinctUntilChanged()
-            .filter { it <= 2 && hasOlderMessages }
-            .collect { onLoadOlder() }
+            .filter { it <= 2 && hasOlderMessages && pendingHistoryAnchor == null }
+            .collect {
+                val first = state.layoutInfo.visibleItemsInfo.firstOrNull()
+                val anchorId = first?.key as? String
+                if (anchorId != null) {
+                    pendingHistoryAnchor = anchorId to state.firstVisibleItemScrollOffset
+                    onLoadOlder()
+                }
+            }
+    }
+    // Re-anchor the same stable message after older rows are prepended. This avoids the viewport
+    // jumping upward by one page even on Compose versions that do not retain a key automatically.
+    LaunchedEffect(allMessages, messages) {
+        val (anchorId, offset) = pendingHistoryAnchor ?: return@LaunchedEffect
+        val anchorIndex = messages.list.indexOfFirst { it.id == anchorId }
+        if (anchorIndex >= 0) state.scrollToItem(anchorIndex, offset)
+        pendingHistoryAnchor = null
+    }
+    LaunchedEffect(loadError, hasOlderMessages) {
+        if (loadError != null || !hasOlderMessages) pendingHistoryAnchor = null
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
 

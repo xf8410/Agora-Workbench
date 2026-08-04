@@ -724,7 +724,9 @@ class ChatViewModel(
 
                         suspend fun loadInitialPage() {
                             loadedEntities = convRepo.getNewestMessagesPage(id, INITIAL_MESSAGE_WINDOW)
-                            _hasOlderMessages.value = loadedEntities.size == INITIAL_MESSAGE_WINDOW
+                            _hasOlderMessages.value = ConversationHistoryPaging.hasAnotherPage(
+                                loadedEntities.size, INITIAL_MESSAGE_WINDOW
+                            )
                             mapAndPublish(loadedEntities)
                         }
 
@@ -742,10 +744,12 @@ class ChatViewModel(
                                 if (older.isEmpty()) {
                                     _hasOlderMessages.value = false
                                 } else {
-                                    val knownIds = loadedEntities.asSequence().map { it.id }.toHashSet()
-                                    loadedEntities = (older.filterNot { it.id in knownIds } + loadedEntities)
-                                        .sortedWith(compareBy<MessageEntity> { it.timestamp }.thenBy { it.id })
-                                    _hasOlderMessages.value = older.size == MESSAGE_PAGE_SIZE
+                                    loadedEntities = ConversationHistoryPaging.mergeOlder(
+                                        loadedEntities, older
+                                    )
+                                    _hasOlderMessages.value = ConversationHistoryPaging.hasAnotherPage(
+                                        older.size, MESSAGE_PAGE_SIZE
+                                    )
                                     mapAndPublish(loadedEntities)
                                 }
                             }
