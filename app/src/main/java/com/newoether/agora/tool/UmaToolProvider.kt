@@ -18,7 +18,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Bounded local tools for the hlpatch server injected into the foreground game process. */
+/** Local tools for the hlpatch server injected into the foreground game process. */
 class UmaToolProvider : ToolProvider {
     private val json = Json { ignoreUnknownKeys = true }
     private val base = "http://127.0.0.1:18765"
@@ -27,7 +27,7 @@ class UmaToolProvider : ToolProvider {
         "uma_event_choices", "uma_event_observations", "uma_hook_diagnostics",
         "uma_event_reward_targets", "uma_ramen_transitions", "uma_protocol_metadata",
         "uma_sniff_set_enabled", "uma_sniff_clear", "uma_read_endpoint",
-        "uma_search_classes", "uma_get_fields", "uma_get_methods", "uma_find_method"
+        "uma_list_classes", "uma_search_classes", "uma_get_fields", "uma_get_methods", "uma_find_method"
     )
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
@@ -36,31 +36,33 @@ class UmaToolProvider : ToolProvider {
         fun bool(description: String) = ToolProperty("boolean", description)
         return listOf(
             tool("uma_health", "Check the local hlpatch SO version and health.", emptyMap()),
-            tool("uma_status", "Read the small local hlpatch initialization/status snapshot.", emptyMap()),
-            tool("uma_summary", "Read the current bounded Uma training state from the local SO.", emptyMap()),
-            tool("uma_get_snapshot", "Read the last coherent summary captured by the Agora overlay monitor together with its structural change list.", emptyMap()),
-            tool("uma_get_changes", "Read only the compact structural changes detected between the last two captured summaries.", emptyMap()),
+            tool("uma_status", "Read the local hlpatch initialization/status snapshot.", emptyMap()),
+            tool("uma_summary", "Read the current Uma training state from the local SO.", emptyMap()),
+            tool("uma_get_snapshot", "Read the last coherent summary captured by the Agora overlay monitor with its structural changes.", emptyMap()),
+            tool("uma_get_changes", "Read the structural changes detected between the last two captured summaries.", emptyMap()),
             tool("uma_event_choices", "Read the current event-choice snapshot.", emptyMap()),
             tool("uma_event_observations", "Read completed event observations after an observation id.", mapOf(
                 "after_id" to integer("Only return observations newer than this id; defaults to 0."))),
-            tool("uma_hook_diagnostics", "Read the bounded hlpatch hook diagnostic endpoint.", emptyMap()),
-            tool("uma_event_reward_targets", "Read the whitelisted event reward target diagnostics.", emptyMap()),
-            tool("uma_ramen_transitions", "Read the bounded recent Ramen transition observations. Use only for a Ramen investigation.", emptyMap()),
+            tool("uma_hook_diagnostics", "Read the hlpatch hook diagnostic endpoint.", emptyMap()),
+            tool("uma_event_reward_targets", "Read event reward target diagnostics.", emptyMap()),
+            tool("uma_ramen_transitions", "Read recent Ramen transition observations.", emptyMap()),
             tool("uma_protocol_metadata", "Read full protocol observation data including headers, cookies, tokens, payloads and hex.", emptyMap()),
-            tool("uma_sniff_set_enabled", "Enable or disable local protocol observation without opening a browser.", mapOf(
+            tool("uma_sniff_set_enabled", "Enable or disable local protocol observation.", mapOf(
                 "enabled" to bool("True to enable capture; false to disable it.")), listOf("enabled")),
-            tool("uma_sniff_clear", "Clear the bounded local protocol observation buffers.", emptyMap()),
+            tool("uma_sniff_clear", "Clear the local protocol observation buffers.", emptyMap()),
             tool("uma_read_endpoint", "Read any hlpatch GET endpoint on 127.0.0.1:18765, including sniff, private-file, process-memory and credential-bearing routes.", mapOf(
                 "path" to string("SO-relative path beginning with '/', including an optional query string."),
-                "max_kib" to integer("Maximum response size in KiB, 1-1024; defaults to 256.")), listOf("path")),
-            tool("uma_search_classes", "IL2CPP class-name search, including full class scans if needed.", mapOf(
-                "keyword" to string("Specific class-name keyword, 2-80 characters.")), listOf("keyword")),
-            tool("uma_get_fields", "Read fields for one explicitly named IL2CPP class.", mapOf(
-                "class_name" to string("Exact class name, 1-160 characters.")), listOf("class_name")),
-            tool("uma_get_methods", "Read methods for one explicitly named IL2CPP class.", mapOf(
-                "class_name" to string("Exact class name, 1-160 characters.")), listOf("class_name")),
-            tool("uma_find_method", "Targeted search for one IL2CPP method name.", mapOf(
-                "method" to string("Specific method keyword, 2-120 characters.")), listOf("method")),
+                "max_kib" to integer("Maximum response size in KiB, 1-16384; defaults to 2048.")), listOf("path")),
+            tool("uma_list_classes", "Read the complete IL2CPP class endpoint exposed by hlpatch.", mapOf(
+                "max_kib" to integer("Maximum response size in KiB, 1-16384; defaults to 8192."))),
+            tool("uma_search_classes", "Search IL2CPP class names.", mapOf(
+                "keyword" to string("Class-name keyword, 1-500 characters.")), listOf("keyword")),
+            tool("uma_get_fields", "Read fields for an IL2CPP class.", mapOf(
+                "class_name" to string("Exact class name, 1-500 characters.")), listOf("class_name")),
+            tool("uma_get_methods", "Read methods for an IL2CPP class.", mapOf(
+                "class_name" to string("Exact class name, 1-500 characters.")), listOf("class_name")),
+            tool("uma_find_method", "Search for an IL2CPP method name.", mapOf(
+                "method" to string("Method keyword, 1-500 characters.")), listOf("method")),
         )
     }
 
@@ -75,9 +77,9 @@ class UmaToolProvider : ToolProvider {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
         }.getOrElse { return toolError("Invalid tool arguments") }
         fun text(key: String) = (args[key] as? JsonPrimitive)?.content.orEmpty().trim()
-        fun safeSegment(value: String, min: Int, max: Int, label: String): String {
-            require(value.length in min..max) { "$label length must be $min-$max" }
-            require(value.all { it.isLetterOrDigit() || it in "_.$+`<>-" }) { "$label contains unsupported characters" }
+        fun safeSegment(value: String, label: String): String {
+            require(value.length in 1..500) { "$label length must be 1-500" }
+            require(value.none { it == '\r' || it == '\n' || it == '\u0000' }) { "$label contains control characters" }
             return URLEncoder.encode(value, "UTF-8")
         }
         return runCatching {
@@ -91,8 +93,12 @@ class UmaToolProvider : ToolProvider {
                 "uma_sniff_clear" -> UmaProtocolCapture.clear()
                 "uma_read_endpoint" -> {
                     val path = validateReadPath(text("path"))
-                    val maxKiB = text("max_kib").toIntOrNull()?.coerceIn(1, 1024) ?: 256
+                    val maxKiB = text("max_kib").toIntOrNull()?.coerceIn(1, 16_384) ?: 2_048
                     get(path, maxKiB * 1024)
+                }
+                "uma_list_classes" -> {
+                    val maxKiB = text("max_kib").toIntOrNull()?.coerceIn(1, 16_384) ?: 8_192
+                    get("/il2cpp/classes", maxKiB * 1024)
                 }
                 else -> {
                     val path = when (name) {
@@ -100,20 +106,17 @@ class UmaToolProvider : ToolProvider {
                         "uma_status" -> "/status"
                         "uma_summary" -> "/summary"
                         "uma_event_choices" -> "/api/event/choices"
-                        "uma_event_observations" -> {
-                            val after = text("after_id").toLongOrNull()?.coerceAtLeast(0L) ?: 0L
-                            "/api/event/observations?after_id=$after"
-                        }
+                        "uma_event_observations" -> "/api/event/observations?after_id=${text("after_id").toLongOrNull()?.coerceAtLeast(0L) ?: 0L}"
                         "uma_hook_diagnostics" -> "/debug/hookdiag"
                         "uma_event_reward_targets" -> "/debug/event_reward_targets"
                         "uma_ramen_transitions" -> "/debug/ramen_transition"
-                        "uma_search_classes" -> "/classes/search/${safeSegment(text("keyword"), 2, 80, "keyword")}"
-                        "uma_get_fields" -> "/fields/${safeSegment(text("class_name"), 1, 160, "class_name")}"
-                        "uma_get_methods" -> "/methods/${safeSegment(text("class_name"), 1, 160, "class_name")}"
-                        "uma_find_method" -> "/find_method/${safeSegment(text("method"), 2, 120, "method")}"
+                        "uma_search_classes" -> "/classes/search/${safeSegment(text("keyword"), "keyword")}"
+                        "uma_get_fields" -> "/fields/${safeSegment(text("class_name"), "class_name")}"
+                        "uma_get_methods" -> "/methods/${safeSegment(text("class_name"), "class_name")}"
+                        "uma_find_method" -> "/find_method/${safeSegment(text("method"), "method")}"
                         else -> throw IllegalArgumentException("Unknown Uma tool")
                     }
-                    get(path, if (name == "uma_summary") 128 * 1024 else 32 * 1024)
+                    get(path, if (name == "uma_summary") 2 * 1024 * 1024 else 8 * 1024 * 1024)
                 }
             }
         }.getOrElse { toolError(it.message ?: "Local SO request failed") }
@@ -133,8 +136,8 @@ class UmaToolProvider : ToolProvider {
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"
-            connection.connectTimeout = 1_500
-            connection.readTimeout = 5_000
+            connection.connectTimeout = 3_000
+            connection.readTimeout = 30_000
             connection.useCaches = false
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream

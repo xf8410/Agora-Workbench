@@ -1,7 +1,6 @@
 package com.newoether.agora.uma
 
 import java.net.HttpURLConnection
-import java.net.URI
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
