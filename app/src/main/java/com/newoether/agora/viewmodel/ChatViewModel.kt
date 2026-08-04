@@ -402,6 +402,8 @@ class ChatViewModel(
     private val messageWindowSize = MutableStateFlow(INITIAL_MESSAGE_WINDOW)
     private val _hasOlderMessages = MutableStateFlow(false)
     val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
+    private val _historyLoadError = MutableStateFlow<String?>(null)
+    val historyLoadError: StateFlow<String?> = _historyLoadError.asStateFlow()
 
     /** Load one older bounded window. The hard cap prevents a long scroll from rebuilding
      * the original unbounded Room/Compose heap pressure on Android OEM builds. */
