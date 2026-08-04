@@ -1,24 +1,14 @@
-name: Register GitHub clone tool once
+name: Deprecated - clone tool registration
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  register:
-    if: github.ref == 'refs/heads/workbench/consolidate-clone-tool'
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: workbench/consolidate-clone-tool
-      - run: python3 scripts/register_github_clone_tool.py
       - run: |
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git add app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt
-          git diff --cached --check
-          git commit -m 'feat: register controlled GitHub clone tool'
-          git push origin HEAD:workbench/consolidate-clone-tool
+          echo 'Disabled: the clone tool is registered in source. This workflow cannot modify repository content.'
