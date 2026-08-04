@@ -15,17 +15,27 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Finalize integration source
+      - name: Apply final integration cleanup
+        run: python3 scripts/finalize_main_integration.py
+      - name: Validate cleaned integration tree
         run: |
           set -euo pipefail
-          python3 scripts/finalize_main_integration.py
+          test ! -e ci-failure-summary.txt
+          test ! -e .github/workflows/apply-conversation-loss-v5-phase1.yml
+          test ! -e .github/workflows/integrate-client-resilience-once.yml
+          test ! -e .github/workflows/register-github-clone-tool-once.yml
+          test ! -e .github/workflows/finalize-main-integration-once.yml
           git diff --check
+      - name: Commit cleaned integration tree
+        run: |
+          set -euo pipefail
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
           git add -A
           git diff --cached --check
           git commit -m 'ci: enforce non-mutating main integration gate'
-          git push origin HEAD:workbench/fix-reply-disappears-on-next-send
+      - name: Push cleaned integration tree
+        run: git push origin HEAD:workbench/fix-reply-disappears-on-next-send
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
