@@ -3,9 +3,6 @@ name: Build Agora Workbench APK
 on:
   workflow_dispatch:
 
-concurrency:
-  group: agora-workbench-${{ github.ref }}
-  cancel-in-progress: true
 permissions:
   contents: write
 
@@ -18,18 +15,18 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply keyset history phase4
-        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5-phase4'
+      - name: Apply bounded keyset repair
+        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5-phase4-bounded'
         run: |
-          python3 scripts/apply_conversation_loss_v5_phase4.py
+          python3 scripts/apply_conversation_loss_v5_phase4_bounded.py
           git config user.name 'Agora Workbench Bot'
           git config user.email 'agora-workbench@users.noreply.github.com'
           git add app/src/main/java/com/newoether/agora/data/local/ChatDatabase.kt \
             app/src/main/java/com/newoether/agora/data/repository/ConversationRepository.kt \
             app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt
           git diff --cached --check
-          git commit -m 'fix: replace capped history window with keyset pages'
-          git push origin HEAD:workbench/root-fix-conversation-loss-v5-phase4
+          git commit -m 'fix: bound keyset rows and repair history collector structure'
+          git push origin HEAD:workbench/root-fix-conversation-loss-v5-phase4-bounded
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -43,10 +40,9 @@ jobs:
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: Agora-Workbench-conversation-loss-v5-phase4-${{ github.run_id }}
+          name: Agora-Workbench-conversation-loss-v5-phase4-bounded-${{ github.run_id }}
           path: app/build/outputs/apk/fdroid/debug/*.apk
           if-no-files-found: error
           retention-days: 14
