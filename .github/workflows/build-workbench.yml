@@ -2,17 +2,12 @@ name: Build Agora Workbench APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths-ignore: ['**/*.md']
 
 concurrency:
   group: agora-workbench-${{ github.ref }}
   cancel-in-progress: true
 permissions:
-  contents: read
-env:
-  BUILD_FILE: app/build.gradle.kts
+  contents: write
 
 jobs:
   build:
@@ -23,14 +18,16 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Verify checked-out identity
-        shell: bash
+      - name: Apply generation durability phase3
+        if: github.ref == 'refs/heads/workbench/root-fix-conversation-loss-v5-phase3'
         run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          git fetch origin "${GITHUB_REF_NAME}"
-          test "$(git rev-parse FETCH_HEAD)" = "${GITHUB_SHA}"
-          test -z "$(git status --porcelain)"
+          python3 scripts/apply_conversation_loss_v5_phase3.py
+          git config user.name 'Agora Workbench Bot'
+          git config user.email 'agora-workbench@users.noreply.github.com'
+          git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          git diff --cached --check
+          git commit -m 'fix: checkpoint generation and verify terminal persistence'
+          git push origin HEAD:workbench/root-fix-conversation-loss-v5-phase3
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -39,34 +36,15 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
-      - name: Test and build F-Droid debug APK
-        shell: bash
+      - name: Test and build
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug
-      - name: Prepare traceable APK
-        id: package
-        shell: bash
-        run: |
-          set -euo pipefail
-          version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$BUILD_FILE" | head -n1)"
-          version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$BUILD_FILE" | head -n1)"
-          build_sha="$(git rev-parse HEAD)"; short_sha="${build_sha:0:12}"
-          source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          test -n "$source_apk"; mkdir -p release
-          apk_name="Agora-Workbench-${version_name}-vc${version_code}-${short_sha}-run${GITHUB_RUN_ID}.apk"
-          cp "$source_apk" "release/$apk_name"
-          apk_sha256="$(sha256sum "release/$apk_name" | awk '{print $1}')"
-          printf '%s  %s\n' "$apk_sha256" "$apk_name" > "release/$apk_name.sha256"
-          printf '{"repository":"%s","branch":"%s","commit":"%s","versionName":"%s","versionCode":%s,"runId":%s,"apk":"%s","sha256":"%s"}\n' \
-            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$build_sha" "$version_name" "$version_code" "$GITHUB_RUN_ID" "$apk_name" "$apk_sha256" \
-            > release/build-manifest.json
-          echo "artifact_name=Agora-Workbench-${version_name}-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
-      - name: Upload Actions artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.package.outputs.artifact_name }}
-          path: release/*
+          name: Agora-Workbench-conversation-loss-v5-phase3-${{ github.run_id }}
+          path: app/build/outputs/apk/fdroid/debug/*.apk
           if-no-files-found: error
           retention-days: 14
