@@ -7,12 +7,7 @@ import java.io.FileInputStream
 import java.io.InputStream
 import java.net.URI
 
-/**
- * Opens attachment sources without assuming that every source is a ContentResolver URI.
- *
- * Composer-owned attachments are copied to app-private storage and represented as bare absolute
- * paths. Those paths must be opened directly; ContentResolver only owns URI-backed sources.
- */
+/** Opens attachment sources without assuming that every source is a ContentResolver URI. */
 object AttachmentSourceReader {
 
     fun open(context: Context, source: String): InputStream? =
@@ -20,10 +15,25 @@ object AttachmentSourceReader {
             context.contentResolver.openInputStream(Uri.parse(uriSource))
         }
 
-    fun readText(context: Context, source: String, maxChars: Int): String? =
-        readText(source, maxChars) { uriSource ->
+    /** Reads plain text directly and converts supported spreadsheets to sheet-delimited TSV.
+     * Spreadsheet conversion intentionally keeps every parsed row, column and sheet; maxChars
+     * remains the legacy plain-text viewer/model limit and is not applied to workbook content. */
+    fun readText(context: Context, source: String, maxChars: Int): String? {
+        val uri = runCatching { Uri.parse(source) }.getOrNull()
+        val mimeType = uri?.let { runCatching { context.contentResolver.getType(it) }.getOrNull() }
+        val fileName = when {
+            source.startsWith("file:", ignoreCase = true) -> runCatching { File(URI(source)).name }.getOrNull()
+            File(source).isAbsolute -> File(source).name
+            uri != null -> FileValidator.resolveFileName(context, uri) ?: uri.lastPathSegment
+            else -> null
+        }
+        if (SpreadsheetReader.isSpreadsheet(fileName, mimeType)) {
+            return SpreadsheetReader.read(context, source, fileName, mimeType)
+        }
+        return readText(source, maxChars) { uriSource ->
             context.contentResolver.openInputStream(Uri.parse(uriSource))
         }
+    }
 
     internal fun open(
         source: String,
