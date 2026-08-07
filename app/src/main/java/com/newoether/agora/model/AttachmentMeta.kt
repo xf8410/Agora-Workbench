@@ -11,11 +11,7 @@ import kotlinx.serialization.encoding.Encoder
 @Serializable
 data class AttachmentMeta(val items: List<AttachmentItem> = emptyList())
 
-/**
- * Attachment metadata keeps large parsed workbooks outside the Room message row. The public
- * [textContent] property resolves [contentPath] only when the generation or viewer actually asks
- * for the content; serialization writes only the original inline value and the short sidecar path.
- */
+/** Large parsed workbooks live outside the Room row and are resolved lazily from [contentPath]. */
 @Serializable(with = AttachmentItemSerializer::class)
 class AttachmentItem(
     val originalUri: String? = null,
@@ -30,7 +26,7 @@ class AttachmentItem(
     val sourceUri: String? = null,
     val transcription: String? = null,
 ) {
-    internal val inlineTextContent: String? = textContent
+    internal val inlineTextContent: String? = if (contentPath == null) textContent else null
     val textContent: String?
         get() = inlineTextContent ?: contentPath?.let { path -> runCatching { File(path).readText() }.getOrNull() }
 
@@ -48,7 +44,8 @@ class AttachmentItem(
         transcription: String? = this.transcription,
     ) = AttachmentItem(
         originalUri, type, fileName, mimeType, imageIndex, pageCount, warning,
-        textContent, contentPath, sourceUri, transcription,
+        if (contentPath == null) textContent else null,
+        contentPath, sourceUri, transcription,
     )
 }
 
@@ -73,17 +70,9 @@ object AttachmentItemSerializer : KSerializer<AttachmentItem> {
 
     override fun serialize(encoder: Encoder, value: AttachmentItem) {
         delegate.serialize(encoder, AttachmentItemSurrogate(
-            originalUri = value.originalUri,
-            type = value.type,
-            fileName = value.fileName,
-            mimeType = value.mimeType,
-            imageIndex = value.imageIndex,
-            pageCount = value.pageCount,
-            warning = value.warning,
-            textContent = value.inlineTextContent,
-            contentPath = value.contentPath,
-            sourceUri = value.sourceUri,
-            transcription = value.transcription,
+            value.originalUri, value.type, value.fileName, value.mimeType, value.imageIndex,
+            value.pageCount, value.warning, value.inlineTextContent, value.contentPath,
+            value.sourceUri, value.transcription,
         ))
     }
 
