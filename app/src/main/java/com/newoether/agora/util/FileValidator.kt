@@ -19,8 +19,7 @@ object FileValidator {
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.oasis.opendocument.spreadsheet",
-        "application/csv",
-        "application/octet-stream"
+        "application/csv"
     )
     private val SUPPORTED_EXTENSIONS = setOf(
         "txt", "md", "markdown", "json", "xml", "yaml", "yml",
