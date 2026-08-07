@@ -75,7 +75,8 @@ class MessagePayloadBuilder(
                             metaItems += AttachmentItem(
                                 originalUri = "file://${sidecar.absolutePath}",
                                 type = "file", fileName = att.fileName, mimeType = att.mimeType,
-                                textContent = parsed, contentPath = sidecar.absolutePath,
+                                contentPath = sidecar.absolutePath,
+                                sourceUri = att.localPath?.let { "file://$it" } ?: att.uri,
                             )
                         }
                     } else {
