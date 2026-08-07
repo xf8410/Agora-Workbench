@@ -1,6 +1,5 @@
 package com.newoether.agora.model
 
-import java.io.File
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -8,10 +7,12 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
+const val SPREADSHEET_SIDECAR_PREFIX = "@agora-spreadsheet-sidecar:"
+
 @Serializable
 data class AttachmentMeta(val items: List<AttachmentItem> = emptyList())
 
-/** Large parsed workbooks live outside the Room row and are resolved lazily from [contentPath]. */
+/** Large parsed workbooks live outside the Room row and expose only a stable sidecar reference. */
 @Serializable(with = AttachmentItemSerializer::class)
 class AttachmentItem(
     val originalUri: String? = null,
@@ -28,7 +29,7 @@ class AttachmentItem(
 ) {
     internal val inlineTextContent: String? = if (contentPath == null) textContent else null
     val textContent: String?
-        get() = inlineTextContent ?: contentPath?.let { path -> runCatching { File(path).readText() }.getOrNull() }
+        get() = inlineTextContent ?: contentPath?.let { SPREADSHEET_SIDECAR_PREFIX + it }
 
     fun copy(
         originalUri: String? = this.originalUri,
@@ -44,8 +45,7 @@ class AttachmentItem(
         transcription: String? = this.transcription,
     ) = AttachmentItem(
         originalUri, type, fileName, mimeType, imageIndex, pageCount, warning,
-        if (contentPath == null) textContent else null,
-        contentPath, sourceUri, transcription,
+        if (contentPath == null) textContent else null, contentPath, sourceUri, transcription,
     )
 }
 
@@ -67,7 +67,6 @@ private data class AttachmentItemSurrogate(
 object AttachmentItemSerializer : KSerializer<AttachmentItem> {
     private val delegate = AttachmentItemSurrogate.serializer()
     override val descriptor: SerialDescriptor = delegate.descriptor
-
     override fun serialize(encoder: Encoder, value: AttachmentItem) {
         delegate.serialize(encoder, AttachmentItemSurrogate(
             value.originalUri, value.type, value.fileName, value.mimeType, value.imageIndex,
@@ -75,7 +74,6 @@ object AttachmentItemSerializer : KSerializer<AttachmentItem> {
             value.sourceUri, value.transcription,
         ))
     }
-
     override fun deserialize(decoder: Decoder): AttachmentItem {
         val value = delegate.deserialize(decoder)
         return AttachmentItem(
