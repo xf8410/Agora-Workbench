@@ -10,7 +10,6 @@ class SpreadsheetViewerTest {
             === Sheet: basic_effect ===
             id	effect
             1	line1\nline2
-
             === Sheet: check_point ===
             id	value
             2	15
