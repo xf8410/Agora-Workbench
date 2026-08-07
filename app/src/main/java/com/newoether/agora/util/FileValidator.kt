@@ -36,14 +36,14 @@ object FileValidator {
         } catch (_: Exception) { null }
         val fileName = resolveFileName(context, uri)
         val extension = fileName?.substringAfterLast('.', "")?.lowercase()
+        val allowedByExtension = extension != null && extension in SUPPORTED_EXTENSIONS
 
-        if (mimeType == null && extension !in SUPPORTED_EXTENSIONS)
+        if (mimeType == null && !allowedByExtension)
             return Result(false, Error.UNKNOWN_TYPE, null)
 
         val allowedByMime = mimeType != null && (
             MIME_WHITELIST.any { mimeType.startsWith(it) } || mimeType in MIME_WHITELIST
         )
-        val allowedByExtension = extension in SUPPORTED_EXTENSIONS
         if (!allowedByMime && !allowedByExtension)
             return Result(false, Error.UNSUPPORTED_TYPE, mimeType)
 
