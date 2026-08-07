@@ -9,13 +9,14 @@ data class AttachmentMeta(val items: List<AttachmentItem> = emptyList())
 @Serializable
 data class AttachmentItem(
     val originalUri: String? = null,
-    val type: String,               // "image", "video", "file", "pdf"
+    val type: String,               // "image", "video", "file", "pdf", "spreadsheet"
     @SerialName("file_name") val fileName: String? = null,
     @SerialName("mime_type") val mimeType: String? = null,
     @SerialName("image_index") val imageIndex: Int? = null,
     @SerialName("page_count") val pageCount: Int? = null,
     val warning: String? = null,
     @SerialName("text_content") val textContent: String? = null,
+    @SerialName("content_path") val contentPath: String? = null,
     @SerialName("transcription") val transcription: String? = null
 )
 
