@@ -6,192 +6,50 @@ import com.newoether.agora.R
 import com.newoether.agora.model.AttachmentItem
 import com.newoether.agora.model.AttachmentMeta
 import com.newoether.agora.model.SelectedAttachment
+import com.newoether.agora.util.AttachmentSourceReader
 import com.newoether.agora.util.Constants
 import com.newoether.agora.util.DebugLog
 import com.newoether.agora.util.PdfPageRenderer
-import com.newoether.agora.util.AttachmentSourceReader
+import com.newoether.agora.util.SpreadsheetReader
+import java.security.MessageDigest
 
-/**
- * Resolves outgoing message attachments (images / video / file / pdf) into concrete
- * image paths + structured AttachmentMeta. Extracted verbatim from ChatViewModel.
- */
-class MessagePayloadBuilder(
-    private val generationManager: GenerationManager,
-    // buildMessagePayload 里有一处 _snackbarMessage.emit(...) 用于 PDF 渲染失败提示。
-    // 用一个挂起回调把它传进来,避免 MessagePayloadBuilder 依赖 ChatViewModel 的 SharedFlow。
-    private val onSnackbar: suspend (String) -> Unit,
-) {
-    /** 见原 ChatViewModel.MessagePayload */
-    data class MessagePayload(
-        val allImages: List<String>,
-        val attachmentMeta: AttachmentMeta?
-    )
-
-    // ↓↓↓ 原样粘贴 buildMessagePayload 方法体 ↓↓↓
-    // 把可见性 private 改成 (无修饰=public 或 internal)。
-    // 方法体里唯一需要改的一行:
-    //   原:  _snackbarMessage.emit(SnackbarEvent(app.getString(R.string.pdf_render_failed)))
-    //   改:  onSnackbar(app.getString(R.string.pdf_render_failed))
-    // 其余每一行(包括所有注释、那段 uriToResultMap 的复杂索引重算逻辑)逐字保留,一个字都不要改。
-    suspend fun buildMessagePayload(
-        app: Application,
-        images: List<String>,
-        attachments: List<SelectedAttachment>
-    ): MessagePayload {
-        // mediaUris: URIs that need processImages (images, video content:// URIs)
-        // directPaths: paths that skip processImages (pre-extracted frames, PDF copies, rendered pages)
-        val mediaUris = mutableListOf<String>()
-        val directPaths = mutableListOf<String>()
-        val sliceConfigs = mutableMapOf<String, VideoSliceConfig>()
-        val metaItems = mutableListOf<AttachmentItem>()
-        var nextImageIndex = 0
-
-        // Process legacy images list (backward compatibility)
-        for (uri in images) {
-            mediaUris.add(uri)
-        }
-
-        // Process new SelectedAttachment list
-        for (att in attachments) {
-            when (att.type) {
-                "image" -> {
-                    mediaUris.add(att.localPath ?: att.uri)
-                    metaItems.add(AttachmentItem(
-                        originalUri = att.uri, type = "image", mimeType = att.mimeType,
-                        imageIndex = nextImageIndex
-                    ))
-                    nextImageIndex++
-                }
-                "video" -> {
-                    // Copy video to local storage for export/playback survival
-                    val videoExt = when {
-                        att.mimeType?.contains("mp4") == true -> "mp4"
-                        att.mimeType?.contains("webm") == true -> "webm"
-                        att.mimeType?.contains("quicktime") == true -> "mov"
-                        else -> "mp4"
+class MessagePayloadBuilder(private val generationManager: GenerationManager, private val onSnackbar: suspend (String) -> Unit) {
+    data class MessagePayload(val allImages: List<String>, val attachmentMeta: AttachmentMeta?)
+    suspend fun buildMessagePayload(app: Application, images: List<String>, attachments: List<SelectedAttachment>): MessagePayload {
+        val media = images.toMutableList(); val direct = mutableListOf<String>(); val slices = mutableMapOf<String, VideoSliceConfig>(); val meta = mutableListOf<AttachmentItem>(); var nextImage = 0
+        for (att in attachments) when (att.type) {
+            "image" -> { media += att.localPath ?: att.uri; meta += AttachmentItem(att.uri, "image", mimeType = att.mimeType, imageIndex = nextImage); nextImage++ }
+            "video" -> {
+                val ext = if (att.mimeType?.contains("webm") == true) "webm" else if (att.mimeType?.contains("quicktime") == true) "mov" else "mp4"
+                val original = java.io.File(app.filesDir, "vid_original_${java.util.UUID.randomUUID()}.$ext")
+                val local = try { app.contentResolver.openInputStream(Uri.parse(att.uri))?.use { input -> original.outputStream().use { input.copyTo(it) } }; "file://${original.absolutePath}" } catch (_: Exception) { att.uri }
+                if (!att.processedFrames.isNullOrEmpty()) { meta += AttachmentItem(local, "video", att.fileName, att.mimeType, nextImage, att.frameCount); direct.addAll(att.processedFrames); nextImage += att.processedFrames.size }
+                else { val count = att.frameCount ?: 1; meta += AttachmentItem(local, "video", att.fileName, att.mimeType, nextImage, att.frameCount); media += att.uri; if (att.frameCount != null && att.frameCount > 1 && att.sliceIntervalMs != null) slices[att.uri] = VideoSliceConfig(att.sliceIntervalMs * 1000L, att.frameCount); nextImage += count }
+            }
+            "file" -> {
+                val source = att.localPath ?: att.uri
+                if (SpreadsheetReader.isSpreadsheet(att.fileName, att.mimeType)) {
+                    val parsed = SpreadsheetReader.read(app, source, att.fileName, att.mimeType)
+                    if (parsed == null) meta += AttachmentItem(att.localPath?.let { "file://$it" } ?: att.uri, "file", att.fileName, att.mimeType, warning = "Spreadsheet parsing failed")
+                    else {
+                        val hash = MessageDigest.getInstance("SHA-256").digest(parsed.toByteArray()).joinToString("") { "%02x".format(it) }
+                        val dir = java.io.File(app.filesDir, "spreadsheet_parsed").apply { mkdirs() }; val sidecar = java.io.File(dir, "$hash.tsv"); if (!sidecar.exists()) sidecar.writeText(parsed)
+                        meta += AttachmentItem(att.localPath?.let { "file://$it" } ?: att.uri, "file", att.fileName, att.mimeType, contentPath = sidecar.absolutePath)
                     }
-                    val videoFile = java.io.File(app.filesDir, "vid_original_${java.util.UUID.randomUUID()}.$videoExt")
-                    var localVideoUri: String? = null
-                    try {
-                        app.contentResolver.openInputStream(android.net.Uri.parse(att.uri))?.use { input ->
-                            videoFile.outputStream().use { input.copyTo(it) }
-                        }
-                        localVideoUri = "file://${videoFile.absolutePath}"
-                    } catch (_: Exception) {
-                        // Fallback: keep original content URI (may expire)
-                        localVideoUri = att.uri
-                    }
-
-                    if (att.processedFrames != null && att.processedFrames.isNotEmpty()) {
-                        metaItems.add(AttachmentItem(
-                            originalUri = localVideoUri, type = "video",
-                            fileName = att.fileName, mimeType = att.mimeType,
-                            imageIndex = nextImageIndex, pageCount = att.frameCount
-                        ))
-                        directPaths.addAll(att.processedFrames)
-                        nextImageIndex += att.processedFrames.size
-                    } else {
-                        val frameCount = att.frameCount ?: 1
-                        metaItems.add(AttachmentItem(
-                            originalUri = localVideoUri, type = "video",
-                            fileName = att.fileName, mimeType = att.mimeType,
-                            imageIndex = nextImageIndex, pageCount = att.frameCount
-                        ))
-                        mediaUris.add(att.uri)
-                        if (att.frameCount != null && att.frameCount > 1 && att.sliceIntervalMs != null) {
-                            sliceConfigs[att.uri] = VideoSliceConfig(
-                                intervalMicros = att.sliceIntervalMs * 1000L,
-                                frameCount = att.frameCount
-                            )
-                        }
-                        nextImageIndex += frameCount
-                    }
-                }
-                "file" -> {
-                    val source = att.localPath ?: att.uri
-                    val textContent = AttachmentSourceReader.readText(
-                        context = app,
-                        source = source,
-                        maxChars = Constants.MAX_FILE_CONTENT_READ_LENGTH,
-                    )
-                    if (textContent == null) {
-                        DebugLog.e(
-                            "ChatViewModel",
-                            "Failed to read attachment content: ${att.fileName}",
-                        )
-                    }
-                    metaItems.add(AttachmentItem(
-                        originalUri = att.localPath?.let { "file://$it" } ?: att.uri,
-                        type = "file",
-                        fileName = att.fileName, mimeType = att.mimeType,
-                        textContent = textContent
-                    ))
-                }
-                "pdf" -> {
-                    val pagePaths = if (att.preRenderedPaths != null && att.preRenderedPaths.isNotEmpty()) {
-                        val sel = att.selectedPages ?: att.preRenderedPaths.indices.toSet()
-                        att.preRenderedPaths.filterIndexed { i, _ -> i in sel }
-                    } else {
-                        PdfPageRenderer.renderAsImages(app, Uri.parse(att.uri), att.selectedPages)
-                    }
-                    if (pagePaths.isEmpty()) {
-                        onSnackbar(app.getString(R.string.pdf_render_failed))
-                        continue
-                    }
-                    metaItems.add(AttachmentItem(
-                        originalUri = att.uri, type = "pdf",
-                        fileName = att.fileName, mimeType = "application/pdf",
-                        imageIndex = nextImageIndex, pageCount = pagePaths.size
-                    ))
-                    directPaths.addAll(pagePaths)
-                    nextImageIndex += pagePaths.size
+                } else {
+                    val text = AttachmentSourceReader.readText(app, source, Constants.MAX_FILE_CONTENT_READ_LENGTH); if (text == null) DebugLog.e("MessagePayloadBuilder", "Failed to read attachment: ${att.fileName}")
+                    meta += AttachmentItem(att.localPath?.let { "file://$it" } ?: att.uri, "file", att.fileName, att.mimeType, textContent = text)
                 }
             }
-        }
-
-        val processedImages = if (mediaUris.isNotEmpty()) generationManager.processImages(mediaUris, sliceConfigs) else emptyList()
-        val allImages = processedImages + directPaths
-
-        // Recalculate imageIndex for all meta items based on final allImages positions.
-        // nextImageIndex tracked the expected order:
-        //   First N items correspond to mediaUris entries (→ processedImages)
-        //   Remaining items correspond to directPaths entries
-        // After processing, processedImages may differ in size from mediaUris.
-        // We build a position map: for each metaItem that has imageIndex < mediaUris.size,
-        // it was tracking an offset within mediaUris. We need the actual offset within processedImages.
-        val uriToResultMap = mutableListOf<IntRange>() // for each mediaUris entry, the range in processedImages
-        var pos = 0
-        for (uri in mediaUris) {
-            val start = pos
-            // Count consecutive results belonging to this URI by scanning forward until
-            // we find files that don't correspond. Since we can't distinguish, use a simple
-            // heuristic: each URI produces either 0 or 1+ results. The slice configs tell us
-            // how many frames per video.
-            val config = sliceConfigs[uri]
-            val expectedCount = config?.frameCount ?: 1
-            val end = minOf(pos + expectedCount, processedImages.size)
-            uriToResultMap.add(start until end)
-            pos = end
-        }
-        // Cap at processedImages size
-        val adjustedMetaItems = metaItems.map { item ->
-            val idx = item.imageIndex
-            if (idx == null) {
-                item
-            } else if (idx < mediaUris.size && idx < uriToResultMap.size) {
-                val range = uriToResultMap[idx]
-                item.copy(imageIndex = range.first)
-            } else if (idx in mediaUris.size until (mediaUris.size + directPaths.size)) {
-                // This item's imageIndex is relative to directPaths start
-                item.copy(imageIndex = processedImages.size + (idx - mediaUris.size))
-            } else {
-                // Fallback: keep original index (shouldn't happen for well-formed input)
-                item
+            "pdf" -> {
+                val pages = if (!att.preRenderedPaths.isNullOrEmpty()) { val selected = att.selectedPages ?: att.preRenderedPaths.indices.toSet(); att.preRenderedPaths.filterIndexed { i, _ -> i in selected } } else PdfPageRenderer.renderAsImages(app, Uri.parse(att.uri), att.selectedPages)
+                if (pages.isEmpty()) { onSnackbar(app.getString(R.string.pdf_render_failed)); continue }
+                meta += AttachmentItem(att.uri, "pdf", att.fileName, "application/pdf", nextImage, pages.size); direct.addAll(pages); nextImage += pages.size
             }
         }
-        val attachmentMeta = if (adjustedMetaItems.isNotEmpty()) {
-            AttachmentMeta(items = adjustedMetaItems)
-        } else null
-        return MessagePayload(allImages, attachmentMeta)
+        val processed = if (media.isNotEmpty()) generationManager.processImages(media, slices) else emptyList(); val all = processed + direct; val ranges = mutableListOf<IntRange>(); var pos = 0
+        for (uri in media) { val end = minOf(pos + (slices[uri]?.frameCount ?: 1), processed.size); ranges += pos until end; pos = end }
+        val adjusted = meta.map { item -> val i = item.imageIndex; when { i == null -> item; i < media.size && i < ranges.size -> item.copy(imageIndex = ranges[i].first); i in media.size until media.size + direct.size -> item.copy(imageIndex = processed.size + i - media.size); else -> item } }
+        return MessagePayload(all, adjusted.takeIf { it.isNotEmpty() }?.let(::AttachmentMeta))
     }
 }
