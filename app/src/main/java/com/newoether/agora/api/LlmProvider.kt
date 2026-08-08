@@ -21,6 +21,13 @@ sealed class StreamEvent {
     data class Retrying(val attempt: Int, val maxAttempts: Int) : StreamEvent()
 }
 
+/**
+ * Provider APIs require function names to be unique within one request. Keep the first
+ * registered definition so provider ordering remains the execution-routing authority.
+ */
+internal fun deduplicateToolDefinitions(tools: List<ToolDefinition>?): List<ToolDefinition>? =
+    tools?.distinctBy { it.function.name }
+
 data class ProviderConfig(
     val apiKey: String,
     val modelId: String,
@@ -33,7 +40,7 @@ data class ProviderConfig(
     val thinkingBudgetEnabled: Boolean = false,
     val thinkingBudgetTokens: Int = 4096,
     val baseUrl: String? = null,
-    val tools: List<ToolDefinition>? = null,
+    var tools: List<ToolDefinition>? = null,
     val userPrepend: String? = null,
     val userPostpend: String? = null,
     val includeImages: Boolean = true,
@@ -42,7 +49,11 @@ data class ProviderConfig(
     val topP: Float? = null,
     val frequencyPenalty: Float? = null,
     val presencePenalty: Float? = null
-)
+) {
+    init {
+        tools = deduplicateToolDefinitions(tools)
+    }
+}
 
 @Serializable
 data class ToolDefinition(
@@ -139,8 +150,6 @@ data class OpenAiImageUrl(
     val url: String
 )
 
-
-
 @Serializable
 data class OpenAiTool(
     val type: String,
@@ -236,6 +245,6 @@ interface LlmProvider {
         messages: List<ChatMessage>,
         config: ProviderConfig
     ): Flow<StreamEvent>
-    
+
     suspend fun fetchModels(apiKey: String, baseUrl: String? = null): List<String>
 }
