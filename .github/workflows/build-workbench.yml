@@ -46,6 +46,7 @@ jobs:
           cp "$apk_path" "artifacts/Agora-Workbench-${GITHUB_SHA}.apk"
           test -s "artifacts/Agora-Workbench-${GITHUB_SHA}.apk"
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
         with:
           name: Agora-Workbench-${{ github.sha }}-run${{ github.run_id }}
           path: artifacts/Agora-Workbench-${{ github.sha }}.apk
