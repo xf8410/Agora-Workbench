@@ -234,12 +234,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
                 }
 
                 response.usage?.let { usage ->
-                    emit(
-                        StreamEvent.UsageUpdate(
-                            tokenCount = usage.totalTokens,
-                            thoughtsTokenCount = usage.completionTokensDetails?.reasoningTokens ?: 0
-                        )
-                    )
+                    emit(StreamEvent.UsageUpdate(usage.toTokenUsage()))
                 }
             } catch (e: Exception) {
                 DebugLog.e("AgoraAPI", "Parse error: ${e.message}", e)
