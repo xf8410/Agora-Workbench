@@ -33,21 +33,9 @@ jobs:
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Unit tests
         run: |
-          set +e
+          set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest > unit-test.log 2>&1
-          status=$?
-          cat unit-test.log
-          if [ "$status" -ne 0 ]; then
-            mkdir -p docs/ci-diagnostics
-            cp unit-test.log docs/ci-diagnostics/unit-test.log
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add docs/ci-diagnostics/unit-test.log
-            git commit -m "保存单元测试原始诊断 [skip ci]"
-            git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          fi
-          exit "$status"
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
       - name: Build APK (verify main SHA compiles)
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - name: Verify APK output
@@ -56,3 +44,14 @@ jobs:
           apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$apk_path"
           test -s "$apk_path"
+      - name: Remove temporary CI diagnostics after successful verification
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        run: |
+          set -euo pipefail
+          git rm -f docs/ci-diagnostics/unit-test.log
+          git show origin/main:.github/workflows/build-workbench.yml > .github/workflows/build-workbench.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/build-workbench.yml docs/ci-diagnostics/unit-test.log
+          git commit -m "清理临时 CI 诊断"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
