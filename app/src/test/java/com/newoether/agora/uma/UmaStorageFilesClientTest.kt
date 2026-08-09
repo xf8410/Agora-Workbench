@@ -57,4 +57,14 @@ class UmaStorageFilesClientTest {
             )
         }
     }
+
+    @Test
+    fun rejectsNegativeByteLength() {
+        assertThrows(IllegalArgumentException::class.java) {
+            appendUmaStoragePage(
+                "s", 0, UmaStorageFilesPage(true, "s", 0, 1, 1, listOf(file(1, length = -1))),
+                mutableSetOf(), mutableListOf(),
+            )
+        }
+    }
 }
