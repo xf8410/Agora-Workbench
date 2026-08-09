@@ -1,6 +1,7 @@
 package com.newoether.agora.api
 
 import com.newoether.agora.model.ChatMessage
+import com.newoether.agora.model.TokenUsage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -10,7 +11,14 @@ import kotlinx.serialization.json.JsonObject
 sealed class StreamEvent {
     data class TextChunk(val text: String) : StreamEvent()
     data class ThoughtChunk(val thought: String, val title: String? = null, val signature: String? = null) : StreamEvent()
-    data class UsageUpdate(val tokenCount: Int, val thoughtsTokenCount: Int = 0) : StreamEvent()
+    data class UsageUpdate(val usage: TokenUsage) : StreamEvent() {
+        constructor(tokenCount: Int, thoughtsTokenCount: Int = 0) : this(
+            TokenUsage.fromTotalOnly(tokenCount, thoughtsTokenCount)
+        )
+
+        val tokenCount: Int get() = usage.totalTokens ?: 0
+        val thoughtsTokenCount: Int get() = usage.thoughtsTokens ?: 0
+    }
     data class Error(val error: GenerationError) : StreamEvent() {
         val message: String get() = error.userMessage()
     }
@@ -211,7 +219,13 @@ data class OpenAiUsage(
     @SerialName("prompt_tokens") val promptTokens: Int,
     @SerialName("completion_tokens") val completionTokens: Int,
     @SerialName("total_tokens") val totalTokens: Int,
+    @SerialName("prompt_tokens_details") val promptTokensDetails: OpenAiPromptTokensDetails? = null,
     @SerialName("completion_tokens_details") val completionTokensDetails: OpenAiCompletionTokensDetails? = null
+)
+
+@Serializable
+data class OpenAiPromptTokensDetails(
+    @SerialName("cached_tokens") val cachedTokens: Int? = null
 )
 
 @Serializable
