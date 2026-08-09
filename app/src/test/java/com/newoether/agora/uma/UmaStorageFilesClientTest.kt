@@ -3,6 +3,7 @@ package com.newoether.agora.uma
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UmaStorageFilesClientTest {
@@ -26,7 +27,7 @@ class UmaStorageFilesClientTest {
             output = output,
         )
 
-        assertEquals(2L, requireNotNull(next))
+        assertTrue(next == 2L)
         assertEquals(listOf(1L, 2L), output.map { it.fileId })
     }
 
