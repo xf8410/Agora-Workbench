@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -22,7 +22,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -44,14 +43,3 @@ jobs:
           apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$apk_path"
           test -s "$apk_path"
-      - name: Remove temporary CI diagnostics after successful verification
-        if: ${{ success() && github.event_name == 'pull_request' }}
-        run: |
-          set -euo pipefail
-          git rm -f docs/ci-diagnostics/unit-test.log
-          git show origin/main:.github/workflows/build-workbench.yml > .github/workflows/build-workbench.yml
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "清理临时 CI 诊断"
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
