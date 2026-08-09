@@ -37,18 +37,9 @@ jobs:
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
       - name: Build APK (verify main SHA compiles)
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
-      - name: Stage verified APK
+      - name: Verify APK output
         run: |
           set -euo pipefail
           apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$apk_path"
-          mkdir -p artifacts
-          cp "$apk_path" "artifacts/Agora-Workbench-${GITHUB_SHA}.apk"
-          test -s "artifacts/Agora-Workbench-${GITHUB_SHA}.apk"
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'push'
-        with:
-          name: Agora-Workbench-${{ github.sha }}-run${{ github.run_id }}
-          path: artifacts/Agora-Workbench-${{ github.sha }}.apk
-          if-no-files-found: error
-          retention-days: 14
+          test -s "$apk_path"
