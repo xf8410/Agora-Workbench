@@ -26,7 +26,7 @@ class UmaStorageFilesClientTest {
             output = output,
         )
 
-        assertEquals(2L, next)
+        assertEquals(2L, requireNotNull(next))
         assertEquals(listOf(1L, 2L), output.map { it.fileId })
     }
 
