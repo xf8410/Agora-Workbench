@@ -88,7 +88,7 @@ class UmaStorageFilesClient(
             connection.useCaches = false
             val code = connection.responseCode
             val bytes = (if (code in 200..299) connection.inputStream else connection.errorStream)
-                ?.use { it.readBytes() }.orEmpty()
+                ?.use { it.readBytes() } ?: ByteArray(0)
             val body = bytes.toString(Charsets.UTF_8)
             require(code in 200..299) { "hlpatch HTTP $code: $body" }
             json.decodeFromString<UmaStorageFilesPage>(body)
