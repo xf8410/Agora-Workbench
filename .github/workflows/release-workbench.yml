@@ -4,11 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name (e.g. 1.4.7-workbench)'
-        required: true
+        description: 'Version name'
+        required: false
+        default: '1.4.7-workbench'
       version_code:
-        description: 'Version code (integer, e.g. 35)'
-        required: true
+        description: 'Version code'
+        required: false
+        default: '35'
 
 permissions:
   contents: write
@@ -49,6 +51,9 @@ jobs:
 
       - name: Set version
         run: |
+          set -euo pipefail
+          test -n "${{ inputs.version_name }}"
+          [[ "${{ inputs.version_code }}" =~ ^[1-9][0-9]*$ ]]
           sed -i "s/versionCode = .*/versionCode = ${{ inputs.version_code }}/" app/build.gradle.kts
           sed -i "s/versionName = .*/versionName = \"${{ inputs.version_name }}\"/" app/build.gradle.kts
           grep -E "versionCode|versionName" app/build.gradle.kts
