@@ -1,7 +1,6 @@
 package com.newoether.agora.uma
 
 import android.util.Base64
-import java.io.EOFException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlinx.serialization.json.JsonArray
@@ -44,9 +43,9 @@ class UmaMessagePackJsonDecoder(
             0xc4 -> binary(c.bytes(c.u8()))
             0xc5 -> binary(c.bytes(c.u16()))
             0xc6 -> binary(c.bytes(c.length32()))
-            0xc7 -> extension(c.i8(), c.bytes(c.u8()))
-            0xc8 -> extension(c.i8(), c.bytes(c.u16()))
-            0xc9 -> extension(c.i8(), c.bytes(c.length32()))
+            0xc7 -> readVariableExtension(c, c.u8())
+            0xc8 -> readVariableExtension(c, c.u16())
+            0xc9 -> readVariableExtension(c, c.length32())
             0xca -> JsonPrimitive(Float.fromBits(c.i32()).toDouble())
             0xcb -> JsonPrimitive(Double.fromBits(c.i64()))
             0xcc -> JsonPrimitive(c.u8())
@@ -74,6 +73,11 @@ class UmaMessagePackJsonDecoder(
         }
     }
 
+    private fun readVariableExtension(c: Cursor, length: Int): JsonElement {
+        val type = c.i8()
+        return extension(type, c.bytes(length))
+    }
+
     private fun readArray(c: Cursor, count: Int, depth: Int): JsonArray {
         requireCount(c, count)
         return buildJsonArray { repeat(count) { add(readValue(c, depth)) } }
@@ -91,23 +95,21 @@ class UmaMessagePackJsonDecoder(
             if (text == null || !seen.add(text)) allStringKeys = false
             entries += key to value
         }
-        return if (allStringKeys) JsonObject(entries.associate { it.first.jsonPrimitiveContent() to it.second })
+        return if (allStringKeys) JsonObject(entries.associate { (it.first as JsonPrimitive).content to it.second })
         else buildJsonObject {
-            put("$msgpack_map", buildJsonArray {
+            put(MSGPACK_MAP, buildJsonArray {
                 entries.forEach { (key, value) -> add(buildJsonArray { add(key); add(value) }) }
             })
         }
     }
 
-    private fun JsonElement.jsonPrimitiveContent() = (this as JsonPrimitive).content
-
     private fun binary(bytes: ByteArray) = buildJsonObject {
-        put("$msgpack_binary_base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+        put(MSGPACK_BINARY_BASE64, Base64.encodeToString(bytes, Base64.NO_WRAP))
         put("byte_length", bytes.size)
     }
 
     private fun extension(type: Int, bytes: ByteArray) = buildJsonObject {
-        put("$msgpack_extension", buildJsonObject {
+        put(MSGPACK_EXTENSION, buildJsonObject {
             put("type", type)
             put("data_base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
             put("byte_length", bytes.size)
@@ -129,9 +131,9 @@ class UmaMessagePackJsonDecoder(
         fun i8(): Int = u8().let { if (it >= 128) it - 256 else it }
         fun u16(): Int = (u8() shl 8) or u8()
         fun i16(): Int = u16().let { if (it >= 0x8000) it - 0x10000 else it }
-        fun i32(): Int { need(4); return ByteBuffer.wrap(data, position.also { position += 4 }, 4).order(ByteOrder.BIG_ENDIAN).int }
+        fun i32(): Int { need(4); val start = position; position += 4; return ByteBuffer.wrap(data, start, 4).order(ByteOrder.BIG_ENDIAN).int }
         fun u32(): Long = i32().toLong() and 0xffffffffL
-        fun i64(): Long { need(8); return ByteBuffer.wrap(data, position.also { position += 8 }, 8).order(ByteOrder.BIG_ENDIAN).long }
+        fun i64(): Long { need(8); val start = position; position += 8; return ByteBuffer.wrap(data, start, 8).order(ByteOrder.BIG_ENDIAN).long }
         fun u64String(): String {
             val signed = i64()
             return if (signed >= 0) signed.toString() else java.lang.Long.toUnsignedString(signed)
@@ -146,13 +148,13 @@ class UmaMessagePackJsonDecoder(
             val bytes = bytes(count)
             val decoder = Charsets.UTF_8.newDecoder()
             return try { decoder.decode(ByteBuffer.wrap(bytes)).toString() }
-            catch (e: Exception) { throw UmaMessagePackDecodeException(position - count, "invalid UTF-8") }
+            catch (_: Exception) { throw UmaMessagePackDecodeException(position - count, "invalid UTF-8") }
         }
     }
 
-    private companion object {
-        const val msgpack_map = "\$msgpack_map"
-        const val msgpack_binary_base64 = "\$msgpack_binary_base64"
-        const val msgpack_extension = "\$msgpack_extension"
+    companion object {
+        const val MSGPACK_MAP = "\$msgpack_map"
+        const val MSGPACK_BINARY_BASE64 = "\$msgpack_binary_base64"
+        const val MSGPACK_EXTENSION = "\$msgpack_extension"
     }
 }
