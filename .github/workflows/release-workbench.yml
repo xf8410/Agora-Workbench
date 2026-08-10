@@ -58,21 +58,45 @@ jobs:
           sed -i "s/versionName = .*/versionName = \"${{ inputs.version_name }}\"/" app/build.gradle.kts
           grep -E "versionCode|versionName" app/build.gradle.kts
 
-      - name: Build Release APK
-        run: ./gradlew --no-daemon --stacktrace assembleFdroidRelease
+      # fdroidDebug is signed automatically with the runner-generated Android
+      # debug key. It is installable, but a later build may require uninstalling
+      # the previous APK because GitHub-hosted runners do not retain this key.
+      - name: Build debug-signed APK
+        run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
 
-      - name: Create tag
+      - name: Verify signature and prepare release asset
+        id: apk
         run: |
-          git config user.name 'Agora Workbench Bot'
-          git config user.email 'agora-workbench@users.noreply.github.com'
-          git tag -a "v${{ inputs.version_name }}" -m "Release ${{ inputs.version_name }} (code ${{ inputs.version_code }})"
-          git push origin "v${{ inputs.version_name }}"
+          set -euo pipefail
+          apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$apk_path"
+          test -s "$apk_path"
+          apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          test -x "$apksigner_path"
+          "$apksigner_path" verify --verbose --print-certs "$apk_path"
+          asset="Agora-Workbench-${{ inputs.version_name }}-arm64-v8a-debug-signed.apk"
+          cp "$apk_path" "$asset"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
+      - name: Create tag when absent
+        env:
+          TAG: v${{ inputs.version_name }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; keeping it and updating the release assets."
+          else
+            git config user.name 'Agora Workbench Bot'
+            git config user.email 'agora-workbench@users.noreply.github.com'
+            git tag -a "$TAG" -m "Release ${{ inputs.version_name }} (code ${{ inputs.version_code }})"
+            git push origin "$TAG"
+          fi
+
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ inputs.version_name }}"
           name: "Agora Workbench ${{ inputs.version_name }}"
           generate_release_notes: true
-          files: |
-            app/build/outputs/apk/fdroid/release/*.apk
+          overwrite_files: true
+          files: "${{ steps.apk.outputs.asset }}"
