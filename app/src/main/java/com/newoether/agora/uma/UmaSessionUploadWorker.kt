@@ -30,14 +30,14 @@ class UmaSessionUploadWorker(
         val uploader = UmaGitBlobUploader(github)
 
         return try {
-            while (true) {
+            uploadLoop@ while (true) {
                 val record = requireNotNull(store.read(taskId)) { "upload task does not exist" }
                 if (record.progress.phase in setOf(
                         UmaSessionUploadPhase.COMPLETE,
                         UmaSessionUploadPhase.CANCELLED,
                         UmaSessionUploadPhase.PAUSED,
                     )
-                ) return Result.success()
+                ) break@uploadLoop
 
                 val root = File(base, "sessions/${record.task.sessionId}")
                 val progress = when (record.progress.phase) {
@@ -70,13 +70,14 @@ class UmaSessionUploadWorker(
                     )
                     UmaSessionUploadPhase.COMPLETE,
                     UmaSessionUploadPhase.PAUSED,
-                    UmaSessionUploadPhase.CANCELLED -> return Result.success()
+                    UmaSessionUploadPhase.CANCELLED -> break@uploadLoop
                 }
                 setProgress(progressData(progress))
-                if (progress.complete) return Result.success()
-                // A successful bounded batch immediately enters the next batch. Do not return
-                // Result.retry(), because WorkManager backoff would delay every healthy batch.
+                if (progress.complete) break@uploadLoop
+                // A successful bounded batch immediately enters the next batch. WorkManager
+                // backoff remains reserved for the exception path below.
             }
+            Result.success()
         } catch (failure: Throwable) {
             val message = failure.message ?: failure::class.java.name
             runCatching {
