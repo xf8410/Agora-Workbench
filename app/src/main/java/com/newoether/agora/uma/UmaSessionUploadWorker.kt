@@ -14,10 +14,7 @@ import com.newoether.agora.github.GitHubApiClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/**
- * Runs one bounded raw-Blob batch. WorkManager retries the same durable task until the raw stage is
- * complete, so the upload no longer depends on one chat tool invocation remaining connected.
- */
+/** Runs one bounded stage and reschedules the durable task until its single commit is complete. */
 class UmaSessionUploadWorker(
     context: Context,
     params: WorkerParameters,
@@ -32,29 +29,50 @@ class UmaSessionUploadWorker(
             return Result.failure(errorData(it.message ?: "cannot read upload task"))
         } ?: return Result.failure(errorData("upload task does not exist"))
 
-        if (record.progress.phase == UmaSessionUploadPhase.CANCELLED) return Result.success()
-        if (record.progress.phase == UmaSessionUploadPhase.PAUSED) return Result.success()
-        if (record.progress.phase !in setOf(
-                UmaSessionUploadPhase.QUEUED,
-                UmaSessionUploadPhase.DOWNLOAD,
-                UmaSessionUploadPhase.RAW_BLOBS,
+        if (record.progress.phase in setOf(
+                UmaSessionUploadPhase.COMPLETE,
+                UmaSessionUploadPhase.CANCELLED,
+                UmaSessionUploadPhase.PAUSED,
             )
         ) return Result.success()
 
         return try {
             val filesClient = UmaStorageFilesClient()
-            val executor = UmaSessionRawBlobBatchExecutor(
-                downloader = UmaSessionResumeDownloader(filesClient, UmaBinaryRangeClient()),
-                filesClient = filesClient,
-                blobUploader = UmaGitBlobUploader(GitHubApiClient(applicationContext)),
-                taskStore = store,
-            )
-            val progress = executor.execute(
-                taskId = taskId,
-                rootDirectory = File(base, "sessions/${record.task.sessionId}"),
-            )
+            val github = GitHubApiClient(applicationContext)
+            val uploader = UmaGitBlobUploader(github)
+            val root = File(base, "sessions/${record.task.sessionId}")
+            val progress = when (record.progress.phase) {
+                UmaSessionUploadPhase.QUEUED,
+                UmaSessionUploadPhase.DOWNLOAD,
+                UmaSessionUploadPhase.RAW_BLOBS -> UmaSessionRawBlobBatchExecutor(
+                    downloader = UmaSessionResumeDownloader(filesClient, UmaBinaryRangeClient()),
+                    filesClient = filesClient,
+                    blobUploader = uploader,
+                    taskStore = store,
+                ).execute(taskId, root)
+
+                UmaSessionUploadPhase.DERIVE,
+                UmaSessionUploadPhase.DERIVED_BLOBS -> UmaSessionDerivedBlobBatchExecutor(
+                    filesClient = filesClient,
+                    blobUploader = uploader,
+                    taskStore = store,
+                ).execute(taskId, root)
+
+                UmaSessionUploadPhase.TREE,
+                UmaSessionUploadPhase.COMMIT -> UmaSessionUploadFinalizer(
+                    filesClient = filesClient,
+                    treeClient = UmaGitTreeClient(github),
+                    commitClient = UmaGitCommitClient(github),
+                    taskStore = store,
+                ).finalize(taskId, root)
+
+                UmaSessionUploadPhase.FAILED -> error("failed upload task must be explicitly resumed")
+                UmaSessionUploadPhase.COMPLETE,
+                UmaSessionUploadPhase.PAUSED,
+                UmaSessionUploadPhase.CANCELLED -> return Result.success()
+            }
             setProgress(progressData(progress))
-            if (progress.phase == UmaSessionUploadPhase.RAW_BLOBS) Result.retry() else Result.success()
+            if (progress.complete) Result.success() else Result.retry()
         } catch (failure: Throwable) {
             val message = failure.message ?: failure::class.java.name
             runCatching {
@@ -100,7 +118,11 @@ class UmaSessionUploadWorker(
             .putInt("raw_total_files", progress.rawTotalFiles)
             .putLong("raw_completed_bytes", progress.rawCompletedBytes)
             .putLong("raw_total_bytes", progress.rawTotalBytes)
+            .putInt("derived_completed_files", progress.derivedCompletedFiles)
+            .putInt("derived_total_files", progress.derivedTotalFiles)
             .putInt("next_cursor", progress.nextCursor)
+            .putString("tree_sha", progress.treeSha)
+            .putString("commit_sha", progress.commitSha)
             .build()
 
         private fun errorData(message: String) = Data.Builder().putString("error", message).build()
