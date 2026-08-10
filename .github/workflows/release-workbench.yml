@@ -41,17 +41,17 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
 
-      - name: Set version
-        run: |
-          sed -i "s/versionCode = .*/versionCode = ${{ inputs.version_code }}/" app/build.gradle.kts
-          sed -i "s/versionName = .*/versionName = \"${{ inputs.version_name }}\"/" app/build.gradle.kts
-          grep -E "versionCode|versionName" app/build.gradle.kts
-
       - name: Unit tests
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
+
+      - name: Set version
+        run: |
+          sed -i "s/versionCode = .*/versionCode = ${{ inputs.version_code }}/" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"${{ inputs.version_name }}\"/" app/build.gradle.kts
+          grep -E "versionCode|versionName" app/build.gradle.kts
 
       - name: Build Release APK
         run: ./gradlew --no-daemon --stacktrace assembleFdroidRelease
