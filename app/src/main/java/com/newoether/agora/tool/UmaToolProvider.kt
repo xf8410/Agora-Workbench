@@ -4,9 +4,11 @@ import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.api.ToolFunction
 import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
+import com.newoether.agora.uma.UmaApplicationContext
 import com.newoether.agora.uma.UmaProtocolCapture
 import com.newoether.agora.uma.UmaRuntimeState
 import com.newoether.agora.viewmodel.GenerationContext
+import com.newoether.agora.viewmodel.GitHubMutationConfirmation
 import java.net.HttpURLConnection
 import java.net.URLEncoder
 import java.net.URL
@@ -22,7 +24,11 @@ import kotlinx.serialization.json.put
 class UmaToolProvider : ToolProvider {
     private val json = Json { ignoreUnknownKeys = true }
     private val base = "http://127.0.0.1:18765"
-    private val sessionExportTools = UmaSessionExportToolProvider()
+    private val sessionExportTools by lazy {
+        UmaSessionExportToolProvider(UmaApplicationContext.require()).also { provider ->
+            provider.confirm = { _, summary -> GitHubMutationConfirmation.confirm(summary) }
+        }
+    }
     private val names = setOf(
         "uma_health", "uma_status", "uma_summary", "uma_get_snapshot", "uma_get_changes",
         "uma_event_choices", "uma_event_observations", "uma_hook_diagnostics",
