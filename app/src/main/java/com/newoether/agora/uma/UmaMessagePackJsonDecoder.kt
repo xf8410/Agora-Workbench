@@ -1,8 +1,9 @@
 package com.newoether.agora.uma
 
-import android.util.Base64
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -103,15 +104,18 @@ class UmaMessagePackJsonDecoder(
         }
     }
 
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun encodeBase64(bytes: ByteArray): String = Base64.Default.encode(bytes)
+
     private fun binary(bytes: ByteArray) = buildJsonObject {
-        put(MSGPACK_BINARY_BASE64, Base64.encodeToString(bytes, Base64.NO_WRAP))
+        put(MSGPACK_BINARY_BASE64, encodeBase64(bytes))
         put("byte_length", bytes.size)
     }
 
     private fun extension(type: Int, bytes: ByteArray) = buildJsonObject {
         put(MSGPACK_EXTENSION, buildJsonObject {
             put("type", type)
-            put("data_base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            put("data_base64", encodeBase64(bytes))
             put("byte_length", bytes.size)
         })
     }
