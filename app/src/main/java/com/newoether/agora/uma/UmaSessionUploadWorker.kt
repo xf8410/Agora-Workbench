@@ -14,7 +14,7 @@ import com.newoether.agora.github.GitHubApiClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/** Runs one bounded stage and reschedules the durable task until its single commit is complete. */
+/** Runs verified batches continuously; WorkManager retry is reserved for actual failures. */
 class UmaSessionUploadWorker(
     context: Context,
     params: WorkerParameters,
@@ -25,54 +25,58 @@ class UmaSessionUploadWorker(
 
         val base = File(applicationContext.cacheDir, "agora-uma")
         val store = UmaSessionUploadTaskStore(base)
-        val record = runCatching { store.read(taskId) }.getOrElse {
-            return Result.failure(errorData(it.message ?: "cannot read upload task"))
-        } ?: return Result.failure(errorData("upload task does not exist"))
-
-        if (record.progress.phase in setOf(
-                UmaSessionUploadPhase.COMPLETE,
-                UmaSessionUploadPhase.CANCELLED,
-                UmaSessionUploadPhase.PAUSED,
-            )
-        ) return Result.success()
+        val filesClient = UmaStorageFilesClient()
+        val github = GitHubApiClient(applicationContext)
+        val uploader = UmaGitBlobUploader(github)
 
         return try {
-            val filesClient = UmaStorageFilesClient()
-            val github = GitHubApiClient(applicationContext)
-            val uploader = UmaGitBlobUploader(github)
-            val root = File(base, "sessions/${record.task.sessionId}")
-            val progress = when (record.progress.phase) {
-                UmaSessionUploadPhase.QUEUED,
-                UmaSessionUploadPhase.DOWNLOAD,
-                UmaSessionUploadPhase.RAW_BLOBS -> UmaSessionRawBlobBatchExecutor(
-                    downloader = UmaSessionResumeDownloader(filesClient, UmaBinaryRangeClient()),
-                    filesClient = filesClient,
-                    blobUploader = uploader,
-                    taskStore = store,
-                ).execute(taskId, root)
+            while (true) {
+                val record = requireNotNull(store.read(taskId)) { "upload task does not exist" }
+                if (record.progress.phase in setOf(
+                        UmaSessionUploadPhase.COMPLETE,
+                        UmaSessionUploadPhase.CANCELLED,
+                        UmaSessionUploadPhase.PAUSED,
+                    )
+                ) return Result.success()
 
-                UmaSessionUploadPhase.DERIVE,
-                UmaSessionUploadPhase.DERIVED_BLOBS -> UmaSessionDerivedBlobBatchExecutor(
-                    filesClient = filesClient,
-                    blobUploader = uploader,
-                    taskStore = store,
-                ).execute(taskId, root)
+                val root = File(base, "sessions/${record.task.sessionId}")
+                val progress = when (record.progress.phase) {
+                    UmaSessionUploadPhase.QUEUED,
+                    UmaSessionUploadPhase.DOWNLOAD,
+                    UmaSessionUploadPhase.RAW_BLOBS -> UmaSessionRawBlobBatchExecutor(
+                        downloader = UmaSessionResumeDownloader(filesClient, UmaBinaryRangeClient()),
+                        filesClient = filesClient,
+                        blobUploader = uploader,
+                        taskStore = store,
+                    ).execute(taskId, root)
 
-                UmaSessionUploadPhase.TREE,
-                UmaSessionUploadPhase.COMMIT -> UmaSessionUploadFinalizer(
-                    filesClient = filesClient,
-                    treeClient = UmaGitTreeClient(github),
-                    commitClient = UmaGitCommitClient(github),
-                    taskStore = store,
-                ).finalize(taskId, root)
+                    UmaSessionUploadPhase.DERIVE,
+                    UmaSessionUploadPhase.DERIVED_BLOBS -> UmaSessionDerivedBlobBatchExecutor(
+                        filesClient = filesClient,
+                        blobUploader = uploader,
+                        taskStore = store,
+                    ).execute(taskId, root)
 
-                UmaSessionUploadPhase.FAILED -> error("failed upload task must be explicitly resumed")
-                UmaSessionUploadPhase.COMPLETE,
-                UmaSessionUploadPhase.PAUSED,
-                UmaSessionUploadPhase.CANCELLED -> return Result.success()
+                    UmaSessionUploadPhase.TREE,
+                    UmaSessionUploadPhase.COMMIT -> UmaSessionUploadFinalizer(
+                        filesClient = filesClient,
+                        treeClient = UmaGitTreeClient(github),
+                        commitClient = UmaGitCommitClient(github),
+                        taskStore = store,
+                    ).finalize(taskId, root)
+
+                    UmaSessionUploadPhase.FAILED -> error(
+                        "failed upload task must be explicitly resumed"
+                    )
+                    UmaSessionUploadPhase.COMPLETE,
+                    UmaSessionUploadPhase.PAUSED,
+                    UmaSessionUploadPhase.CANCELLED -> return Result.success()
+                }
+                setProgress(progressData(progress))
+                if (progress.complete) return Result.success()
+                // A successful bounded batch immediately enters the next batch. Do not return
+                // Result.retry(), because WorkManager backoff would delay every healthy batch.
             }
-            setProgress(progressData(progress))
-            if (progress.complete) Result.success() else Result.retry()
         } catch (failure: Throwable) {
             val message = failure.message ?: failure::class.java.name
             runCatching {
