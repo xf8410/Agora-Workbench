@@ -19,6 +19,7 @@ class AgoraApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashReporter.install(this)
+        com.newoether.agora.uma.UmaApplicationContext.install(this)
         // Arm scheduled task alarms for this process (idempotent; also re-armed after boot).
         container.automationScheduler.start()
     }
