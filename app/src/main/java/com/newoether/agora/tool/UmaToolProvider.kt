@@ -22,6 +22,7 @@ import kotlinx.serialization.json.put
 class UmaToolProvider : ToolProvider {
     private val json = Json { ignoreUnknownKeys = true }
     private val base = "http://127.0.0.1:18765"
+    private val sessionExportTools = UmaSessionExportToolProvider()
     private val names = setOf(
         "uma_health", "uma_status", "uma_summary", "uma_get_snapshot", "uma_get_changes",
         "uma_event_choices", "uma_event_observations", "uma_hook_diagnostics",
@@ -34,7 +35,7 @@ class UmaToolProvider : ToolProvider {
         fun string(description: String) = ToolProperty("string", description)
         fun integer(description: String) = ToolProperty("integer", description)
         fun bool(description: String) = ToolProperty("boolean", description)
-        return listOf(
+        val localTools = listOf(
             tool("uma_health", "Check the local hlpatch SO version and health.", emptyMap()),
             tool("uma_status", "Read the local hlpatch initialization/status snapshot.", emptyMap()),
             tool("uma_summary", "Read the current Uma training state from the local SO.", emptyMap()),
@@ -64,9 +65,11 @@ class UmaToolProvider : ToolProvider {
             tool("uma_find_method", "Search for an IL2CPP method name.", mapOf(
                 "method" to string("Method keyword, 1-500 characters.")), listOf("method")),
         )
+        return localTools + sessionExportTools.definitions(ctx)
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
+        if (sessionExportTools.handles(name)) return sessionExportTools.execute(name, arguments, ctx)
         if (name !in names) return toolError("Unknown Uma tool")
         if (name == "uma_get_snapshot") return UmaRuntimeState.snapshotJson()
         if (name == "uma_get_changes") return UmaRuntimeState.changesJson()
@@ -127,8 +130,6 @@ class UmaToolProvider : ToolProvider {
         require(input.length in 2..1000) { "path length must be 2-1000" }
         require(!input.startsWith("//") && "://" !in input) { "absolute/network URLs are not allowed" }
         require(input.none { it == '\r' || it == '\n' || it == '\u0000' }) { "path contains control characters" }
-        // Private fork: all hlpatch GET endpoints are allowed, including sniff,
-        // private-file, process-memory and credential-bearing routes.
         return input
     }
 
@@ -164,5 +165,5 @@ class UmaToolProvider : ToolProvider {
             parameters = ToolParameters(properties = properties, required = required)))
 
     private fun toolError(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
-    override fun handles(name: String): Boolean = name in names
+    override fun handles(name: String): Boolean = name in names || sessionExportTools.handles(name)
 }
