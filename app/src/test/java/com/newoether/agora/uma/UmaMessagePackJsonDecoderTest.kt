@@ -4,8 +4,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFailsWith
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -42,7 +42,7 @@ class UmaMessagePackJsonDecoderTest {
 
     @Test
     fun rejectsTrailingBytesWithExactOffset() {
-        val failure = assertFailsWith<UmaMessagePackDecodeException> {
+        val failure = assertThrows(UmaMessagePackDecodeException::class.java) {
             decoder.decode(byteArrayOf(0x01, 0x02))
         }
         assertEquals(1, failure.byteOffset)
@@ -61,6 +61,6 @@ class UmaMessagePackJsonDecoderTest {
     @Test
     fun onlyWorkbenchBranchesAreAccepted() {
         assertEquals("workbench/session", requireUmaWorkbenchBranch("workbench/session"))
-        assertFailsWith<IllegalArgumentException> { requireUmaWorkbenchBranch("main") }
+        assertThrows(IllegalArgumentException::class.java) { requireUmaWorkbenchBranch("main") }
     }
 }
