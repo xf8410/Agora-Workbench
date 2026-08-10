@@ -32,9 +32,20 @@ jobs:
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Unit tests
         run: |
-          set -euo pipefail
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test-console.log
+      - name: Preserve unit test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-diagnostics-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            unit-test-console.log
+            app/build/reports/tests/
+            app/build/test-results/
       - name: Build APK (verify main SHA compiles)
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - name: Verify APK output
