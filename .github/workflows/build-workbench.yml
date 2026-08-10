@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -31,12 +31,15 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Unit tests
+        id: unit_tests
+        continue-on-error: true
         run: |
           set -o pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test-console.log
-      - name: Preserve unit test diagnostics
-        if: always()
+      - name: Preserve unit test diagnostics artifact
+        if: steps.unit_tests.outcome == 'failure'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-diagnostics-${{ github.sha }}
@@ -46,6 +49,22 @@ jobs:
             unit-test-console.log
             app/build/reports/tests/
             app/build/test-results/
+      - name: Commit unit test diagnostics fallback
+        if: steps.unit_tests.outcome == 'failure' && github.event_name == 'pull_request'
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          cp unit-test-console.log ci-failure-summary.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ci-failure-summary.txt
+          git commit -m "保存单元测试原始诊断 [skip ci]"
+          git push origin "HEAD:${HEAD_BRANCH}"
+          exit 1
+      - name: Fail after preserved unit test diagnostics
+        if: steps.unit_tests.outcome == 'failure'
+        run: exit 1
       - name: Build APK (verify main SHA compiles)
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - name: Verify APK output
