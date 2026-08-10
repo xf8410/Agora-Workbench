@@ -41,12 +41,18 @@ class UmaSessionExportToolProvider(context: Context) : ToolProvider {
             ToolDefinition(function = ToolFunction(
                 name = "uma_session_download_raw",
                 description = "Download every indexed file in one SO session as unchanged bytes with checkpointed resume. Reinvoke after timeout to continue.",
-                parameters = ToolParameters(mapOf("session_id" to sessionId), listOf("session_id")),
+                parameters = ToolParameters(
+                    properties = mapOf("session_id" to sessionId),
+                    required = listOf("session_id"),
+                ),
             )),
             ToolDefinition(function = ToolFunction(
                 name = "uma_session_export_zip",
                 description = "Export every indexed file in one SO session to a ZIP while preserving relative paths, zero-byte files and unchanged bytes.",
-                parameters = ToolParameters(mapOf("session_id" to sessionId), listOf("session_id")),
+                parameters = ToolParameters(
+                    properties = mapOf("session_id" to sessionId),
+                    required = listOf("session_id"),
+                ),
             )),
             ToolDefinition(function = ToolFunction(
                 name = "uma_session_upload_github",
