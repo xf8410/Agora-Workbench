@@ -6,11 +6,11 @@ on:
       version_name:
         description: 'Version name'
         required: false
-        default: '1.4.7-workbench'
+        default: '1.4.8-workbench'
       version_code:
         description: 'Version code'
         required: false
-        default: '35'
+        default: '36'
 
 permissions:
   contents: write
