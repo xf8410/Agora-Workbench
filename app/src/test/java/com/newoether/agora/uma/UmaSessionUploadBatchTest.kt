@@ -31,6 +31,17 @@ class UmaSessionUploadBatchTest {
     }
 
     @Test
+    fun `bounded batch rejects cursors outside the ordered files`() {
+        val files = listOf("a", "b")
+        assertThrows(IllegalArgumentException::class.java) {
+            nextUmaUploadBatch(files, -1, UmaSessionUploadBatchLimits(1))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            nextUmaUploadBatch(files, 3, UmaSessionUploadBatchLimits(1))
+        }
+    }
+
+    @Test
     fun `task store persists progress and forbids argument replacement`() {
         val root = Files.createTempDirectory("uma-upload-task-test").toFile()
         try {
