@@ -50,7 +50,10 @@ class UmaSessionDerivedBlobBatchExecutor(
             val derived = generator.generate(task.sessionId, rootDirectory, indexed)
             val ordered = derived.files
                 .map { (path, file) -> validateUmaArchivePath(path) to file }
-                .sortedBy { it.first }
+                .sortedWith(
+                    compareBy<Pair<String, File>> { it.first.endsWith("/manifest.json") }
+                        .thenBy { it.first }
+                )
             require(ordered.isNotEmpty()) { "derived layer produced no files" }
             require(ordered.map { it.first }.toSet().size == ordered.size) {
                 "derived layer contains duplicate paths"
