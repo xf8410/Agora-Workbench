@@ -15,7 +15,7 @@ private data class UmaFinalizerDerivedBlobCheckpoint(
     val blobs: List<UmaSessionUploadedBlob> = emptyList(),
 )
 
-/** Creates one complete Tree and advances the existing workbench branch once, without force. */
+/** Creates one complete hierarchical Tree and advances the existing workbench branch once. */
 class UmaSessionUploadFinalizer(
     private val filesClient: UmaStorageFilesClient,
     private val treeClient: UmaGitTreeClient,
@@ -90,7 +90,7 @@ class UmaSessionUploadFinalizer(
             val treeSha = if (prior != null) {
                 prior.tree_sha
             } else {
-                val tree = treeClient.create(
+                val tree = treeClient.createHierarchical(
                     task.repository,
                     base.treeSha,
                     task.targetDirectory,
