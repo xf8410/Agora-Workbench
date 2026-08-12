@@ -60,9 +60,10 @@ data class UmaSessionDerivedJsonResult(
     val exchangeCount: Int,
 )
 
-/** Generates rebuildable JSON beside unchanged raw session files. */
+/** Generates rebuildable JSON and a human-readable TXT report beside unchanged raw session files. */
 class UmaSessionDerivedJsonGenerator(
     private val decoder: UmaMessagePackJsonDecoder = UmaMessagePackJsonDecoder(),
+    private val catalog: UmaSessionJsonCatalog = UmaSessionJsonCatalog(),
     private val json: Json = Json { prettyPrint = true; prettyPrintIndent = "  "; encodeDefaults = true },
 ) {
     fun generate(
@@ -77,6 +78,7 @@ class UmaSessionDerivedJsonGenerator(
         val decoded = mutableListOf<UmaDerivedDecodeRecord>()
         val errors = mutableListOf<UmaDerivedDecodeError>()
         val decodedBySource = mutableMapOf<String, String>()
+        val jsonRoles = mutableListOf<UmaSessionJsonRole>()
 
         indexedFiles.filter { it.relativePath.endsWith("/payload.bin") }.forEach { indexed ->
             val sourcePath = validateUmaArchivePath(indexed.relativePath)
@@ -92,6 +94,7 @@ class UmaSessionDerivedJsonGenerator(
                 outputs += derivedPath to target
                 decoded += UmaDerivedDecodeRecord(sourcePath, derivedPath, indexed.byteLength, result.consumedBytes)
                 decodedBySource[sourcePath] = derivedPath
+                jsonRoles += catalog.decoded(sourcePath, derivedPath, result.value)
             } catch (failure: Throwable) {
                 val offset = (failure as? UmaMessagePackDecodeException)?.byteOffset ?: -1
                 errors += UmaDerivedDecodeError(sourcePath, offset, failure.message ?: failure::class.java.name)
@@ -137,6 +140,11 @@ class UmaSessionDerivedJsonGenerator(
                 it.fileId, it.relativePath, it.contentType, it.byteLength, it.sha256, it.createdAtMs
             ) },
         )))
+
+        val completeRoles = (catalog.builtInFiles() + jsonRoles).sortedBy { it.json_path }
+        writeDerived(JSON_CATALOG_FILE, json.encodeToString(completeRoles))
+        writeDerived(TEXT_REPORT_FILE, catalog.renderText(sessionId, completeRoles))
+
         return UmaSessionDerivedJsonResult(outputs, decoded.size, errors.size, exchanges.size)
     }
 
@@ -161,5 +169,9 @@ class UmaSessionDerivedJsonGenerator(
         require(temporary.renameTo(target)) { "cannot commit derived file" }
     }
 
-    companion object { const val DERIVED_DIRECTORY = "derived" }
+    companion object {
+        const val DERIVED_DIRECTORY = "derived"
+        const val JSON_CATALOG_FILE = "json_catalog.json"
+        const val TEXT_REPORT_FILE = "json_catalog.txt"
+    }
 }
