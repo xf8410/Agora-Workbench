@@ -4,16 +4,7 @@ package com.newoether.agora.api
 sealed class GenerationError {
     data class Network(val statusCode: Int, val message: String) : GenerationError()
     data class Api(val code: String?, val type: String?, val message: String) : GenerationError()
-
-    /**
-     * The provider explicitly reported that the submitted prompt exceeded its context/token limit.
-     * This must never be inferred from HTTP 502 alone.
-     */
-    data class ContextWindow(
-        val statusCode: Int,
-        val providerMessage: String,
-    ) : GenerationError()
-
+    data class ContextWindow(val statusCode: Int, val providerMessage: String) : GenerationError()
     data class SseParse(val rawLine: String, val cause: String) : GenerationError()
     data class ToolExecution(val toolName: String, val arguments: String, val message: String) : GenerationError()
     data class Transcription(val imagePath: String, val message: String) : GenerationError()
@@ -49,6 +40,6 @@ sealed class GenerationError {
         is Configuration -> message
         is Unknown -> cause.localizedMessage ?: "An unexpected error occurred."
         Cancelled -> "Generation cancelled."
-        Timeout -> "Request timed out."
+        Timeout -> "The provider did not send stream data within 30 minutes. Local messages and completed tool progress were preserved; retry or continue from the latest checkpoint."
     }
 }
