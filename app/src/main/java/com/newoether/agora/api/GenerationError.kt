@@ -25,19 +25,21 @@ sealed class GenerationError {
     object Timeout : GenerationError()
 
     fun userMessage(): String = when (this) {
-        is Network -> when (statusCode) {
-            401 -> "Authentication failed. Please check your API key."
-            429 -> "Rate limit exceeded. Please wait and try again."
-            502 -> "Gateway error (502). The upstream service failed; this does not by itself mean the context is too long."
-            in 500..599 -> "Server error ($statusCode). The service may be temporarily unavailable."
-            else -> "Network error ($statusCode): $message"
-        }
-        is Api -> buildString {
-            if (code != null) append(code)
-            if (type != null) append(" [$type]")
-            if (isNotEmpty()) append(": ")
-            append(message)
-        }
+        is Network -> HttpGenerationErrorPolicy.contextErrorOrNull(statusCode, message)?.userMessage()
+            ?: when (statusCode) {
+                401 -> "Authentication failed. Please check your API key."
+                429 -> "Rate limit exceeded. Please wait and try again."
+                502 -> "Gateway error (502). The upstream service failed; this does not by itself mean the context is too long."
+                in 500..599 -> "Server error ($statusCode). The service may be temporarily unavailable."
+                else -> "Network error ($statusCode): $message"
+            }
+        is Api -> HttpGenerationErrorPolicy.contextErrorOrNull(code?.toIntOrNull() ?: 0, message)?.userMessage()
+            ?: buildString {
+                if (code != null) append(code)
+                if (type != null) append(" [$type]")
+                if (isNotEmpty()) append(": ")
+                append(message)
+            }
         is ContextWindow -> "The provider reported that this request exceeds its context or input-token limit. Reduce the configured context window or start a new conversation. Provider response: $providerMessage"
         is SseParse -> "Failed to parse server response."
         is ToolExecution -> "Tool '$toolName' failed: $message"
