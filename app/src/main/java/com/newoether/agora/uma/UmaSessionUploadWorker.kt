@@ -40,7 +40,7 @@ class UmaSessionUploadWorker(
             val filesClient = UmaStorageFilesClient()
             val github = GitHubApiClient(applicationContext)
             val uploader = UmaGitBlobUploader(github)
-            val root = File(base, "sessions/${record.task.sessionId}")
+            val root = umaSessionUploadWorkspace(base, record.task)
             val progress = when (record.progress.phase) {
                 UmaSessionUploadPhase.QUEUED,
                 UmaSessionUploadPhase.DOWNLOAD,
