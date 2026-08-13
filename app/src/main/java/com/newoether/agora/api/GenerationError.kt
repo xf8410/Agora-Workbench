@@ -40,6 +40,6 @@ sealed class GenerationError {
         is Configuration -> message
         is Unknown -> cause.localizedMessage ?: "An unexpected error occurred."
         Cancelled -> "Generation cancelled."
-        Timeout -> "The provider did not send stream data within 30 minutes. Local messages and completed tool progress were preserved; retry or continue from the latest checkpoint."
+        Timeout -> "A network connection, request write, or upstream transport operation timed out. There is no local elapsed read limit for ordinary or streaming responses. Local messages and completed tool progress were preserved; retry or continue from the latest checkpoint."
     }
 }
