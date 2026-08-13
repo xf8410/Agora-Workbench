@@ -176,6 +176,7 @@ class GenerationManager(
     }
     private val githubWatchToolProvider = com.newoether.agora.tool.GitHubWatchToolProvider(app)
     private val githubPullRequestToolProvider = com.newoether.agora.tool.GitHubPullRequestToolProvider(app)
+    private val githubRepositoryMutationToolProvider = com.newoether.agora.tool.GitHubRepositoryMutationToolProvider(app)
     private val githubCloneToolProvider = com.newoether.agora.tool.GitHubCloneToolProvider(app, sandboxFactory)
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
@@ -185,7 +186,7 @@ class GenerationManager(
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
         githubToolProvider, githubWatchToolProvider, githubPullRequestToolProvider,
-        githubCloneToolProvider, umaToolProvider, shellToolProvider
+        githubRepositoryMutationToolProvider, githubCloneToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
@@ -363,7 +364,7 @@ class GenerationManager(
         val currentPath = expanded.map {
             val segs = it.toolCallJson?.let { json -> try { Json.decodeFromString<List<MessageSegment>>(json) } catch (_: Exception) { null } }
             val toolCall = segs?.lastOrNull { s -> s.type == "tool" }?.let { s ->
-                ToolCallData(s.toolName ?: "", s.toolArgs ?: "{}", s.toolResult ?: "", s.toolCallId)
+                ToolCallData(s.toolName ?: "", s.toolArgs ?: "{}", s.toolResult ?: "", s.signature, s.toolCallId)
             }
             val meta = it.attachmentMeta?.let { json -> try { Json.decodeFromString<com.newoether.agora.model.AttachmentMeta>(json) } catch (_: Exception) { null } }
             val attachmentText = if (meta != null) {
