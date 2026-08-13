@@ -8,7 +8,6 @@ import com.newoether.agora.api.util.StreamingThinkTagParser
 private val BOLD_TITLE_REGEX = Regex("\\*\\*(.*?)\\*\\*")
 private val HEADING_TITLE_REGEX = Regex("(?m)^#+\\s*(.*)$")
 
-/** First bold (`**...**`) or markdown-heading line in a reasoning chunk, used as its title. */
 private fun extractThoughtTitle(text: String): String? =
     BOLD_TITLE_REGEX.find(text)?.groupValues?.get(1)
         ?: HEADING_TITLE_REGEX.find(text)?.groupValues?.get(1)
@@ -44,19 +43,26 @@ class OpenRouterProvider : BaseOpenAiProvider() {
         delta.reasoningDetails?.forEach { detail ->
             if (detail.type == "reasoning.text" || detail.type == "text") {
                 detail.text?.let {
-                    if (it.isNotEmpty()) {
+                    if (it.isNotEmpty() && config.thinkingEnabled) {
                         emit(StreamEvent.ThoughtChunk(it, extractThoughtTitle(it)))
                     }
                 }
             }
         }
         delta.reasoningContent?.let {
-            if (it.isNotEmpty()) {
+            if (it.isNotEmpty() && config.thinkingEnabled) {
                 emit(StreamEvent.ThoughtChunk(it, extractThoughtTitle(it)))
             }
         }
         delta.content?.let { content ->
-            if (content.isNotEmpty()) emit(StreamEvent.TextChunk(content))
+            if (content.isNotEmpty()) {
+                thinkParser.feed(
+                    content = content,
+                    thinkingEnabled = config.thinkingEnabled,
+                    onText = { emit(StreamEvent.TextChunk(it)) },
+                    onThought = { emit(StreamEvent.ThoughtChunk(it, extractThoughtTitle(it))) }
+                )
+            }
         }
     }
 }

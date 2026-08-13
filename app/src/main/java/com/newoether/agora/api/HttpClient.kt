@@ -11,11 +11,12 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSource
 
-/** Timeout policy is explicit so streaming generation is not constrained by ordinary HTTP reads. */
+/** Timeout policy is explicit so long-running requests are not cut off by an elapsed-time limit. */
 internal object HttpTimeoutPolicy {
     const val CONNECT_SECONDS = 45L
-    const val ORDINARY_READ_MINUTES = 5L
-    const val STREAM_READ_MINUTES = 30L
+    // OkHttp treats zero as no read timeout. Calls remain cancellable via Call.cancel().
+    const val ORDINARY_READ_MINUTES = 0L
+    const val STREAM_READ_MINUTES = 0L
     const val STREAM_WRITE_MINUTES = 5L
 }
 
@@ -142,17 +143,13 @@ object HttpClient {
         .proxySelector(proxySelector)
         .proxyAuthenticator(proxyAuthenticator)
 
-    /** Ordinary bounded requests such as model listing and image fetching. */
+    /** Ordinary requests have no elapsed read deadline and remain explicitly cancellable. */
     val client: OkHttpClient = baseBuilder()
         .readTimeout(HttpTimeoutPolicy.ORDINARY_READ_MINUTES, TimeUnit.MINUTES)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    /**
-     * Generation may spend many minutes processing a large prompt before its first SSE event.
-     * A dedicated client prevents the old five-minute ordinary read timeout from killing a valid
-     * reasoning request. Stop still cancels the Call immediately, so this does not make Stop slow.
-     */
+    /** Streaming generation has no elapsed read deadline and remains explicitly cancellable. */
     private val streamingClient: OkHttpClient = baseBuilder()
         .readTimeout(HttpTimeoutPolicy.STREAM_READ_MINUTES, TimeUnit.MINUTES)
         .writeTimeout(HttpTimeoutPolicy.STREAM_WRITE_MINUTES, TimeUnit.MINUTES)
