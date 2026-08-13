@@ -2,7 +2,6 @@ package com.newoether.agora.uma
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.Base64
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -103,7 +102,24 @@ class UmaMessagePackJsonDecoder(
         }
     }
 
-    private fun encodeBase64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+    /** Pure Kotlin RFC 4648 encoder: deterministic in local JVM tests and available below API 26. */
+    private fun encodeBase64(bytes: ByteArray): String {
+        if (bytes.isEmpty()) return ""
+        val out = StringBuilder(((bytes.size + 2) / 3) * 4)
+        var index = 0
+        while (index < bytes.size) {
+            val first = bytes[index++].toInt() and 0xff
+            val hasSecond = index < bytes.size
+            val second = if (hasSecond) bytes[index++].toInt() and 0xff else 0
+            val hasThird = index < bytes.size
+            val third = if (hasThird) bytes[index++].toInt() and 0xff else 0
+            out.append(BASE64_ALPHABET[first ushr 2])
+            out.append(BASE64_ALPHABET[((first and 0x03) shl 4) or (second ushr 4)])
+            out.append(if (hasSecond) BASE64_ALPHABET[((second and 0x0f) shl 2) or (third ushr 6)] else '=')
+            out.append(if (hasThird) BASE64_ALPHABET[third and 0x3f] else '=')
+        }
+        return out.toString()
+    }
 
     private fun binary(bytes: ByteArray) = buildJsonObject {
         put(MSGPACK_BINARY_BASE64, encodeBase64(bytes))
@@ -158,5 +174,6 @@ class UmaMessagePackJsonDecoder(
         const val MSGPACK_MAP = "\$msgpack_map"
         const val MSGPACK_BINARY_BASE64 = "\$msgpack_binary_base64"
         const val MSGPACK_EXTENSION = "\$msgpack_extension"
+        private const val BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
     }
 }
