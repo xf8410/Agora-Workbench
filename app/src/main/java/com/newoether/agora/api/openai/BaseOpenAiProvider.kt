@@ -1,7 +1,6 @@
 package com.newoether.agora.api.openai
 
 import com.newoether.agora.api.*
-
 import com.newoether.agora.util.DebugLog
 import com.newoether.agora.api.util.StreamingThinkTagParser
 import com.newoether.agora.api.util.convertToOpenAiMessages
@@ -23,329 +22,120 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 abstract class BaseOpenAiProvider : LlmProvider {
-
     protected val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
-
-    // -- Override points --
-
-    /**
-     * Modify the outgoing request before serialization (e.g. add reasoning_effort, plugins).
-     * The default implementation returns the request unchanged.
-     */
-    protected open fun customizeRequest(request: OpenAiChatRequest, config: ProviderConfig): OpenAiChatRequest = request
-
-    /**
-     * Extra HTTP headers to include in the POST to /chat/completions.
-     */
+    protected open fun customizeRequest(request: OpenAiChatRequest, config: ProviderConfig) = request
     protected open fun getExtraHeaders(config: ProviderConfig): Map<String, String> = emptyMap()
-
-    /**
-     * Transform the system prompt before it is sent. Default: pass-through.
-     */
     protected open fun transformSystemPrompt(prompt: String?): String? = prompt
-
-    /**
-     * Parse the delta from one SSE event and emit TextChunk / ThoughtChunk events.
-     * The base class handles tool_calls accumulation, finish_reason emission, and usage
-     * emission automatically.
-     *
-     * The default implementation covers the common OpenAI-compatible shape: a separate
-     * `reasoning_content` field (gated on [ProviderConfig.thinkingEnabled]) plus `content`.
-     * Providers with a different reasoning representation (e.g. OpenRouter's
-     * `reasoning_details`) override this.
-     */
-    protected open suspend fun parseDeltaContent(
-        delta: OpenAiDelta,
-        config: ProviderConfig,
-        thinkParser: StreamingThinkTagParser,
-        emit: suspend (StreamEvent) -> Unit
-    ) {
-        delta.reasoningContent?.let { reasoning ->
-            if (reasoning.isNotEmpty() && config.thinkingEnabled) {
-                emit(StreamEvent.ThoughtChunk(reasoning))
-            }
-        }
-        delta.content?.let { content ->
-            if (content.isNotEmpty()) emit(StreamEvent.TextChunk(content))
-        }
+    protected open suspend fun parseDeltaContent(delta: OpenAiDelta, config: ProviderConfig, thinkParser: StreamingThinkTagParser, emit: suspend (StreamEvent) -> Unit) {
+        delta.reasoningContent?.takeIf { it.isNotEmpty() && config.thinkingEnabled }?.let { emit(StreamEvent.ThoughtChunk(it)) }
+        delta.content?.takeIf { it.isNotEmpty() }?.let { emit(StreamEvent.TextChunk(it)) }
     }
+    protected open val retryableStatusCodes = setOf(429, 502, 503, 504)
+    protected open val retryMissingV1BaseUrl = false
+    protected open fun retryDelayMillis(statusCode: Int, attempt: Int) = 1000L * attempt
 
-    protected open val retryableStatusCodes: Set<Int> = setOf(429, 502, 503, 504)
-
-    protected open val retryMissingV1BaseUrl: Boolean = false
-
-    protected open fun retryDelayMillis(statusCode: Int, attempt: Int): Long = 1000L * attempt
-
-    // -- Template method --
-
-    override fun generateResponse(
-        messages: List<ChatMessage>,
-        config: ProviderConfig
-    ): Flow<StreamEvent> = flow {
+    override fun generateResponse(messages: List<ChatMessage>, config: ProviderConfig): Flow<StreamEvent> = flow {
         val baseUrl = config.baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
         val endpointUrls = endpointCandidates(baseUrl, "chat/completions")
-
-        val validatedMessages = prepareMessages(messages, config.maxContextWindow)
-
-        val apiMessages = convertToOpenAiMessages(
-            messages = validatedMessages,
-            systemPrompt = transformSystemPrompt(config.systemPrompt),
-            includeImages = config.includeImages
-        )
-
-        var request = OpenAiChatRequest(
-            model = config.modelId,
-            messages = apiMessages,
-            stream = true,
-            streamOptions = OpenAiStreamOptions(includeUsage = true),
-            tools = config.tools,
-            temperature = config.temperature,
-            maxTokens = config.maxTokens,
-            topP = config.topP,
-            frequencyPenalty = config.frequencyPenalty,
-            presencePenalty = config.presencePenalty
-        )
+        val apiMessages = convertToOpenAiMessages(prepareMessages(messages, config.maxContextWindow), transformSystemPrompt(config.systemPrompt), config.includeImages)
+        var request = OpenAiChatRequest(config.modelId, apiMessages, streamOptions = OpenAiStreamOptions(), tools = config.tools,
+            temperature = config.temperature, maxTokens = config.maxTokens, topP = config.topP,
+            frequencyPenalty = config.frequencyPenalty, presencePenalty = config.presencePenalty)
         request = customizeRequest(request, config)
-
-        val thinkParser = StreamingThinkTagParser()
-
+        val parser = StreamingThinkTagParser()
         try {
-            val requestBodyJson = json.encodeToString(OpenAiChatRequest.serializer(), request)
-            DebugLog.d("AgoraAPI", "[$name] REQ -> ${endpointUrls.first()} | model=${config.modelId} | msgs=${apiMessages.size} | tools=${config.tools?.size ?: 0}")
-
+            val body = json.encodeToString(OpenAiChatRequest.serializer(), request)
             val headers = mutableMapOf("Content-Type" to "application/json")
             if (config.apiKey.isNotBlank()) headers["Authorization"] = "Bearer ${config.apiKey}"
-            for ((key, value) in getExtraHeaders(config)) headers[key] = value
-
-            val maxAttempts = 3
+            headers.putAll(getExtraHeaders(config))
             var attempt = 0
             var finished = false
-
-            while (attempt < maxAttempts && !finished) {
+            while (attempt < 3 && !finished) {
                 attempt++
                 var endpointIndex = 0
-                var retryScheduled = false
-
-                while (endpointIndex < endpointUrls.size && !finished && !retryScheduled) {
-                    val endpointUrl = endpointUrls[endpointIndex]
-                    val handle = HttpClient.streamPost(endpointUrl, requestBodyJson, headers)
+                var retry = false
+                while (endpointIndex < endpointUrls.size && !finished && !retry) {
+                    val handle = HttpClient.streamPost(endpointUrls[endpointIndex], body, headers)
                     try {
                         if (handle.code == 200) {
-                            consumeSuccessfulStream(handle, config, thinkParser) { emit(it) }
+                            consumeSuccessfulStream(handle, config, parser) { emit(it) }
                             finished = true
                         } else {
-                            val errorRaw = handle.errorBody ?: "Unknown error"
-                            val hasV1Fallback = endpointIndex + 1 < endpointUrls.size
-                            if (hasV1Fallback) {
-                                DebugLog.w("AgoraAPI", "[$name] ${handle.code} at $endpointUrl, retrying with ${endpointUrls[endpointIndex + 1]}")
-                                endpointIndex++
-                                continue
-                            }
-
-                            DebugLog.e("AgoraAPI", "[$name] ERR ${handle.code} at $endpointUrl: $errorRaw")
-
-                            if (handle.code in retryableStatusCodes && attempt < maxAttempts) {
-                                val retryDelayMs = retryDelayMillis(handle.code, attempt)
-                                DebugLog.w("AgoraAPI", "[$name] Transient error ${handle.code} on attempt $attempt/$maxAttempts, retrying in ${retryDelayMs}ms...")
-                                emit(StreamEvent.Retrying(attempt, maxAttempts))
-                                delay(retryDelayMs)
-                                retryScheduled = true
-                            } else {
-                                emit(StreamEvent.Error(buildGenerationError(handle.code, errorRaw, endpointUrls)))
-                                finished = true
-                            }
+                            val raw = handle.errorBody ?: "Unknown error"
+                            if (endpointIndex + 1 < endpointUrls.size) { endpointIndex++; continue }
+                            if (handle.code in retryableStatusCodes && attempt < 3) {
+                                emit(StreamEvent.Retrying(attempt, 3)); delay(retryDelayMillis(handle.code, attempt)); retry = true
+                            } else { emit(StreamEvent.Error(buildGenerationError(handle.code, raw, endpointUrls))); finished = true }
                         }
-                    } finally {
-                        handle.close()
-                    }
+                    } finally { handle.close() }
                 }
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SocketTimeoutException) {
-            emit(StreamEvent.Error(GenerationError.Timeout))
-        } catch (e: ConnectException) {
-            emit(StreamEvent.Error(GenerationError.Network(statusCode = 0, message = e.localizedMessage ?: "Connection refused")))
-        } catch (e: UnknownHostException) {
-            emit(StreamEvent.Error(GenerationError.Network(statusCode = 0, message = e.localizedMessage ?: "Unknown host")))
-        } catch (e: Exception) {
-            if (currentCoroutineContext().isActive) {
-                emit(StreamEvent.Error(GenerationError.Unknown(e)))
-            }
-        }
+        } catch (e: CancellationException) { throw e }
+        catch (_: SocketTimeoutException) { emit(StreamEvent.Error(GenerationError.Timeout)) }
+        catch (e: ConnectException) { emit(StreamEvent.Error(GenerationError.Network(0, e.localizedMessage ?: "Connection refused"))) }
+        catch (e: UnknownHostException) { emit(StreamEvent.Error(GenerationError.Network(0, e.localizedMessage ?: "Unknown host"))) }
+        catch (e: Exception) { if (currentCoroutineContext().isActive) emit(StreamEvent.Error(GenerationError.Unknown(e))) }
     }.flowOn(Dispatchers.IO)
 
-    private suspend fun consumeSuccessfulStream(
-        handle: HttpClient.StreamHandle,
-        config: ProviderConfig,
-        thinkParser: StreamingThinkTagParser,
-        emit: suspend (StreamEvent) -> Unit
-    ) {
-        val pendingToolCalls = mutableMapOf<Int, PendingToolCall>()
-        // Accumulate answer content so that, if the server emits tool calls as content text rather
-        // than as structured delta.tool_calls (#33 path B), we can recover them at stream end.
-        val contentBuf = StringBuilder()
-        val emitAndAccumulate: suspend (StreamEvent) -> Unit = { event ->
-            if (event is StreamEvent.TextChunk) contentBuf.append(event.text)
-            emit(event)
-        }
-        var structuredToolCallsEmitted = false
-
+    private suspend fun consumeSuccessfulStream(handle: HttpClient.StreamHandle, config: ProviderConfig, thinkParser: StreamingThinkTagParser, emit: suspend (StreamEvent) -> Unit) {
+        val pending = mutableMapOf<Int, PendingToolCall>()
+        val content = StringBuilder()
+        var structured = false
         while (currentCoroutineContext().isActive) {
-            val line = try {
-                handle.readLine()
-            } catch (e: SocketTimeoutException) {
-                if (!currentCoroutineContext().isActive) break
-                continue
-            } ?: break
-
+            // A read timeout is terminal. The previous continue loop could display "Request timed
+            // out" indefinitely while never closing the request or finalizing the message.
+            val line = handle.readLine() ?: break
             if (!line.startsWith("data: ")) continue
-            val jsonStr = line.substring(6).trim()
-            if (jsonStr == "[DONE]") break
-
+            val raw = line.substring(6).trim()
+            if (raw == "[DONE]") break
             try {
-                val response = json.decodeFromString<OpenAiStreamResponse>(jsonStr)
+                val response = json.decodeFromString<OpenAiStreamResponse>(raw)
                 val choice = response.choices?.firstOrNull()
-
                 choice?.delta?.let { delta ->
-                    parseDeltaContent(delta, config, thinkParser, emitAndAccumulate)
-
+                    parseDeltaContent(delta, config, thinkParser) { event ->
+                        if (event is StreamEvent.TextChunk) content.append(event.text)
+                        emit(event)
+                    }
                     delta.toolCalls?.forEach { tc ->
-                        val existing = if (tc.id != null) pendingToolCalls.values.firstOrNull { it.id == tc.id } else null
-                        val pending = if (existing != null) existing else {
-                            val idx = tc.index ?: pendingToolCalls.size
-                            pendingToolCalls.getOrPut(idx) { PendingToolCall() }
-                        }
-                        if (tc.id != null) pending.id = tc.id
-                        tc.function?.name?.let { if (it.isNotEmpty()) pending.name = it }
-                        tc.function?.arguments?.let {
-                            pending.args.append(if (it is JsonPrimitive) it.content else it.toString())
-                        }
+                        val p = tc.id?.let { id -> pending.values.firstOrNull { it.id == id } }
+                            ?: pending.getOrPut(tc.index ?: pending.size) { PendingToolCall() }
+                        tc.id?.let { p.id = it }; tc.function?.name?.takeIf { it.isNotEmpty() }?.let { p.name = it }
+                        tc.function?.arguments?.let { p.args.append(if (it is JsonPrimitive) it.content else it.toString()) }
                     }
                 }
-
-                if (choice?.finishReason == "tool_calls" && pendingToolCalls.isNotEmpty()) {
-                    val calls = pendingToolCalls.values.filter { it.name.isNotEmpty() }.map {
-                        StreamEvent.ToolCallRequest(it.id, it.name, it.args.toString())
-                    }
-                    pendingToolCalls.clear()
-                    if (calls.size == 1) { structuredToolCallsEmitted = true; emit(calls.first()) }
-                    else if (calls.size > 1) { structuredToolCallsEmitted = true; emit(StreamEvent.ToolCallsRequest(calls)) }
+                if (choice?.finishReason == "tool_calls" && pending.isNotEmpty()) {
+                    val calls = pending.values.filter { it.name.isNotEmpty() }.map { StreamEvent.ToolCallRequest(it.id, it.name, it.args.toString()) }
+                    pending.clear(); structured = calls.isNotEmpty()
+                    if (calls.size == 1) emit(calls.first()) else if (calls.isNotEmpty()) emit(StreamEvent.ToolCallsRequest(calls))
                 }
-
-                response.usage?.let { usage ->
-                    emit(StreamEvent.UsageUpdate(usage.toTokenUsage()))
-                }
-            } catch (e: Exception) {
-                DebugLog.e("AgoraAPI", "Parse error: ${e.message}", e)
-            }
+                response.usage?.let { OpenAiUsageParser.parse(it) }?.let { emit(StreamEvent.UsageUpdate(it)) }
+            } catch (e: Exception) { DebugLog.e("AgoraAPI", "Parse error: ${e.message}", e) }
         }
-
-        thinkParser.flush(
-            onText = { emitAndAccumulate(StreamEvent.TextChunk(it)) },
-            onThought = { emitAndAccumulate(StreamEvent.ThoughtChunk(it)) }
-        )
-
-        // Fallback (#33 path B): some OpenAI-compatible servers (llama.cpp et al.) finish with
-        // finish_reason == "stop" and put the tool call in the content text instead of the
-        // structured delta.tool_calls field. If we never saw structured tool calls but tools were
-        // offered, parse them out of the accumulated content so the generation enters the
-        // tool-call phase instead of just printing the JSON as an answer. Brings these servers to
-        // parity with Ollama, which reads its structured tool_calls field directly.
-        if (!structuredToolCallsEmitted && !config.tools.isNullOrEmpty()) {
-            val parsed = ToolCallTextParser.parse(contentBuf.toString())
-            if (parsed.size == 1) {
-                emit(StreamEvent.ToolCallRequest(syntheticToolCallId(), parsed[0].name, parsed[0].arguments))
-            } else if (parsed.size > 1) {
-                emit(StreamEvent.ToolCallsRequest(parsed.map {
-                    StreamEvent.ToolCallRequest(syntheticToolCallId(), it.name, it.arguments)
-                }))
-            }
+        thinkParser.flush(onText = { emit(StreamEvent.TextChunk(it)) }, onThought = { emit(StreamEvent.ThoughtChunk(it)) })
+        if (!structured && !config.tools.isNullOrEmpty()) {
+            val parsed = ToolCallTextParser.parse(content.toString())
+            val calls = parsed.map { StreamEvent.ToolCallRequest("call_text_${java.util.UUID.randomUUID()}", it.name, it.arguments) }
+            if (calls.size == 1) emit(calls.first()) else if (calls.isNotEmpty()) emit(StreamEvent.ToolCallsRequest(calls))
         }
-
-        if (!currentCoroutineContext().isActive) {
-            throw CancellationException("Stream cancelled")
-        }
+        if (!currentCoroutineContext().isActive) throw CancellationException("Stream cancelled")
     }
 
     private fun endpointCandidates(baseUrl: String, path: String): List<String> {
-        val normalizedBaseUrl = baseUrl.trimEnd('/')
-        val cleanPath = path.trimStart('/')
-        val primary = "$normalizedBaseUrl/$cleanPath"
-        if (!retryMissingV1BaseUrl || normalizedBaseUrl.isBlank() ||
-            BaseUrlResolver.hasVersionSegment(normalizedBaseUrl)
-        ) {
-            return listOf(primary)
-        }
-        return listOf(primary, "$normalizedBaseUrl/v1/$cleanPath")
+        val b = baseUrl.trimEnd('/'); val primary = "$b/${path.trimStart('/')}"
+        return if (!retryMissingV1BaseUrl || b.isBlank() || BaseUrlResolver.hasVersionSegment(b)) listOf(primary) else listOf(primary, "$b/v1/${path.trimStart('/')}")
     }
-
-    /** Synthetic id for tool calls recovered from content text (#33 path B), where the server
-     *  provides no id. Unique per call so the result can still be paired back to the request. */
-    private fun syntheticToolCallId(): String =
-        "call_text_${java.util.UUID.randomUUID()}"
-
-    private fun buildGenerationError(
-        statusCode: Int,
-        errorRaw: String,
-        endpointUrls: List<String>
-    ): GenerationError {
-        val endpointHint = if (statusCode == 404 && endpointUrls.size > 1) {
-            "\nTried ${endpointUrls.joinToString(" and ")}. OpenAI-compatible servers often require a /v1 Base URL."
-        } else {
-            ""
-        }
-        return try {
-            val errorJson = json.decodeFromString<OpenAiErrorResponse>(errorRaw)
-            GenerationError.Api(
-                code = errorJson.error.code ?: statusCode.toString(),
-                type = errorJson.error.type,
-                message = errorJson.error.message + endpointHint
-            )
-        } catch (_: Exception) {
-            GenerationError.Network(statusCode = statusCode, message = errorRaw + endpointHint)
-        }
+    private fun buildGenerationError(code: Int, raw: String, urls: List<String>): GenerationError {
+        val hint = if (code == 404 && urls.size > 1) "\nTried ${urls.joinToString(" and ")}." else ""
+        return try { val e = json.decodeFromString<OpenAiErrorResponse>(raw).error; GenerationError.Api(e.code ?: code.toString(), e.type, e.message + hint) }
+        catch (_: Exception) { GenerationError.Network(code, raw + hint) }
     }
-
-    private fun authHeaders(apiKey: String): Map<String, String> =
-        if (apiKey.isBlank()) emptyMap() else mapOf("Authorization" to "Bearer $apiKey")
-
     override suspend fun fetchModels(apiKey: String, baseUrl: String?): List<String> = withContext(Dispatchers.IO) {
-        try {
-            val effectiveBaseUrl = baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
-            val endpointUrls = endpointCandidates(effectiveBaseUrl, "models")
-            val headers = authHeaders(apiKey)
-            var lastParseError: Exception? = null
-
-            for ((index, endpointUrl) in endpointUrls.withIndex()) {
-                val responseText = HttpClient.fetchModels(endpointUrl, headers)
-                if (responseText == null) {
-                    if (index < endpointUrls.lastIndex) {
-                        DebugLog.w("AgoraAPI", "Failed to fetch $name models from $endpointUrl; retrying ${endpointUrls[index + 1]}")
-                    }
-                    continue
-                }
-
-                try {
-                    return@withContext json.decodeFromString<OpenAiModelListResponse>(responseText)
-                        .data.map { it.id }.sorted()
-                } catch (e: Exception) {
-                    lastParseError = e
-                    if (index < endpointUrls.lastIndex) {
-                        DebugLog.w("AgoraAPI", "Failed to parse $name models from $endpointUrl; retrying ${endpointUrls[index + 1]}")
-                    }
-                }
-            }
-
-            if (lastParseError != null) {
-                DebugLog.e("AgoraAPI", "Failed to parse $name models", lastParseError)
-            } else {
-                DebugLog.e("AgoraAPI", "Failed to fetch $name models: empty response")
-            }
-            emptyList()
-        } catch (e: Exception) {
-            DebugLog.e("AgoraAPI", "Failed to fetch $name models", e)
-            emptyList()
+        val effective = baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
+        val headers = if (apiKey.isBlank()) emptyMap() else mapOf("Authorization" to "Bearer $apiKey")
+        for (url in endpointCandidates(effective, "models")) {
+            val text = HttpClient.fetchModels(url, headers) ?: continue
+            runCatching { json.decodeFromString<OpenAiModelListResponse>(text).data.map { it.id }.sorted() }.getOrNull()?.let { return@withContext it }
         }
+        emptyList()
     }
 }
