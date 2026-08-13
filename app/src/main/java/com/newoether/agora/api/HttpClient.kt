@@ -15,7 +15,8 @@ import okio.BufferedSource
 internal object HttpTimeoutPolicy {
     const val CONNECT_SECONDS = 45L
     const val ORDINARY_READ_MINUTES = 5L
-    const val STREAM_READ_MINUTES = 30L
+    // OkHttp treats zero as no timeout. Long-running reasoning remains user-cancellable via Call.cancel().
+    const val STREAM_READ_MINUTES = 0L
     const val STREAM_WRITE_MINUTES = 5L
 }
 
@@ -149,9 +150,9 @@ object HttpClient {
         .build()
 
     /**
-     * Generation may spend many minutes processing a large prompt before its first SSE event.
-     * A dedicated client prevents the old five-minute ordinary read timeout from killing a valid
-     * reasoning request. Stop still cancels the Call immediately, so this does not make Stop slow.
+     * Generation may spend an unbounded amount of time processing a large prompt before its first
+     * SSE event. Streaming therefore has no read deadline. Stop still cancels the Call immediately,
+     * so removing the hard timeout does not make user cancellation slow.
      */
     private val streamingClient: OkHttpClient = baseBuilder()
         .readTimeout(HttpTimeoutPolicy.STREAM_READ_MINUTES, TimeUnit.MINUTES)
