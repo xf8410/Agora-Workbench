@@ -78,7 +78,7 @@ class ConversationGenerationState(val conversationId: String) {
 
 data class QueuedSend(val id: String, val text: String, val modelId: String, val attachments: List<SelectedAttachment>, val createdAt: Long = System.currentTimeMillis())
 
-class StreamScope(val conversationId: String) {
+class StreamScope(val conversationId: String = "") {
     private val handles = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<com.newoether.agora.api.HttpClient.StreamHandle, Boolean>())
     fun register(handle: com.newoether.agora.api.HttpClient.StreamHandle) { handles.add(handle) }
     fun unregister(handle: com.newoether.agora.api.HttpClient.StreamHandle) { handles.remove(handle) }
