@@ -36,6 +36,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
 
     override fun generateResponse(messages: List<ChatMessage>, config: ProviderConfig): Flow<StreamEvent> = flow {
         val baseUrl = config.baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
+        val providerId = SessionUsageRuntime.stableProviderId(name, if (this@BaseOpenAiProvider is CustomOpenAiProvider) baseUrl else null)
         val endpointUrls = endpointCandidates(baseUrl, "chat/completions")
         val apiMessages = convertToOpenAiMessages(prepareMessages(messages, config.maxContextWindow), transformSystemPrompt(config.systemPrompt), config.includeImages)
         var request = OpenAiChatRequest(config.modelId, apiMessages, streamOptions = OpenAiStreamOptions(), tools = config.tools,
@@ -48,18 +49,14 @@ abstract class BaseOpenAiProvider : LlmProvider {
             val headers = mutableMapOf("Content-Type" to "application/json")
             if (config.apiKey.isNotBlank()) headers["Authorization"] = "Bearer ${config.apiKey}"
             headers.putAll(getExtraHeaders(config))
-            var attempt = 0
-            var finished = false
+            var attempt = 0; var finished = false
             while (attempt < 3 && !finished) {
-                attempt++
-                var endpointIndex = 0
-                var retry = false
+                attempt++; var endpointIndex = 0; var retry = false
                 while (endpointIndex < endpointUrls.size && !finished && !retry) {
                     val handle = HttpClient.streamPost(endpointUrls[endpointIndex], body, headers)
                     try {
                         if (handle.code == 200) {
-                            consumeSuccessfulStream(handle, config, parser) { emit(it) }
-                            finished = true
+                            consumeSuccessfulStream(handle, config, parser, providerId) { emit(it) }; finished = true
                         } else {
                             val raw = handle.errorBody ?: "Unknown error"
                             if (endpointIndex + 1 < endpointUrls.size) { endpointIndex++; continue }
@@ -77,65 +74,43 @@ abstract class BaseOpenAiProvider : LlmProvider {
         catch (e: Exception) { if (currentCoroutineContext().isActive) emit(StreamEvent.Error(GenerationError.Unknown(e))) }
     }.flowOn(Dispatchers.IO)
 
-    private suspend fun consumeSuccessfulStream(handle: HttpClient.StreamHandle, config: ProviderConfig, thinkParser: StreamingThinkTagParser, emit: suspend (StreamEvent) -> Unit) {
-        val pending = mutableMapOf<Int, PendingToolCall>()
-        val content = StringBuilder()
-        var structured = false
+    private suspend fun consumeSuccessfulStream(handle: HttpClient.StreamHandle, config: ProviderConfig, thinkParser: StreamingThinkTagParser, providerId: String, emit: suspend (StreamEvent) -> Unit) {
+        val pending = mutableMapOf<Int, PendingToolCall>(); val content = StringBuilder(); var structured = false
+        var requestId = "usage_${java.util.UUID.randomUUID()}"
         while (currentCoroutineContext().isActive) {
-            // A read timeout is terminal. The previous continue loop could display "Request timed
-            // out" indefinitely while never closing the request or finalizing the message.
             val line = handle.readLine() ?: break
             if (!line.startsWith("data: ")) continue
-            val raw = line.substring(6).trim()
-            if (raw == "[DONE]") break
+            val raw = line.substring(6).trim(); if (raw == "[DONE]") break
             try {
                 val response = json.decodeFromString<OpenAiStreamResponse>(raw)
+                response.id?.takeIf { it.isNotBlank() }?.let { requestId = it }
                 val choice = response.choices?.firstOrNull()
                 choice?.delta?.let { delta ->
-                    parseDeltaContent(delta, config, thinkParser) { event ->
-                        if (event is StreamEvent.TextChunk) content.append(event.text)
-                        emit(event)
-                    }
+                    parseDeltaContent(delta, config, thinkParser) { event -> if (event is StreamEvent.TextChunk) content.append(event.text); emit(event) }
                     delta.toolCalls?.forEach { tc ->
-                        val p = tc.id?.let { id -> pending.values.firstOrNull { it.id == id } }
-                            ?: pending.getOrPut(tc.index ?: pending.size) { PendingToolCall() }
+                        val p = tc.id?.let { id -> pending.values.firstOrNull { it.id == id } } ?: pending.getOrPut(tc.index ?: pending.size) { PendingToolCall() }
                         tc.id?.let { p.id = it }; tc.function?.name?.takeIf { it.isNotEmpty() }?.let { p.name = it }
                         tc.function?.arguments?.let { p.args.append(if (it is JsonPrimitive) it.content else it.toString()) }
                     }
                 }
                 if (choice?.finishReason == "tool_calls" && pending.isNotEmpty()) {
                     val calls = pending.values.filter { it.name.isNotEmpty() }.map { StreamEvent.ToolCallRequest(it.id, it.name, it.args.toString()) }
-                    pending.clear(); structured = calls.isNotEmpty()
-                    if (calls.size == 1) emit(calls.first()) else if (calls.isNotEmpty()) emit(StreamEvent.ToolCallsRequest(calls))
+                    pending.clear(); structured = calls.isNotEmpty(); if (calls.size == 1) emit(calls.first()) else if (calls.isNotEmpty()) emit(StreamEvent.ToolCallsRequest(calls))
                 }
-                response.usage?.let { OpenAiUsageParser.parse(it) }?.let { emit(StreamEvent.UsageUpdate(it)) }
+                response.usage?.let { OpenAiUsageParser.parse(it) }?.let { usage ->
+                    SessionUsageRuntime.record(requestId, providerId, name, config.modelId, usage)
+                    emit(StreamEvent.UsageUpdate(usage))
+                }
             } catch (e: Exception) { DebugLog.e("AgoraAPI", "Parse error: ${e.message}", e) }
         }
         thinkParser.flush(onText = { emit(StreamEvent.TextChunk(it)) }, onThought = { emit(StreamEvent.ThoughtChunk(it)) })
         if (!structured && !config.tools.isNullOrEmpty()) {
-            val parsed = ToolCallTextParser.parse(content.toString())
-            val calls = parsed.map { StreamEvent.ToolCallRequest("call_text_${java.util.UUID.randomUUID()}", it.name, it.arguments) }
+            val calls = ToolCallTextParser.parse(content.toString()).map { StreamEvent.ToolCallRequest("call_text_${java.util.UUID.randomUUID()}", it.name, it.arguments) }
             if (calls.size == 1) emit(calls.first()) else if (calls.isNotEmpty()) emit(StreamEvent.ToolCallsRequest(calls))
         }
         if (!currentCoroutineContext().isActive) throw CancellationException("Stream cancelled")
     }
-
-    private fun endpointCandidates(baseUrl: String, path: String): List<String> {
-        val b = baseUrl.trimEnd('/'); val primary = "$b/${path.trimStart('/')}"
-        return if (!retryMissingV1BaseUrl || b.isBlank() || BaseUrlResolver.hasVersionSegment(b)) listOf(primary) else listOf(primary, "$b/v1/${path.trimStart('/')}")
-    }
-    private fun buildGenerationError(code: Int, raw: String, urls: List<String>): GenerationError {
-        val hint = if (code == 404 && urls.size > 1) "\nTried ${urls.joinToString(" and ")}." else ""
-        return try { val e = json.decodeFromString<OpenAiErrorResponse>(raw).error; GenerationError.Api(e.code ?: code.toString(), e.type, e.message + hint) }
-        catch (_: Exception) { GenerationError.Network(code, raw + hint) }
-    }
-    override suspend fun fetchModels(apiKey: String, baseUrl: String?): List<String> = withContext(Dispatchers.IO) {
-        val effective = baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
-        val headers = if (apiKey.isBlank()) emptyMap() else mapOf("Authorization" to "Bearer $apiKey")
-        for (url in endpointCandidates(effective, "models")) {
-            val text = HttpClient.fetchModels(url, headers) ?: continue
-            runCatching { json.decodeFromString<OpenAiModelListResponse>(text).data.map { it.id }.sorted() }.getOrNull()?.let { return@withContext it }
-        }
-        emptyList()
-    }
+    private fun endpointCandidates(baseUrl: String, path: String): List<String> { val b = baseUrl.trimEnd('/'); val p = "$b/${path.trimStart('/')}"; return if (!retryMissingV1BaseUrl || b.isBlank() || BaseUrlResolver.hasVersionSegment(b)) listOf(p) else listOf(p, "$b/v1/${path.trimStart('/')}") }
+    private fun buildGenerationError(code: Int, raw: String, urls: List<String>): GenerationError { val hint = if (code == 404 && urls.size > 1) "\nTried ${urls.joinToString(" and ")}." else ""; return try { val e = json.decodeFromString<OpenAiErrorResponse>(raw).error; GenerationError.Api(e.code ?: code.toString(), e.type, e.message + hint) } catch (_: Exception) { GenerationError.Network(code, raw + hint) } }
+    override suspend fun fetchModels(apiKey: String, baseUrl: String?): List<String> = withContext(Dispatchers.IO) { val effective = baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl; val headers = if (apiKey.isBlank()) emptyMap() else mapOf("Authorization" to "Bearer $apiKey"); for (url in endpointCandidates(effective, "models")) { val text = HttpClient.fetchModels(url, headers) ?: continue; runCatching { json.decodeFromString<OpenAiModelListResponse>(text).data.map { it.id }.sorted() }.getOrNull()?.let { return@withContext it } }; emptyList() }
 }
