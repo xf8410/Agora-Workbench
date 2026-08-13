@@ -22,20 +22,20 @@ Daemon will be stopped at the end of the build
 > Task :app:packageFdroidDebugResources
 > Task :app:processFdroidDebugNavigationResources
 > Task :app:parseFdroidDebugLocalResources
-> Task :app:generateFdroidDebugRFile
 > Task :app:javaPreCompileFdroidDebug
-> Task :app:checkFdroidDebugAarMetadata
+> Task :app:generateFdroidDebugRFile
 > Task :app:mapFdroidDebugSourceSetPaths
+> Task :app:checkFdroidDebugAarMetadata
 > Task :app:compileFdroidDebugNavigationResources
-> Task :app:mergeFdroidDebugResources
 > Task :app:createFdroidDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksFdroidDebug
 > Task :app:processFdroidDebugMainManifest
 > Task :app:processFdroidDebugManifest
-> Task :app:processFdroidDebugManifestForPackage
-> Task :app:processFdroidDebugResources
 > Task :app:preFdroidDebugUnitTestBuild UP-TO-DATE
 > Task :app:javaPreCompileFdroidDebugUnitTest
+> Task :app:processFdroidDebugManifestForPackage
+> Task :app:mergeFdroidDebugResources
+> Task :app:processFdroidDebugResources
 > Task :app:kspFdroidDebugKotlin
 > Task :app:compileFdroidDebugKotlin
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt:404:41 The corresponding parameter in the supertype 'SandboxManager' is named 'command'. This may cause problems when calling this function with named arguments.
@@ -54,12 +54,12 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:102:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:574:33 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/DuckDuckGoScraper.kt:205:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:161:58 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:163:32 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:239:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:241:81 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:253:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:264:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:170:58 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:172:32 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:224:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:226:93 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:237:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:246:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:189:61 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:195:52 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:217:76 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
@@ -123,11 +123,11 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt:674:47 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
 
 > Task :app:compileFdroidDebugJavaWithJavac NO-SOURCE
+> Task :app:processFdroidDebugJavaRes
 > Task :app:bundleFdroidDebugClassesToCompileJar
+> Task :app:kspFdroidDebugUnitTestKotlin
 > Task :app:transformFdroidDebugClassesWithAsm
 > Task :app:bundleFdroidDebugClassesToRuntimeJar
-> Task :app:processFdroidDebugJavaRes
-> Task :app:kspFdroidDebugUnitTestKotlin
 
 > Task :app:compileFdroidDebugUnitTestKotlin
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/automation/ConversationExecutionCoordinatorTest.kt:33:9 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
@@ -140,14 +140,17 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/co
 
 > Task :app:compileFdroidDebugUnitTestJavaWithJavac NO-SOURCE
 > Task :app:processFdroidDebugUnitTestJavaRes
+
+> Task :app:testFdroidDebugUnitTest
+
+GenerationErrorTest > Timeout userMessage FAILED
+    org.junit.ComparisonFailure at GenerationErrorTest.kt:105
+
 OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
 
 > Task :app:testFdroidDebugUnitTest
 
-UmaMessagePackJsonDecoderTest > decodesNestedStringMapArrayBinaryAndExtension FAILED
-    java.lang.RuntimeException at UmaMessagePackJsonDecoderTest.kt:23
-
-257 tests completed, 1 failed
+280 tests completed, 1 failed
 
 > Task :app:testFdroidDebugUnitTest FAILED
 
@@ -302,5 +305,5 @@ Caused by: org.gradle.api.internal.exceptions.MarkedVerificationException: There
 	... 30 more
 
 
-BUILD FAILED in 2m 46s
+BUILD FAILED in 2m 8s
 31 actionable tasks: 31 executed

@@ -101,7 +101,10 @@ class GenerationErrorTest {
     }
 
     @Test
-    fun `Timeout userMessage`() {
-        assertEquals("Request timed out.", GenerationError.Timeout.userMessage())
+    fun `Timeout userMessage explains bounded stream wait and recovery`() {
+        val msg = GenerationError.Timeout.userMessage()
+        assertTrue(msg.contains("30 minutes"))
+        assertTrue(msg.contains("completed tool progress were preserved"))
+        assertTrue(msg.contains("latest checkpoint"))
     }
 }
