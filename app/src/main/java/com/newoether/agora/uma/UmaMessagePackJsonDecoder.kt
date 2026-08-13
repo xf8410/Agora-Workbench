@@ -2,8 +2,7 @@ package com.newoether.agora.uma
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
+import java.util.Base64
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -104,8 +103,7 @@ class UmaMessagePackJsonDecoder(
         }
     }
 
-    @OptIn(ExperimentalEncodingApi::class)
-    private fun encodeBase64(bytes: ByteArray): String = Base64.Default.encode(bytes)
+    private fun encodeBase64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
 
     private fun binary(bytes: ByteArray) = buildJsonObject {
         put(MSGPACK_BINARY_BASE64, encodeBase64(bytes))
