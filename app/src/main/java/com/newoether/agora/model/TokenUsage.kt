@@ -1,6 +1,7 @@
 package com.newoether.agora.model
 
 /** Whether the provider supplied an input-cache breakdown for this request. */
+@kotlinx.serialization.Serializable
 enum class CacheDetailsStatus {
     PROVIDED,
     NOT_PROVIDED,
@@ -8,9 +9,7 @@ enum class CacheDetailsStatus {
 
 /**
  * Provider-neutral token usage for one model request.
- *
- * Nullable fields mean "the provider did not supply this value". They must not be
- * converted to zero, because zero usage and unavailable usage are different facts.
+ * Nullable fields mean "the provider did not supply this value" and must not become zero.
  */
 data class TokenUsage(
     val inputTokensTotal: Int? = null,
@@ -21,6 +20,8 @@ data class TokenUsage(
     val cacheCreationTokens: Int? = null,
     val totalTokens: Int? = null,
     val cacheDetailsStatus: CacheDetailsStatus = CacheDetailsStatus.NOT_PROVIDED,
+    val origin: UsageOrigin = UsageOrigin.PROVIDER_REPORTED,
+    val rawUsageJson: String? = null,
 ) {
     init {
         require(inputTokensTotal == null || inputTokensTotal >= 0)
@@ -35,22 +36,15 @@ data class TokenUsage(
             (inputTokensCached == null && cacheReadTokens == null && cacheCreationTokens == null))
     }
 
-    /** Uncached input is knowable only when both total input and cached input are supplied. */
     val inputTokensUncached: Int?
-        get() = if (inputTokensTotal != null && inputTokensCached != null) {
-            inputTokensTotal - inputTokensCached
-        } else null
+        get() = if (inputTokensTotal != null && inputTokensCached != null) inputTokensTotal - inputTokensCached else null
 
-    /** Cache hit ratio is unavailable when the provider omitted cache details or input is zero. */
     val cacheHitRatio: Double?
         get() = if (cacheDetailsStatus == CacheDetailsStatus.PROVIDED &&
             inputTokensTotal != null && inputTokensCached != null && inputTokensTotal > 0
-        ) {
-            inputTokensCached.toDouble() / inputTokensTotal.toDouble()
-        } else null
+        ) inputTokensCached.toDouble() / inputTokensTotal.toDouble() else null
 
     companion object {
-        /** Compatibility shape for providers that currently expose only a total and thoughts count. */
         fun fromTotalOnly(totalTokens: Int, thoughtsTokens: Int = 0): TokenUsage = TokenUsage(
             totalTokens = totalTokens.takeIf { it >= 0 },
             thoughtsTokens = thoughtsTokens.takeIf { it >= 0 },
