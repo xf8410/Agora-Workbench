@@ -70,7 +70,7 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
             }))
             SettingsGroup(title = "数据范围", items = listOf({
                 SettingsItem(headlineContent={Text("完整通信数据交给模型")},
-                    supportingContent={Text("协议观测返回完整的 path、header、cookie、token、payload 和 hex，无脱敏。本地采集容量由 hlpatch 单独管理。")})
+                    supportingContent={Text("协议观测返回完整的 path、header、cookie、token、payload 和 hex。本地采集容量由 hlpatch 单独管理。")})
             }))
         }
     }
