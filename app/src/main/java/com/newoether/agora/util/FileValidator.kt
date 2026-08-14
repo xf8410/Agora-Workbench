@@ -3,6 +3,7 @@ package com.newoether.agora.util
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import java.util.Locale
 
 object FileValidator {
     enum class Error {
@@ -16,41 +17,51 @@ object FileValidator {
         "application/json",
         "application/xml",
         "application/yaml",
-        "application/pdf"
+        "application/pdf",
+        "application/zip",
+        "application/octet-stream",
+        "application/x-zip-compressed",
+        "binary/octet-stream"
     )
     private const val MAX_SIZE = 20L * 1024 * 1024
 
     data class Result(val valid: Boolean, val error: Error? = null, val mimeType: String? = null)
 
     fun validate(context: Context, uri: Uri): Result {
-        val mimeType = try {
+        val reportedMime = try {
             context.contentResolver.getType(uri)
         } catch (_: Exception) { null }
+        val fileName = resolveFileName(context, uri)
+        val extension = fileName?.substringAfterLast('.', "")?.lowercase(Locale.ROOT)
 
-        if (mimeType == null)
-            return Result(false, Error.UNKNOWN_TYPE, null)
+        // Android document providers frequently report ZIP/BIN files as null or as a
+        // provider-specific binary MIME. Use the filename as a narrowly-scoped fallback;
+        // do not turn every unknown file into an accepted attachment.
+        val extensionMime = when (extension) {
+            "zip" => "application/zip"
+            "bin" => "application/octet-stream"
+            else -> null
+        }
+        val mimeType = reportedMime ?: extensionMime
+        val allowedByMime = mimeType != null && (
+            MIME_WHITELIST.any { mimeType.startsWith(it) } || mimeType in MIME_WHITELIST
+        )
+        val allowedByExtension = extensionMime != null
 
-        val allowed = MIME_WHITELIST.any { mimeType.startsWith(it) } ||
-                      mimeType in MIME_WHITELIST
-        if (!allowed)
-            return Result(false, Error.UNSUPPORTED_TYPE, mimeType)
-
-        val fileSize = try {
-            val cursor = context.contentResolver.query(
-                uri, arrayOf(OpenableColumns.SIZE), null, null, null
+        if (!allowedByMime && !allowedByExtension) {
+            return Result(
+                false,
+                if (mimeType == null) Error.UNKNOWN_TYPE else Error.UNSUPPORTED_TYPE,
+                mimeType
             )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val idx = it.getColumnIndex(OpenableColumns.SIZE)
-                    if (idx >= 0) it.getLong(idx) else null
-                } else null
-            }
-        } catch (_: Exception) { null }
+        }
 
-        if (fileSize != null && fileSize > MAX_SIZE && mimeType != "application/pdf")
+        val fileSize = resolveFileSize(context, uri)
+        if (fileSize != null && fileSize > MAX_SIZE && mimeType != "application/pdf") {
             return Result(false, Error.TOO_LARGE, mimeType)
+        }
 
-        return Result(true, mimeType = mimeType)
+        return Result(true, mimeType = mimeType ?: extensionMime)
     }
 
     fun resolveMimeType(context: Context, uriString: String): String? {
