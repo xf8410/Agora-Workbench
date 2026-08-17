@@ -100,7 +100,7 @@ class UmaSessionGitHubPublisher(
         if (prior != null) require(base.headCommitSha == prior.expected_head_sha) {
             "branch head changed before tree creation"
         }
-        val tree = treeClient.create(repository, base.treeSha, safeTarget, allBlobs)
+        val tree = treeClient.createBatched(repository, base.treeSha, safeTarget, allBlobs)
         require(tree.entryCount == allBlobs.size) { "Git tree entry count mismatch" }
         writeCheckpoint(checkpointFile, UmaSessionPublishCheckpoint(
             sessionId, repository, branch, safeTarget, base.headCommitSha, tree.treeSha,
