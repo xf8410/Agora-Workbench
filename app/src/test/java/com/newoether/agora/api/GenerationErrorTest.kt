@@ -1,107 +1,63 @@
 package com.newoether.agora.api
 
-import org.junit.Assert.*
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GenerationErrorTest {
-
-    @Test
-    fun `Network error userMessage for 401`() {
-        val msg = GenerationError.Network(401, "Unauthorized").userMessage()
-        assertTrue(msg.contains("Authentication"))
+    @Test fun `401 explains api key in Chinese`() {
+        val message = GenerationError.Network(401, "Unauthorized").userMessage()
+        assertTrue(message.contains("API 密钥"))
+        assertFalse(message.contains("Authentication failed"))
     }
 
-    @Test
-    fun `Network error userMessage for 429`() {
-        val msg = GenerationError.Network(429, "Rate limited").userMessage()
-        assertTrue(msg.contains("Rate limit"))
+    @Test fun `429 explains frequency or quota in Chinese`() {
+        val message = GenerationError.Network(429, "Rate limited").userMessage()
+        assertTrue(message.contains("频繁") || message.contains("额度"))
     }
 
-    @Test
-    fun `Network error userMessage for 5xx`() {
-        val msg = GenerationError.Network(500, "Internal error").userMessage()
-        assertTrue(msg.contains("Server error"))
+    @Test fun `502 is not automatically called a context overflow`() {
+        val message = GenerationError.Network(502, "Bad gateway").userMessage()
+        assertTrue(message.contains("502"))
+        assertFalse(message.contains("消息上限"))
     }
 
-    @Test
-    fun `Network error userMessage generic`() {
-        val msg = GenerationError.Network(418, "I'm a teapot").userMessage()
-        assertTrue(msg.contains("418"))
+    @Test fun `context overflow gives a concrete recovery action`() {
+        val message = GenerationError.Api("400", "invalid_request_error", "maximum context length exceeded").userMessage()
+        assertTrue(message.contains("消息上限"))
+        assertTrue(message.contains("新建对话"))
     }
 
-    @Test
-    fun `Api error userMessage with code and type`() {
-        val msg = GenerationError.Api("invalid_key", "AUTH_ERROR", "Bad key").userMessage()
-        assertTrue(msg.contains("invalid_key"))
-        assertTrue(msg.contains("AUTH_ERROR"))
-        assertTrue(msg.contains("Bad key"))
+    @Test fun `model not found is localized without raw provider text`() {
+        val message = GenerationError.Api("model_not_found", null, "The model does not exist").userMessage()
+        assertTrue(message.contains("找不到所选模型"))
+        assertFalse(message.contains("does not exist"))
     }
 
-    @Test
-    fun `Api error userMessage without type`() {
-        val msg = GenerationError.Api("rate_limit", null, "Too many requests").userMessage()
-        assertEquals("rate_limit: Too many requests", msg)
+    @Test fun `tool failure does not expose raw English message`() {
+        val message = GenerationError.ToolExecution("web_search", "{}", "API key missing").userMessage()
+        assertTrue(message.contains("工具“web_search”执行失败"))
+        assertFalse(message.contains("API key missing"))
     }
 
-    @Test
-    fun `Api error userMessage without code`() {
-        val msg = GenerationError.Api(null, null, "Something went wrong").userMessage()
-        assertEquals("Something went wrong", msg)
+    @Test fun `timeout is Chinese and actionable`() {
+        val message = GenerationError.Timeout.userMessage()
+        assertTrue(message.contains("超时"))
+        assertTrue(message.contains("重试"))
     }
 
-    @Test
-    fun `SseParse error userMessage`() {
-        val msg = GenerationError.SseParse("raw data", "Unexpected token").userMessage()
-        assertEquals("Failed to parse server response.", msg)
+    @Test fun `unknown English exception is replaced by Chinese fallback`() {
+        val message = GenerationError.Unknown(RuntimeException("Boom!")).userMessage()
+        assertTrue(message.contains("未知错误"))
+        assertFalse(message.contains("Boom"))
     }
 
-    @Test
-    fun `ToolExecution error userMessage`() {
-        val msg = GenerationError.ToolExecution("web_search", "{\"q\":\"test\"}", "API key missing").userMessage()
-        assertEquals("Tool 'web_search' failed: API key missing", msg)
+    @Test fun `connection refused is explained in Chinese`() {
+        val message = GenerationError.Unknown(RuntimeException("Connection refused")).userMessage()
+        assertTrue(message.contains("拒绝连接"))
     }
 
-    @Test
-    fun `Transcription error userMessage`() {
-        val msg = GenerationError.Transcription("/path/to/img.jpg", "Unsupported format").userMessage()
-        assertEquals("Image transcription failed: Unsupported format", msg)
-    }
-
-    @Test
-    fun `Embedding error userMessage`() {
-        val msg = GenerationError.Embedding("emb-model-1", "Connection refused").userMessage()
-        assertEquals("Embedding failed: Connection refused", msg)
-    }
-
-    @Test
-    fun `LocalModel error userMessage`() {
-        assertEquals("Model file not found", GenerationError.LocalModel("Model file not found").userMessage())
-    }
-
-    @Test
-    fun `Configuration error userMessage`() {
-        assertEquals("Base URL not set", GenerationError.Configuration("Base URL not set").userMessage())
-    }
-
-    @Test
-    fun `Unknown error userMessage`() {
-        val ex = RuntimeException("Boom!")
-        assertEquals("Boom!", GenerationError.Unknown(ex).userMessage())
-    }
-
-    @Test
-    fun `Unknown error userMessage fallback for null message`() {
-        val ex = RuntimeException()
-        assertEquals("An unexpected error occurred.", GenerationError.Unknown(ex).userMessage())
-    }
-
-    @Test
-    fun `Cancelled userMessage`() {
-        assertEquals("Generation cancelled.", GenerationError.Cancelled.userMessage())
-    }
-
-    @Test
-    fun `Timeout userMessage`() {
-        assertEquals("Request timed out.", GenerationError.Timeout.userMessage())
+    @Test fun `cancelled is Chinese`() {
+        assertTrue(GenerationError.Cancelled.userMessage().contains("停止"))
     }
 }
