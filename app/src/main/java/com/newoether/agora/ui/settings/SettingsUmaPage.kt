@@ -3,27 +3,72 @@ package com.newoether.agora.ui.settings
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.newoether.agora.uma.UmaSessionZipExporter
 import com.newoether.agora.uma.UmaWorkbenchService
 import com.newoether.agora.viewmodel.ChatViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
+    val exportScope = rememberCoroutineScope()
+    var exportSessionId by remember { mutableStateOf("") }
+    var pendingExportSessionId by remember { mutableStateOf<String?>(null) }
+    var exportInProgress by remember { mutableStateOf(false) }
+    val createZip = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { destination ->
+        val sessionId = pendingExportSessionId
+        pendingExportSessionId = null
+        if (destination == null || sessionId == null) return@rememberLauncherForActivityResult
+        exportInProgress = true
+        exportScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(destination, "w").use { output ->
+                        requireNotNull(output) { "无法打开所选保存位置" }
+                        UmaSessionZipExporter().export(sessionId, output)
+                    }
+                }
+            }.onSuccess { result ->
+                viewModel.emitSnackbar("已保存 ${result.fileCount} 个文件：$sessionId.zip")
+            }.onFailure { error ->
+                viewModel.emitSnackbar("导出失败：${error.message ?: "未知错误"}")
+            }
+            exportInProgress = false
+        }
+    }
+
     fun send(action: String) = context.startService(
         Intent(context, UmaWorkbenchService::class.java).setAction(action))
     fun ensureOverlayThenStart() {
@@ -54,6 +99,40 @@ fun SettingsUmaPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                     leadingContent={Icon(Icons.Default.Stop,null,tint=MaterialTheme.colorScheme.error)},
                     modifier=Modifier.clickable{UmaWorkbenchService.stop(context)}) }
             ))
+            SettingsGroup(title = "Session 导出", items = listOf({
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text("保存完整 Session ZIP", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "输入 Session ID 后由 Android 系统文件选择器选择保存目录和文件名；不会固定写入下载目录。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = exportSessionId,
+                        onValueChange = { exportSessionId = it.trim() },
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        singleLine = true,
+                        label = { Text("Session ID") },
+                        placeholder = { Text("1786133409049-22481") },
+                    )
+                    Button(
+                        onClick = {
+                            val sessionId = exportSessionId.trim()
+                            if (!Regex("[A-Za-z0-9._-]{1,200}").matches(sessionId)) {
+                                viewModel.emitSnackbar("Session ID 格式无效")
+                            } else {
+                                pendingExportSessionId = sessionId
+                                createZip.launch("$sessionId.zip")
+                            }
+                        },
+                        enabled = !exportInProgress && exportSessionId.isNotBlank(),
+                        modifier = Modifier.padding(top = 10.dp),
+                    ) {
+                        Icon(Icons.Default.Download, null)
+                        Text(if (exportInProgress) "正在导出…" else "选择位置并保存", Modifier.padding(start = 8.dp))
+                    }
+                }
+            }))
             SettingsGroup(title = "通信协议观测", items = listOf(
                 { SettingsItem(headlineContent={Text("在游戏浮窗中控制")},
                     supportingContent={Text("浮窗底部可直接开始或停止观测。SO 未连接时会进入准备状态，游戏启动后自动开启；临时断线后也会自动恢复。")},

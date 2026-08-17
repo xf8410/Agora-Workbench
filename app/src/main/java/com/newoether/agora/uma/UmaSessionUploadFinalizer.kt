@@ -90,11 +90,11 @@ class UmaSessionUploadFinalizer(
             val treeSha = if (prior != null) {
                 prior.tree_sha
             } else {
-                val tree = treeClient.create(
-                    task.repository,
-                    base.treeSha,
-                    task.targetDirectory,
-                    all,
+                val tree = treeClient.createBatched(
+                    repo = task.repository,
+                    baseTreeSha = base.treeSha,
+                    directory = task.targetDirectory,
+                    blobs = all,
                 )
                 require(tree.entryCount == all.size) { "Git tree entry count mismatch" }
                 writePublishCheckpoint(checkpointFile, UmaSessionPublishCheckpoint(
