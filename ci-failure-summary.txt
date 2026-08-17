@@ -1,3 +1,5 @@
+Downloading https://services.gradle.org/distributions/gradle-9.5.1-bin.zip
+.............10%.............20%..............30%.............40%.............50%..............60%.............70%..............80%.............90%.............100%
 
 Welcome to Gradle 9.5.1!
 
@@ -32,8 +34,8 @@ Daemon will be stopped at the end of the build
 > Task :app:processFdroidDebugMainManifest
 > Task :app:processFdroidDebugManifest
 > Task :app:preFdroidDebugUnitTestBuild UP-TO-DATE
-> Task :app:javaPreCompileFdroidDebugUnitTest
 > Task :app:processFdroidDebugManifestForPackage
+> Task :app:javaPreCompileFdroidDebugUnitTest
 > Task :app:mergeFdroidDebugResources
 > Task :app:processFdroidDebugResources
 > Task :app:kspFdroidDebugKotlin
@@ -54,12 +56,12 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:102:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:574:33 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/DuckDuckGoScraper.kt:205:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:170:58 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:172:32 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:224:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:226:93 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:237:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:246:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:167:58 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:169:32 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:221:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:223:93 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:234:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:243:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:189:61 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:195:52 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:217:76 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
@@ -120,14 +122,16 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTitleGenPage.kt:67:75 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTranscriptionPage.kt:78:86 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTranscriptionPage.kt:97:71 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/uma/UmaGitTreeClient.kt:131:25 Unnecessary non-null assertion (!!) on a non-null receiver of type 'GitHubApiResponse'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/uma/UmaGitTreeClient.kt:132:32 Unnecessary non-null assertion (!!) on a non-null receiver of type 'GitHubApiResponse'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt:674:47 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
 
 > Task :app:compileFdroidDebugJavaWithJavac NO-SOURCE
 > Task :app:processFdroidDebugJavaRes
 > Task :app:bundleFdroidDebugClassesToCompileJar
-> Task :app:kspFdroidDebugUnitTestKotlin
 > Task :app:transformFdroidDebugClassesWithAsm
 > Task :app:bundleFdroidDebugClassesToRuntimeJar
+> Task :app:kspFdroidDebugUnitTestKotlin
 
 > Task :app:compileFdroidDebugUnitTestKotlin
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/com/newoether/agora/automation/ConversationExecutionCoordinatorTest.kt:33:9 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
@@ -143,14 +147,14 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/co
 
 > Task :app:testFdroidDebugUnitTest
 
-GenerationErrorTest > Timeout userMessage FAILED
-    org.junit.ComparisonFailure at GenerationErrorTest.kt:105
+WorkbenchReleaseMetadataTest > releaseVersion_isWorkbench146 FAILED
+    java.lang.AssertionError at WorkbenchReleaseMetadataTest.kt:11
 
 OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
 
 > Task :app:testFdroidDebugUnitTest
 
-280 tests completed, 1 failed
+282 tests completed, 1 failed
 
 > Task :app:testFdroidDebugUnitTest FAILED
 
@@ -196,6 +200,37 @@ org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:tes
 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:328)
 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
+	at org.gradle.execution.plan.DefaultPlanExecutor.process(DefaultPlanExecutor.java:111)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph.executeWithServices(DefaultTaskExecutionGraph.java:146)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph.execute(DefaultTaskExecutionGraph.java:131)
+	at org.gradle.execution.SelectedTaskExecutionAction.execute(SelectedTaskExecutionAction.java:35)
+	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor$ExecuteTasks.call(BuildOperationFiringBuildWorkerExecutor.java:54)
+	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor$ExecuteTasks.call(BuildOperationFiringBuildWorkerExecutor.java:43)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:210)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:205)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:67)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:167)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:60)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:54)
+	at org.gradle.execution.BuildOperationFiringBuildWorkerExecutor.execute(BuildOperationFiringBuildWorkerExecutor.java:40)
+	at org.gradle.internal.build.DefaultBuildLifecycleController.lambda$executeTasks$11(DefaultBuildLifecycleController.java:323)
+	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:304)
+	at org.gradle.internal.model.StateTransitionController.lambda$tryTransition$9(StateTransitionController.java:215)
+	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:45)
+	at org.gradle.internal.model.StateTransitionController.tryTransition(StateTransitionController.java:215)
+	at org.gradle.internal.build.DefaultBuildLifecycleController.executeTasks(DefaultBuildLifecycleController.java:314)
+	at org.gradle.internal.build.DefaultBuildWorkGraphController$DefaultBuildWorkGraph.runWork(DefaultBuildWorkGraphController.java:220)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$runAndReleaseLocks$0(DefaultWorkerLeaseService.java:300)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:43)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAndReleaseLocks(DefaultWorkerLeaseService.java:298)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:294)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:286)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:130)
+	at org.gradle.composite.internal.DefaultBuildController.doRun(DefaultBuildController.java:182)
+	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.lambda$run$0(DefaultBuildController.java:199)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.run(DefaultBuildController.java:199)
 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
 Caused by: org.gradle.api.internal.exceptions.MarkedVerificationException: There were failing tests. See the report at: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/build/reports/tests/testFdroidDebugUnitTest/index.html
@@ -302,8 +337,8 @@ Caused by: org.gradle.api.internal.exceptions.MarkedVerificationException: There
 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:38)
 	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
-	... 30 more
+	... 61 more
 
 
-BUILD FAILED in 2m 8s
+BUILD FAILED in 3m 36s
 31 actionable tasks: 31 executed
