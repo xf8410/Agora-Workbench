@@ -16,7 +16,7 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "com.newoether.agora.workbench"
+        applicationId = "com.newoether.agora.workbench.v2"
         minSdk = 24
         targetSdk = 36
         versionCode = 34
@@ -100,6 +100,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.compose.markdown)
+    implementation(libs.jetbrains.markdown)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
