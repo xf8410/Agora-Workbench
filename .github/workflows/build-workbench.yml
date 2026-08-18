@@ -26,30 +26,129 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          workflow = Path('.github/workflows/apply-stage2-token-layout-once.yml')
-          text = workflow.read_text()
-          marker = "          python3 - <<'PY'\n"
-          start = text.index(marker) + len(marker)
-          end = text.index("\n          PY", start)
-          lines = text[start:end].splitlines()
-          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
-          unlink = "Path('.github/workflows/apply-stage2-token-layout-once.yml').unlink()"
-          if unlink not in script:
-              raise SystemExit('Stage 2 applicator cleanup marker is missing')
-          script = script.rsplit(unlink, 1)[0]
-          compile(script, 'stage2-applicator', 'exec')
-          exec(script)
+          assistant = Path('app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt')
+          text = assistant.read_text()
+
+          old_status = '''                    message.status == MessageStatus.SUCCESS -> if (message.tokenCount > 0) stringResource(R.string.cost_tokens, message.tokenCount) else null
+                    isStreaming && isTranscribing -> transcribingStatus'''
+          new_status = '''                    isStreaming && isTranscribing -> transcribingStatus'''
+          if old_status in text:
+              text = text.replace(old_status, new_status, 1)
+          elif 'message.status == MessageStatus.SUCCESS -> if (message.tokenCount > 0)' in text:
+              raise SystemExit('Unexpected successful-reply token header shape')
+
+          old_visibility = 'visible = shouldShowAssistantActions(isStreaming, message.text),'
+          new_visibility = '''visible = shouldShowAssistantActions(
+                            isStreaming = isStreaming,
+                            text = message.text,
+                            hasRenderableContent = message.images.isNotEmpty() ||
+                                !message.segments.isNullOrEmpty() ||
+                                message.status == MessageStatus.ERROR ||
+                                message.status == MessageStatus.STOPPED,
+                        ),'''
+          if old_visibility in text:
+              text = text.replace(old_visibility, new_visibility, 1)
+          elif 'hasRenderableContent = message.images.isNotEmpty()' not in text:
+              raise SystemExit('Assistant action visibility call was not found')
+
+          usage_marker = 'text = stringResource(R.string.reply_token_usage, message.tokenCount)'
+          if usage_marker not in text:
+              footer = '                Spacer(modifier = Modifier.height(16.dp))'
+              pos = text.rfind(footer)
+              if pos < 0:
+                  raise SystemExit('Assistant footer spacer was not found')
+              usage = '''                AnimatedVisibility(
+                    visible = message.participant == Participant.MODEL &&
+                        shouldShowAssistantTokenUsage(message.status, message.tokenCount),
+                    enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+                    exit = fadeOut(tween(200)) + shrinkVertically(tween(200)),
+                ) {
+                    Text(
+                        text = stringResource(R.string.reply_token_usage, message.tokenCount),
+                        style = ChatType.meta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                    )
+                }
+
+'''
+              text = text[:pos] + usage + text[pos:]
+          assistant.write_text(text)
+
+          Path('app/src/main/java/com/newoether/agora/ui/chat/message/AssistantActionVisibility.kt').write_text('''package com.newoether.agora.ui.chat.message
+
+import com.newoether.agora.model.MessageStatus
+
+/** Actions need useful reply content; a stale streaming flag must not hide durable answer text. */
+internal fun shouldShowAssistantActions(
+    isStreaming: Boolean,
+    text: String,
+    hasRenderableContent: Boolean,
+): Boolean = text.isNotBlank() || (!isStreaming && hasRenderableContent)
+
+/** Unknown usage is persisted as zero today, so only a positive terminal value is displayable. */
+internal fun shouldShowAssistantTokenUsage(status: MessageStatus, tokenCount: Int): Boolean =
+    status in setOf(MessageStatus.SUCCESS, MessageStatus.ERROR, MessageStatus.STOPPED) && tokenCount > 0
+''')
+
+          Path('app/src/test/java/com/newoether/agora/ui/chat/message/AssistantActionVisibilityTest.kt').write_text('''package com.newoether.agora.ui.chat.message
+
+import com.newoether.agora.model.MessageStatus
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class AssistantActionVisibilityTest {
+    @Test fun completedTextReply_showsActions() =
+        assertTrue(shouldShowAssistantActions(false, "answer", false))
+
+    @Test fun staleStreamingFlag_withVisibleAnswer_stillShowsActions() =
+        assertTrue(shouldShowAssistantActions(true, "durable answer", false))
+
+    @Test fun terminalToolOrErrorReply_withoutText_showsActions() =
+        assertTrue(shouldShowAssistantActions(false, "", true))
+
+    @Test fun emptyStreamingPlaceholder_hidesActions() =
+        assertFalse(shouldShowAssistantActions(true, "", false))
+
+    @Test fun terminalReply_withReportedUsage_showsTokens() {
+        assertTrue(shouldShowAssistantTokenUsage(MessageStatus.SUCCESS, 42))
+        assertTrue(shouldShowAssistantTokenUsage(MessageStatus.ERROR, 42))
+        assertTrue(shouldShowAssistantTokenUsage(MessageStatus.STOPPED, 42))
+    }
+
+    @Test fun unknownOrNonTerminalUsage_doesNotShowTokens() {
+        assertFalse(shouldShowAssistantTokenUsage(MessageStatus.SUCCESS, 0))
+        assertFalse(shouldShowAssistantTokenUsage(MessageStatus.THINKING, 42))
+    }
+}
+''')
+
+          resources = [
+              ('app/src/main/res/values/strings.xml',
+               '    <string name="cost_tokens">Cost %1$d tokens</string>\n',
+               '    <string name="reply_token_usage">Total usage: %1$d tokens</string>\n'),
+              ('app/src/main/res/values-zh/strings.xml',
+               '    <string name="cost_tokens">消耗 %1$d Tokens</string>\n',
+               '    <string name="reply_token_usage">Token 总消耗：%1$d</string>\n'),
+          ]
+          for filename, anchor, addition in resources:
+              path = Path(filename)
+              value = path.read_text()
+              if 'name="reply_token_usage"' not in value:
+                  if anchor not in value:
+                      raise SystemExit(f'String insertion point not found in {filename}')
+                  value = value.replace(anchor, anchor + addition, 1)
+                  path.write_text(value)
+
+          Path('.github/workflows/apply-stage2-token-layout-once.yml').unlink(missing_ok=True)
           PY
           git diff --check
           git diff --stat
           git status --short
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt \
-                  app/src/main/java/com/newoether/agora/ui/chat/message/AssistantActionVisibility.kt \
-                  app/src/test/java/com/newoether/agora/ui/chat/message/AssistantActionVisibilityTest.kt \
-                  app/src/main/res/values/strings.xml \
-                  app/src/main/res/values-zh/strings.xml
+          git add -A
           if ! git diff --cached --quiet; then
             git commit -m 'Move per-reply token usage below assistant actions'
             git push origin HEAD:workbench/generation-ui-timeout-tools-20260818
