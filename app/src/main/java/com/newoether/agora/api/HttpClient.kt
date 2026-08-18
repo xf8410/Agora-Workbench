@@ -124,14 +124,19 @@ object HttpClient {
         }
     }
 
+    /** Bounded client for model discovery, downloads, and other ordinary requests. */
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        // Streaming generation is intentionally not governed by a fixed wall-clock timeout.
-        // User Stop still cancels the underlying Call immediately.
-        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .proxySelector(proxySelector)
         .proxyAuthenticator(proxyAuthenticator)
+        .build()
+
+    /** Generation streams have no fixed read or total wall-clock timeout. */
+    internal val streamingClient: OkHttpClient = client.newBuilder()
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .callTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
     private val liveHandles: MutableSet<StreamHandle> =
@@ -170,7 +175,7 @@ object HttpClient {
         val body = jsonBody.toRequestBody(JSON)
         val requestBuilder = Request.Builder().url(url).post(body)
         headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
-        val call = client.newCall(requestBuilder.build())
+        val call = streamingClient.newCall(requestBuilder.build())
         val handle = StreamHandle(call, call.execute(), scope)
         if (scope != null) scope.register(handle)
         liveHandles.add(handle)
@@ -195,6 +200,7 @@ object HttpClient {
         guardCleartextCredentials(url, headers)
         val body = jsonBody.toRequestBody(JSON)
         val requestBuilder = Request.Builder().url(url).post(body)
+        headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
         val response = client.newCall(requestBuilder.build()).execute()
         return response.use {
             if (it.isSuccessful) it.body?.string()
