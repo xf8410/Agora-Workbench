@@ -124,7 +124,6 @@ object HttpClient {
         }
     }
 
-    /** Bounded client for model discovery, downloads, and other ordinary requests. */
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -133,7 +132,6 @@ object HttpClient {
         .proxyAuthenticator(proxyAuthenticator)
         .build()
 
-    /** Generation streams have no fixed read or total wall-clock timeout. */
     internal val streamingClient: OkHttpClient = client.newBuilder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .callTimeout(0, TimeUnit.MILLISECONDS)
@@ -152,13 +150,24 @@ object HttpClient {
         val errorBody: String? by lazy {
             try { response.body?.string() } catch (_: Exception) { null }
         }
+        private var terminalLineDelivered = false
+
         fun close() {
             HttpClient.liveHandles.remove(this)
             scope?.unregister(this)
             runCatching { call.cancel() }
             response.close()
         }
-        fun readLine(): String? = source?.readUtf8Line()
+
+        fun readLine(): String? {
+            if (terminalLineDelivered) return null
+            val line = source?.readUtf8Line()
+            if (line != null && com.newoether.agora.api.openai.isTerminalOpenAiSseLine(line)) {
+                terminalLineDelivered = true
+            }
+            return line
+        }
+
         fun cancel() = call.cancel()
     }
 
