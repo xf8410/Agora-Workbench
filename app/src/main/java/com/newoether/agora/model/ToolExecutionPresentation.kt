@@ -63,6 +63,6 @@ object ToolExecutionPresentation {
         return normalized.startsWith("[工具错误 ") ||
             normalized.startsWith("error:") ||
             normalized.startsWith("error executing tool") ||
-            Regex("\"ok\"\s*:\s*false", RegexOption.IGNORE_CASE).containsMatchIn(result)
+            Regex("\\\"ok\\\"\\s*:\\s*false", RegexOption.IGNORE_CASE).containsMatchIn(result)
     }
 }
