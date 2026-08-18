@@ -41,6 +41,17 @@ jobs:
             git commit -m "Show tool execution status and duration"
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
+      - name: Apply Stage 3B deferred tool payload once
+        shell: bash
+        run: |
+          python3 .github/scripts/apply_stage3b_deferred_tool_payload.py
+          if ! git diff --quiet; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add app/src app/src/test
+            git commit -m "Load large tool payloads on demand"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
