@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -19,21 +19,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply Stage 2 source changes once
-        shell: bash
-        run: |
-          set -euxo pipefail
-          python3 scripts/apply_stage2_token_layout.py
-          git diff --check
-          git diff --stat
-          git status --short
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m 'Move per-reply token usage below assistant actions'
-            git push origin HEAD:workbench/generation-ui-timeout-tools-20260818
-          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
