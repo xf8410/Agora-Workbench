@@ -39,6 +39,8 @@ data class MessageSegment(
     val toolFinishedAtMs: Long? = null,
     /** Explicit terminal/running state. Null keeps old serialized segments backward compatible. */
     val toolStatus: ToolExecutionStatus? = null,
+    /** True when list rendering intentionally omitted the full tool payload. */
+    val payloadDeferred: Boolean = false,
 )
 
 object ToolCallDisplayModes {

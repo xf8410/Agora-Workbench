@@ -41,6 +41,7 @@ import com.newoether.agora.model.apiModelName
 import com.newoether.agora.model.Participant
 import com.newoether.agora.model.SelectedAttachment
 import com.newoether.agora.model.ToolCallData
+import com.newoether.agora.model.ToolPayloadPolicy
 import com.newoether.agora.sandbox.SandboxManager
 import com.newoether.agora.sandbox.SandboxManagerFactory
 import com.newoether.agora.service.AgoraForegroundService
@@ -650,8 +651,8 @@ class ChatViewModel(
                             val stuckMessages = convRepo.getMessagesForConversation(id).first()
                                 .filter { it.status == MessageStatus.SENDING || it.status == MessageStatus.THINKING || it.status == MessageStatus.TOOL_CALLING || it.status == MessageStatus.TRANSCRIBING }
 
-                            stuckMessages.forEach { msg ->
-                                convRepo.upsertMessage(msg.copy(status = MessageStatus.STOPPED))
+                            if (stuckMessages.isNotEmpty()) {
+                                convRepo.fixStuckMessages(id)
                             }
                         }
 
@@ -699,7 +700,7 @@ class ChatViewModel(
                             // Keep formatting/JSON decoding off Main and decode tool JSON once.
                             val mapped = withContext(Dispatchers.Default) {
                                 entities.map { entity ->
-                                    val decodedSegments = entity.toolCallJson?.let { raw ->
+                                    val decodedSegments = entity.toolCallSummaryJson?.let { raw ->
                                         try { Json.decodeFromString<List<MessageSegment>>(raw) }
                                         catch (_: Exception) { null }
                                     }
@@ -716,7 +717,9 @@ class ChatViewModel(
                                         timestamp = entity.timestamp,
                                         thoughtTimeMs = entity.thoughtTimeMs,
                                         modelName = entity.modelName,
-                                        segments = decodedSegments ?: entity.thoughts
+                                        segments = decodedSegments
+                                            ?: if (entity.toolPayloadAvailable) ToolPayloadPolicy.deferredSegments() else null
+                                            ?: entity.thoughts
                                             ?.takeIf { it.isNotBlank() }
                                             ?.let { listOf(MessageSegment(type = "thought", content = it)) },
                                         toolCall = decodedSegments?.lastOrNull { it.type == "tool" }?.let { seg ->
@@ -1069,6 +1072,9 @@ class ChatViewModel(
             generationFinalizer.launchStopFinalization(state.scope, result.conversationId, messages)
         }
     }
+
+    suspend fun loadToolSegments(messageId: String): List<MessageSegment>? =
+        convRepo.loadToolSegments(messageId)
 
     fun regenerate(messageId: String) = generationController.regenerate(messageId)
 

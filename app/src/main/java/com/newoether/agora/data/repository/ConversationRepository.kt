@@ -4,6 +4,11 @@ import com.newoether.agora.data.local.ChatDao
 import com.newoether.agora.data.local.ChatEntity
 import com.newoether.agora.data.local.EmbeddingEntity
 import com.newoether.agora.data.local.MessageEntity
+import com.newoether.agora.data.local.MessageListRow
+import com.newoether.agora.model.MessageSegment
+import com.newoether.agora.model.ToolPayloadPolicy
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.newoether.agora.model.AttachmentMeta
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.ChatConversation
@@ -62,7 +67,7 @@ class ConversationRepository(
     suspend fun upsertConversation(entity: ChatEntity) = chatDao.upsertConversation(entity)
 
     suspend fun deleteConversation(id: String) {
-        val messages = chatDao.getMessagesForConversation(id).first()
+        val messages = chatDao.getAllMessagesForConversation(id)
         deleteAttachmentFilesFromEntities(messages)
         chatDao.deleteEmbeddingsByConversation(id)
         chatDao.deleteMessagesByConversation(id)
@@ -71,15 +76,22 @@ class ConversationRepository(
 
     // ── Messages ──────────────────────────────────────────────
 
-    fun getMessagesForConversation(conversationId: String, limit: Int = 100): Flow<List<MessageEntity>> =
+    fun getMessagesForConversation(conversationId: String, limit: Int = 100): Flow<List<MessageListRow>> =
         chatDao.getMessagesForConversation(
             conversationId = conversationId,
             limit = limit.coerceIn(1, 500),
             maxTextChars = 65_536,
             maxThoughtChars = 32_768,
-            maxToolJsonChars = 131_072,
+            maxToolSummaryChars = ToolPayloadPolicy.MAX_INLINE_JSON_CHARS,
             maxAttachmentMetaChars = 32_768,
         )
+
+    suspend fun loadToolSegments(messageId: String): List<MessageSegment>? {
+        val raw = chatDao.getToolCallJson(messageId) ?: return null
+        return withContext(Dispatchers.Default) {
+            runCatching { Json.decodeFromString<List<MessageSegment>>(raw) }.getOrNull()
+        }
+    }
 
     fun getMessageCountForConversation(conversationId: String): Flow<Int> =
         chatDao.getMessageCountForConversation(conversationId)

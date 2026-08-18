@@ -643,6 +643,7 @@ fun ChatApp(
                                 onMediaClick = onMediaClick,
                                 onFileContentClick = onFileContentClick,
                                 onPdfPagesClick = { pages, idx -> haptics.action(); onPdfPagesClick?.invoke(pages, idx) },
+                                loadToolSegments = viewModel::loadToolSegments,
                                 thoughtExpandedStates = thoughtExpandedStates,
                                 hasOlderMessages = hasOlderMessages,
                                 onLoadOlder = viewModel::loadOlderMessages,
