@@ -29,9 +29,14 @@ jobs:
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Unit tests
         run: |
-          set -euo pipefail
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
+          if ! ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log; then
+            while IFS= read -r line; do
+              echo "::error title=Unit test failure::$line"
+            done < <(grep -E '(^e: |FAILED$|> Task .* FAILED|There were failing tests|Caused by:|AssertionError)' unit-test.log | tail -n 40)
+            exit 1
+          fi
       - name: Build APK
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - name: Verify APK output
