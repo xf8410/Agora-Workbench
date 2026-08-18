@@ -65,9 +65,17 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           if ! ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log; then
+            grep -E '(^e: |FAILED$|> Task .* FAILED|There were failing tests|Caused by:|AssertionError|Cannot find implementation|error:)' unit-test.log | tail -n 120 > .github/ci-last-unit-test.log || true
             while IFS= read -r line; do
               echo "::error title=Unit test failure::$line"
-            done < <(grep -E '(^e: |FAILED$|> Task .* FAILED|There were failing tests|Caused by:|AssertionError)' unit-test.log | tail -n 40)
+            done < .github/ci-last-unit-test.log
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add .github/ci-last-unit-test.log
+            if ! git diff --cached --quiet; then
+              git commit -m "Capture latest unit-test failure diagnostics"
+              git push origin HEAD:${GITHUB_REF_NAME}
+            fi
             exit 1
           fi
       - name: Build APK
