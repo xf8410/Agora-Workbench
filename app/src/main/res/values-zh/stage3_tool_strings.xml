@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tool_status_running">进行中</string>
+    <string name="tool_status_success">成功</string>
+    <string name="tool_status_failed">失败</string>
+    <string name="tool_status_timed_out">已超时</string>
+    <string name="tool_status_stopped">已停止</string>
+    <string name="tool_status_interrupted">已中断</string>
+    <string name="tool_duration_under_second">&lt;1 秒</string>
+    <string name="tool_duration_seconds">%1$.1f 秒</string>
+</resources>
