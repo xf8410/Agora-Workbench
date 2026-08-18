@@ -30,6 +30,17 @@ jobs:
             git commit -m "Record terminal tool execution timing"
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
+      - name: Apply Stage 3A tool status UI once
+        shell: bash
+        run: |
+          python3 .github/scripts/apply_stage3a_tool_meta_ui.py
+          if ! git diff --quiet -- app/src/main/java/com/newoether/agora/ui/chat/message/MessageItemTimeline.kt; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add app/src/main/java/com/newoether/agora/ui/chat/message/MessageItemTimeline.kt
+            git commit -m "Show tool execution status and duration"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
