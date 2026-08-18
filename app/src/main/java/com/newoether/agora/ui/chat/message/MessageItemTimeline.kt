@@ -421,6 +421,7 @@ private fun CompactSegmentBlock(
                                     style = ChatType.metaNormal,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
+                                ToolExecutionMetaLine(seg, message.status)
                             }
                         }
                         if (idx < segs.lastIndex) {
@@ -621,6 +622,12 @@ private fun TimelineInfoSegmentCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (seg.type == "tool") {
+                    ToolExecutionMetaLine(
+                        segment = seg,
+                        messageStatus = if (isStreaming) MessageStatus.TOOL_CALLING else MessageStatus.SUCCESS,
                     )
                 }
             }
