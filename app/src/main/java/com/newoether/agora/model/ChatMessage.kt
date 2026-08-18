@@ -14,6 +14,16 @@ data class ToolCallData(
 )
 
 @Serializable
+enum class ToolExecutionStatus {
+    RUNNING,
+    SUCCESS,
+    FAILED,
+    TIMED_OUT,
+    STOPPED,
+    INTERRUPTED,
+}
+
+@Serializable
 data class MessageSegment(
     val type: String, // "answer", "thought", "tool", or "transcription"
     val content: String = "",
@@ -22,7 +32,13 @@ data class MessageSegment(
     val toolResult: String? = null,
     val toolCallId: String? = null,
     val signature: String? = null,
-    val durationMs: Long? = null
+    val durationMs: Long? = null,
+    /** Epoch millis captured immediately before tool execution. Absent on legacy messages. */
+    val toolStartedAtMs: Long? = null,
+    /** Epoch millis captured when tool execution reaches a terminal state. Absent on legacy messages. */
+    val toolFinishedAtMs: Long? = null,
+    /** Explicit terminal/running state. Null keeps old serialized segments backward compatible. */
+    val toolStatus: ToolExecutionStatus? = null,
 )
 
 object ToolCallDisplayModes {
