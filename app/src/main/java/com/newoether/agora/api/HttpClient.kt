@@ -13,18 +13,13 @@ import java.util.concurrent.TimeUnit
 
 object HttpClient {
     private val JSON = "application/json; charset=utf-8".toMediaType()
-
-    // Header names that carry secret credentials across the providers.
     private val CREDENTIAL_HEADERS = setOf("authorization", "x-api-key", "x-goog-api-key", "api-key")
 
-    /** True for loopback / RFC-1918 / link-local hosts and bare LAN hostnames
-     *  (e.g. "ollama", "nas.local"). Public FQDNs like api.openai.com return false. */
     private fun isLocalHost(host: String): Boolean {
         if (host.isBlank()) return false
         val h = host.lowercase().trim('[', ']')
         if (h == "localhost" || h == "::1" || h.endsWith(".local") || h.endsWith(".lan") ||
             h.endsWith(".home") || h.endsWith(".internal")) return true
-        // Bare hostname with no dot → LAN name, not a public domain.
         if (!h.contains('.')) return true
         val o = h.split('.')
         if (o.size == 4 && o.all { it.toIntOrNull() in 0..255 }) {
@@ -35,8 +30,6 @@ object HttpClient {
         return false
     }
 
-    /** Fail-closed guard: never transmit API credentials over cleartext HTTP to a
-     *  non-local host. LAN/loopback endpoints (Ollama, self-hosted) stay allowed. */
     private fun guardCleartextCredentials(url: String, headers: Map<String, String>) {
         if (!url.startsWith("http://", ignoreCase = true)) return
         val host = try { java.net.URI(url).host ?: "" } catch (_: Exception) { "" }
@@ -46,25 +39,19 @@ object HttpClient {
         }
     }
 
-    // ── Network proxy ─────────────────────────────────────────────────────
     enum class ProxyType { HTTP, SOCKS }
 
-    /** Active proxy config, or null = direct connection. Read live by the proxy
-     *  selector, so changing it takes effect immediately without rebuilding the client. */
     data class ProxyConfig(
         val type: ProxyType,
         val host: String,
         val port: Int,
         val username: String = "",
         val password: String = "",
-        /** Hosts/CIDRs that bypass the proxy (e.g. localhost, 192.168.0.0/16). */
         val bypass: List<String> = emptyList()
     )
 
     @Volatile private var proxyConfig: ProxyConfig? = null
 
-    /** Apply (or clear) the proxy. Also installs a default [java.net.Authenticator] for
-     *  SOCKS proxy auth, which OkHttp's proxyAuthenticator does not cover. */
     fun setProxy(config: ProxyConfig?) {
         proxyConfig = config?.takeIf { it.host.isNotBlank() && it.port in 1..65535 }
         val cfg = proxyConfig
@@ -87,7 +74,6 @@ object HttpClient {
         return java.net.Proxy(type, java.net.InetSocketAddress.createUnresolved(cfg.host, cfg.port))
     }
 
-    /** True if [host] matches a bypass entry: exact host, `*.suffix` wildcard, or IPv4 CIDR. */
     private fun isProxyBypassed(host: String, bypass: List<String>): Boolean {
         if (host.isBlank()) return true
         val h = host.lowercase().trim('[', ']')
@@ -131,7 +117,7 @@ object HttpClient {
         override fun authenticate(route: okhttp3.Route?, response: okhttp3.Response): Request? {
             val cfg = proxyConfig
             if (cfg == null || cfg.username.isBlank() || cfg.type != ProxyType.HTTP) return null
-            if (response.request.header("Proxy-Authorization") != null) return null // already tried
+            if (response.request.header("Proxy-Authorization") != null) return null
             return response.request.newBuilder()
                 .header("Proxy-Authorization", okhttp3.Credentials.basic(cfg.username, cfg.password))
                 .build()
@@ -140,15 +126,14 @@ object HttpClient {
 
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.MINUTES)
+        // Streaming generation is intentionally not governed by a fixed wall-clock timeout.
+        // User Stop still cancels the underlying Call immediately.
+        .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .proxySelector(proxySelector)
         .proxyAuthenticator(proxyAuthenticator)
         .build()
 
-    /** Every currently-live streaming handle in the process. Per-conversation scopes additionally
-     * index their own handles for targeted Stop; this global set remains the process-shutdown
-     * backstop. Registered on open by [streamPost], removed on [StreamHandle.close]. */
     private val liveHandles: MutableSet<StreamHandle> =
         java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
 
@@ -165,30 +150,16 @@ object HttpClient {
         fun close() {
             HttpClient.liveHandles.remove(this)
             scope?.unregister(this)
-            // Cancel the Call even on normal completion: a no-op when already done,
-            // but guarantees any blocked readLine() on this handle is woken the moment
-            // the response is torn down rather than waiting on the read timeout.
             runCatching { call.cancel() }
             response.close()
         }
         fun readLine(): String? = source?.readUtf8Line()
-        /** Cancel the underlying HTTP call immediately — unblocks [readLine]. */
         fun cancel() = call.cancel()
     }
 
     fun streamPost(url: String, jsonBody: String, headers: Map<String, String> = emptyMap()): StreamHandle =
         streamPost(url, jsonBody, headers, scope = boundStreamScope())
 
-    /**
-     * Open a streaming POST. If [scope] is non-null, the handle is registered there so a
-     * per-conversation Stop can cancel exactly this generation's streams without severing
-     * another conversation's in-flight stream. If null, the handle is only in the global
-     * [liveHandles] set cancelled by [cancelAllStreams].
-     *
-     * GenerationManager binds the scope to its coroutine context through [withStreamScope].
-     * Child `withContext` calls inherit that binding, while parallel conversation coroutines keep
-     * independent values even when they execute on the same pooled thread.
-     */
     fun streamPost(
         url: String,
         jsonBody: String,
@@ -206,24 +177,15 @@ object HttpClient {
         return handle
     }
 
-    private val coroutineStreamScope =
-        ThreadLocal<com.newoether.agora.viewmodel.StreamScope?>()
+    private val coroutineStreamScope = ThreadLocal<com.newoether.agora.viewmodel.StreamScope?>()
 
-    /** Bind [scope] to the current generation coroutine. Thread-context propagation keeps the
-     * value stable across suspensions/dispatcher hops without exposing process-global mutable
-     * ownership to parallel conversations. */
     internal suspend fun <T> withStreamScope(
         scope: com.newoether.agora.viewmodel.StreamScope?,
         block: suspend () -> T,
     ): T = withContext(coroutineStreamScope.asContextElement(scope)) { block() }
 
-    internal fun boundStreamScope(): com.newoether.agora.viewmodel.StreamScope? =
-        coroutineStreamScope.get()
+    internal fun boundStreamScope(): com.newoether.agora.viewmodel.StreamScope? = coroutineStreamScope.get()
 
-    /** Cancel EVERY in-flight streaming Call in the process — the "stop everything" backstop
-     *  (e.g. ViewModel cleared). Per-conversation Stop should use the conversation's
-     *  [com.newoether.agora.viewmodel.StreamScope] instead, so it doesn't kill another
-     *  conversation's generation. */
     fun cancelAllStreams() {
         liveHandles.toList().forEach { runCatching { it.cancel() } }
         liveHandles.clear()
@@ -233,7 +195,6 @@ object HttpClient {
         guardCleartextCredentials(url, headers)
         val body = jsonBody.toRequestBody(JSON)
         val requestBuilder = Request.Builder().url(url).post(body)
-        headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
         val response = client.newCall(requestBuilder.build()).execute()
         return response.use {
             if (it.isSuccessful) it.body?.string()
@@ -249,19 +210,14 @@ object HttpClient {
         val requestBuilder = Request.Builder().url(url).get()
         headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
         val response = client.newCall(requestBuilder.build()).execute()
-        return response.use {
-            if (it.isSuccessful) it.body?.string() else null
-        }
+        return response.use { if (it.isSuccessful) it.body?.string() else null }
     }
 
-    /** GET raw bytes (e.g. an image referenced by URL). Returns null on failure. */
     fun getBytes(url: String, headers: Map<String, String> = emptyMap()): ByteArray? {
         guardCleartextCredentials(url, headers)
         val requestBuilder = Request.Builder().url(url).get()
         headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
         val response = client.newCall(requestBuilder.build()).execute()
-        return response.use {
-            if (it.isSuccessful) it.body?.bytes() else null
-        }
+        return response.use { if (it.isSuccessful) it.body?.bytes() else null }
     }
 }
