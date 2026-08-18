@@ -243,19 +243,19 @@ class GenerationManager(
                     // forever hangs the whole generation. Bound it; on timeout return a tool error
                     // so the tool loop continues instead of hanging (#49).
                     return withTimeout(ctx.toolTimeoutMs) {
-                        provider.execute(name, arguments, ctx)
+                        ToolExecutionErrors.normalizeResult(name, provider.execute(name, arguments, ctx))
                     }
                 }
             }
-            "Unknown tool: $name"
+            ToolExecutionErrors.unknownTool(name)
         } catch (e: TimeoutCancellationException) {
             // A timeout is a recoverable tool failure, NOT a generation cancellation — return an
             // error string so the model can react, instead of unwinding the whole generation.
-            "Error executing tool '$name': timed out after ${ctx.toolTimeoutMs}ms"
+            ToolExecutionErrors.timeout(name)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            "Error executing tool '$name': ${e.localizedMessage ?: "Unknown error"}"
+            ToolExecutionErrors.exception(name, e)
         }
     }
 
@@ -836,7 +836,7 @@ class GenerationManager(
             val isCancelled = generationJob?.isCancelled == true
             currentStatus = if (isCancelled) MessageStatus.STOPPED else MessageStatus.ERROR
             if (!isCancelled) {
-                totalText = "Error: ${e.localizedMessage ?: "An unexpected error occurred."}"
+                totalText = com.newoether.agora.api.GenerationError.Unknown(e).userMessage()
             }
         } finally {
             // Critical non-cancellable section: only the terminal DB upsert (and the
