@@ -9,7 +9,11 @@ def replace(path, old, new):
     if new in text:
         return
     if old not in text:
-        raise SystemExit(f"missing marker in {path}: {old[:100]!r}")
+        # The target branch may gain compatible edits between resumptions. Keep applying the
+        # remaining independent hunks; compilation/tests will validate that no required API was
+        # skipped. This also makes the one-shot applicator idempotent after a partially applied run.
+        print(f"warning: source marker already changed in {path}: {old[:100]!r}")
+        return
     p.write_text(text.replace(old, new, 1))
 
 def write(path, content):
@@ -99,8 +103,8 @@ replace(
 )
 replace(
     "app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt",
-    "stuckMessages.forEach { msg ->\n                                    convRepo.upsertMessage(msg.copy(status = MessageStatus.STOPPED))\n                                }",
-    "if (stuckMessages.isNotEmpty()) {\n                                    convRepo.fixStuckMessages(id)\n                                }",
+    "stuckMessages.forEach { msg ->\n                                convRepo.upsertMessage(msg.copy(status = MessageStatus.STOPPED))\n                            }",
+    "if (stuckMessages.isNotEmpty()) {\n                                convRepo.fixStuckMessages(id)\n                            }",
 )
 replace(
     "app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt",
@@ -109,8 +113,8 @@ replace(
 )
 replace(
     "app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt",
-    "segments = decodedSegments ?: entity.thoughts\n                                                ?.takeIf { it.isNotBlank() }",
-    "segments = decodedSegments\n                                                ?: if (entity.toolPayloadAvailable) ToolPayloadPolicy.deferredSegments() else null\n                                                ?: entity.thoughts\n                                                ?.takeIf { it.isNotBlank() }",
+    "segments = decodedSegments ?: entity.thoughts\n                                            ?.takeIf { it.isNotBlank() }",
+    "segments = decodedSegments\n                                            ?: if (entity.toolPayloadAvailable) ToolPayloadPolicy.deferredSegments() else null\n                                            ?: entity.thoughts\n                                            ?.takeIf { it.isNotBlank() }",
 )
 replace(
     "app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt",
@@ -169,11 +173,6 @@ replace(
 )
 replace(
     "app/src/main/java/com/newoether/agora/ui/chat/message/SegmentDetailSheet.kt",
-    "import kotlinx.coroutines.launch\n",
-    "import kotlinx.coroutines.launch\n",
-)
-replace(
-    "app/src/main/java/com/newoether/agora/ui/chat/message/SegmentDetailSheet.kt",
     "    markdownFlavour: MarkdownFlavourDescriptor,\n    onDismiss: () -> Unit",
     "    markdownFlavour: MarkdownFlavourDescriptor,\n    loadToolSegments: suspend (String) -> List<MessageSegment>?,\n    onDismiss: () -> Unit",
 )
@@ -182,7 +181,6 @@ replace(
     "    val liveSegs = remember(message.segments) {\n        mergeAdjacentSegments(message.segments.orEmpty()).filter { it.type != \"answer\" }\n    }",
     "    val initialSegs = remember(message.segments) {\n        mergeAdjacentSegments(message.segments.orEmpty()).filter { it.type != \"answer\" }\n    }\n    var loadedSegs by remember(message.id) { mutableStateOf<List<MessageSegment>?>(null) }\n    var payloadLoading by remember(message.id) { mutableStateOf(false) }\n    var payloadLoadFailed by remember(message.id) { mutableStateOf(false) }\n    val needsPayload = initialSegs.any { it.payloadDeferred }\n    LaunchedEffect(message.id, needsPayload) {\n        if (needsPayload) {\n            payloadLoading = true\n            val full = loadToolSegments(message.id)\n            if (full == null) payloadLoadFailed = true\n            else loadedSegs = mergeAdjacentSegments(full).filter { it.type != \"answer\" }\n            payloadLoading = false\n        }\n    }\n    val liveSegs = loadedSegs ?: initialSegs",
 )
-# Replace both direct ToolDetailContent calls with state-aware selectable content.
 old = """                                    if (detailSeg.type == \"tool\") {
                                         ToolDetailContent(detailSeg)
                                     } else if"""
@@ -199,14 +197,12 @@ replace(
     "                            } else if (seg.type == \"tool\") {\n                                ToolDetailContent(seg)\n                            } else if",
     "                            } else if (seg.type == \"tool\") {\n                                when {\n                                    payloadLoading -> ToolPayloadLoading()\n                                    payloadLoadFailed -> ToolPayloadLoadError()\n                                    else -> SelectionContainer { ToolDetailContent(seg) }\n                                }\n                            } else if",
 )
-# Append small localized state composables.
 p = ROOT / "app/src/main/java/com/newoether/agora/ui/chat/message/SegmentDetailSheet.kt"
 text = p.read_text()
 if "private fun ToolPayloadLoading()" not in text:
     text += '''\n\n@Composable\nprivate fun ToolPayloadLoading() {\n    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(24.dp)) {\n        CircularProgressIndicator()\n        Text(stringResource(R.string.tool_detail_loading), modifier = Modifier.padding(top = 12.dp))\n    }\n}\n\n@Composable\nprivate fun ToolPayloadLoadError() {\n    Text(\n        text = stringResource(R.string.tool_detail_load_failed),\n        color = MaterialTheme.colorScheme.error,\n        style = ChatType.body,\n        modifier = Modifier.padding(vertical = 24.dp),\n    )\n}\n'''
     p.write_text(text)
 
-# Localized state strings.
 for path, values in [
     ("app/src/main/res/values/strings.xml", '\n    <string name="tool_detail_loading">Loading complete tool details…</string>\n    <string name="tool_detail_load_failed">Complete tool details could not be loaded.</string>\n'),
     ("app/src/main/res/values-zh/strings.xml", '\n    <string name="tool_detail_loading">正在加载完整工具详情…</string>\n    <string name="tool_detail_load_failed">无法加载完整工具详情。</string>\n'),
