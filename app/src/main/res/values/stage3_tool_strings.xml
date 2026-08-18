@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tool_status_running">Running</string>
+    <string name="tool_status_success">Succeeded</string>
+    <string name="tool_status_failed">Failed</string>
+    <string name="tool_status_timed_out">Timed out</string>
+    <string name="tool_status_stopped">Stopped</string>
+    <string name="tool_status_interrupted">Interrupted</string>
+    <string name="tool_duration_under_second">&lt;1 s</string>
+    <string name="tool_duration_seconds">%1$.1f s</string>
+</resources>
