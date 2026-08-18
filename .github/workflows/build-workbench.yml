@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -19,39 +19,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Apply Stage 3A tool timing once
-        shell: bash
-        run: |
-          python3 .github/scripts/apply_stage3a_tool_timing.py
-          if ! git diff --quiet -- app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
-            git commit -m "Record terminal tool execution timing"
-            git push origin HEAD:${GITHUB_REF_NAME}
-          fi
-      - name: Apply Stage 3A tool status UI once
-        shell: bash
-        run: |
-          python3 .github/scripts/apply_stage3a_tool_meta_ui.py
-          if ! git diff --quiet -- app/src/main/java/com/newoether/agora/ui/chat/message/MessageItemTimeline.kt; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add app/src/main/java/com/newoether/agora/ui/chat/message/MessageItemTimeline.kt
-            git commit -m "Show tool execution status and duration"
-            git push origin HEAD:${GITHUB_REF_NAME}
-          fi
-      - name: Apply Stage 3B deferred tool payload once
-        shell: bash
-        run: |
-          python3 .github/scripts/apply_stage3b_deferred_tool_payload.py
-          if ! git diff --quiet; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add app/src app/src/test
-            git commit -m "Load large tool payloads on demand"
-            git push origin HEAD:${GITHUB_REF_NAME}
-          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -64,20 +31,7 @@ jobs:
         run: |
           set -o pipefail
           chmod +x gradlew
-          if ! ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log; then
-            grep -E '(^e: |FAILED$|> Task .* FAILED|There were failing tests|Caused by:|AssertionError|Cannot find implementation|error:)' unit-test.log | tail -n 120 > .github/ci-last-unit-test.log || true
-            while IFS= read -r line; do
-              echo "::error title=Unit test failure::$line"
-            done < .github/ci-last-unit-test.log
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add .github/ci-last-unit-test.log
-            if ! git diff --cached --quiet; then
-              git commit -m "Capture latest unit-test failure diagnostics"
-              git push origin HEAD:${GITHUB_REF_NAME}
-            fi
-            exit 1
-          fi
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log
       - name: Build APK
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - name: Verify APK output
