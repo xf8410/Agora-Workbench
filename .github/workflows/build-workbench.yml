@@ -52,17 +52,6 @@ jobs:
             git commit -m "Load large tool payloads on demand"
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
-      - name: Apply Stage 4 documentation cleanup once
-        shell: bash
-        run: |
-          python3 .github/scripts/apply_stage4_remove_upstream_docs.py
-          if ! git diff --quiet; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add -A app/src/main/java/com/newoether/agora/ui/settings
-            git commit -m "Remove upstream documentation controls from settings"
-            git push origin HEAD:${GITHUB_REF_NAME}
-          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
