@@ -20,20 +20,29 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - name: Apply Stage 2 source changes once
+        shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          text = Path('.github/workflows/apply-stage2-token-layout-once.yml').read_text()
-          start = text.index("          python3 - <<'PY'\n") + len("          python3 - <<'PY'\n")
+
+          workflow = Path('.github/workflows/apply-stage2-token-layout-once.yml')
+          text = workflow.read_text()
+          marker = "          python3 - <<'PY'\n"
+          start = text.index(marker) + len(marker)
           end = text.index("\n          PY", start)
           lines = text[start:end].splitlines()
           script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
-          script = script.replace("          Path('.github/workflows/apply-stage2-token-layout-once.yml').unlink()\n", "")
-          script = script.replace("Path('.github/workflows/apply-stage2-token-layout-once.yml').unlink()\n", "")
-          exec(compile(script, 'stage2-applicator', 'exec'))
+          unlink = "Path('.github/workflows/apply-stage2-token-layout-once.yml').unlink()"
+          if unlink not in script:
+              raise SystemExit('Stage 2 applicator cleanup marker is missing')
+          script = script.rsplit(unlink, 1)[0]
+          compile(script, 'stage2-applicator', 'exec')
+          exec(script)
           PY
           git diff --check
+          git diff --stat
+          git status --short
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt \
