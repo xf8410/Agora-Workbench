@@ -15,6 +15,8 @@ import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.model.Participant
 import com.newoether.agora.model.ToolCallData
+import com.newoether.agora.model.ToolExecutionPresentation
+import com.newoether.agora.model.ToolExecutionStatus
 import com.newoether.agora.R
 import com.newoether.agora.service.AgoraForegroundService
 import com.newoether.agora.service.AppForegroundTracker
@@ -476,6 +478,21 @@ class GenerationManager(
             currentThoughtStartMs = null
         }
 
+        fun finishPendingTools(status: ToolExecutionStatus) {
+            val finishedAt = System.currentTimeMillis()
+            segments.indices.forEach { index ->
+                val segment = segments[index]
+                if (segment.type == "tool" && segment.toolResult == null &&
+                    segment.toolStatus == ToolExecutionStatus.RUNNING
+                ) {
+                    segments[index] = segment.copy(
+                        toolFinishedAtMs = finishedAt,
+                        toolStatus = status,
+                    )
+                }
+            }
+        }
+
         try {
             val provider = getProviderInstance(config.providerName)
             onLoadingChange(true)
@@ -657,7 +674,16 @@ class GenerationManager(
                     is StreamEvent.ToolCallRequest -> {
                         flushAnswerSegment()
                         flushThoughtSegment()
-                        val ts = MessageSegment(type = "tool", toolName = event.name, toolArgs = event.arguments, toolResult = null, toolCallId = event.id, signature = event.signature)
+                        val ts = MessageSegment(
+                            type = "tool",
+                            toolName = event.name,
+                            toolArgs = event.arguments,
+                            toolResult = null,
+                            toolCallId = event.id,
+                            signature = event.signature,
+                            toolStartedAtMs = System.currentTimeMillis(),
+                            toolStatus = ToolExecutionStatus.RUNNING,
+                        )
                         appendMergedSegment(segments, ts)
                         currentStatus = MessageStatus.TOOL_CALLING
                         onStreamUpdate(modelMessage())
@@ -667,7 +693,17 @@ class GenerationManager(
                         val clipped = result.take(Constants.MAX_TOOL_RESULT_LENGTH)
                         val idx = segments.indexOfLast { it.toolCallId == event.id }
                         if (idx >= 0) {
-                            segments[idx] = segments[idx].copy(toolResult = clipped)
+                            val finishedAt = System.currentTimeMillis()
+                            val completed = segments[idx].copy(
+                                toolResult = clipped,
+                                toolFinishedAtMs = finishedAt,
+                            )
+                            segments[idx] = completed.copy(
+                                toolStatus = ToolExecutionPresentation.status(
+                                    completed,
+                                    MessageStatus.SUCCESS,
+                                ) ?: ToolExecutionStatus.SUCCESS,
+                            )
                             roundToolSegments.add(segments[idx])
                         }
                         val tcd = ToolCallData(event.name, event.arguments, clipped, event.signature, event.id)
@@ -681,7 +717,19 @@ class GenerationManager(
                         flushAnswerSegment()
                         flushThoughtSegment()
                         event.calls.forEach { call ->
-                            appendMergedSegment(segments, MessageSegment(type = "tool", toolName = call.name, toolArgs = call.arguments, toolResult = null, toolCallId = call.id, signature = call.signature))
+                            appendMergedSegment(
+                                segments,
+                                MessageSegment(
+                                    type = "tool",
+                                    toolName = call.name,
+                                    toolArgs = call.arguments,
+                                    toolResult = null,
+                                    toolCallId = call.id,
+                                    signature = call.signature,
+                                    toolStartedAtMs = System.currentTimeMillis(),
+                                    toolStatus = ToolExecutionStatus.RUNNING,
+                                ),
+                            )
                         }
                         currentStatus = MessageStatus.TOOL_CALLING
                         onStreamUpdate(modelMessage())
@@ -692,7 +740,17 @@ class GenerationManager(
                             val clipped = result.take(Constants.MAX_TOOL_RESULT_LENGTH)
                             val idx = segments.indexOfLast { it.toolCallId == call.id }
                             if (idx >= 0) {
-                                segments[idx] = segments[idx].copy(toolResult = clipped)
+                                val finishedAt = System.currentTimeMillis()
+                                val completed = segments[idx].copy(
+                                    toolResult = clipped,
+                                    toolFinishedAtMs = finishedAt,
+                                )
+                                segments[idx] = completed.copy(
+                                    toolStatus = ToolExecutionPresentation.status(
+                                        completed,
+                                        MessageStatus.SUCCESS,
+                                    ) ?: ToolExecutionStatus.SUCCESS,
+                                )
                                 roundToolSegments.add(segments[idx])
                             }
                             ToolCallData(call.name, call.arguments, clipped, call.signature, call.id)
@@ -830,10 +888,14 @@ class GenerationManager(
             }
             } // else { // called buildApiPath when currentStatus == ERROR
         } catch (e: CancellationException) {
+            finishPendingTools(ToolExecutionStatus.STOPPED)
             currentStatus = MessageStatus.STOPPED
             throw e
         } catch (e: Exception) {
             val isCancelled = generationJob?.isCancelled == true
+            finishPendingTools(
+                if (isCancelled) ToolExecutionStatus.STOPPED else ToolExecutionStatus.INTERRUPTED,
+            )
             currentStatus = if (isCancelled) MessageStatus.STOPPED else MessageStatus.ERROR
             if (!isCancelled) {
                 totalText = com.newoether.agora.api.GenerationError.Unknown(e).userMessage()
