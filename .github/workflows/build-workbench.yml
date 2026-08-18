@@ -8,7 +8,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -23,6 +23,45 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+      - name: Wire stable tool errors into generation once
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/workbench/fix-backup-import-oom-20260810'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt')
+          s = p.read_text()
+          replacements = {
+              '                        provider.execute(name, arguments, ctx)\n':
+              '                        ToolExecutionErrors.normalizeResult(name, provider.execute(name, arguments, ctx))\n',
+              '            "Unknown tool: $name"\n':
+              '            ToolExecutionErrors.unknownTool(name)\n',
+              '            "Error executing tool \'$name\': timed out after ${ctx.toolTimeoutMs}ms"\n':
+              '            ToolExecutionErrors.timeout(name)\n',
+              '            "Error executing tool \'$name\': ${e.localizedMessage ?: "Unknown error"}"\n':
+              '            ToolExecutionErrors.exception(name, e)\n',
+              '                totalText = "Error: ${e.localizedMessage ?: "An unexpected error occurred."}"\n':
+              '                totalText = com.newoether.agora.api.GenerationError.Unknown(e).userMessage()\n',
+          }
+          changed = False
+          for old, new in replacements.items():
+              count = s.count(old)
+              if count == 1:
+                  s = s.replace(old, new)
+                  changed = True
+              elif new in s:
+                  pass
+              else:
+                  raise SystemExit(f'expected source or wired form: {old!r}')
+          p.write_text(s)
+          Path('/tmp/tool-errors-changed').write_text('1' if changed else '0')
+          PY
+          if [ "$(cat /tmp/tool-errors-changed)" = 1 ]; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+            git commit -m '接入统一工具错误码和中文提示'
+            git push origin HEAD:workbench/fix-backup-import-oom-20260810
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
