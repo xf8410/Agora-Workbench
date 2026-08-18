@@ -17,8 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          submodules: recursive
           fetch-depth: 0
-      - name: Apply Stage 2 and restore workflow
+      - name: Apply Stage 2 source changes once
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -26,17 +27,24 @@ jobs:
           text = Path('.github/workflows/apply-stage2-token-layout-once.yml').read_text()
           start = text.index("          python3 - <<'PY'\n") + len("          python3 - <<'PY'\n")
           end = text.index("\n          PY", start)
-          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in text[start:end].splitlines())
+          lines = text[start:end].splitlines()
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
+          script = script.replace("          Path('.github/workflows/apply-stage2-token-layout-once.yml').unlink()\n", "")
+          script = script.replace("Path('.github/workflows/apply-stage2-token-layout-once.yml').unlink()\n", "")
           exec(compile(script, 'stage2-applicator', 'exec'))
           PY
-          git show 340145dd7a6d74202dd005af74be878cdcfd3f04:.github/workflows/build-workbench.yml > .github/workflows/build-workbench.yml
           git diff --check
-          git diff --stat
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m 'Move per-reply token usage below assistant actions'
-          git push origin HEAD:workbench/generation-ui-timeout-tools-20260818
+          git add app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt \
+                  app/src/main/java/com/newoether/agora/ui/chat/message/AssistantActionVisibility.kt \
+                  app/src/test/java/com/newoether/agora/ui/chat/message/AssistantActionVisibilityTest.kt \
+                  app/src/main/res/values/strings.xml \
+                  app/src/main/res/values-zh/strings.xml
+          if ! git diff --cached --quiet; then
+            git commit -m 'Move per-reply token usage below assistant actions'
+            git push origin HEAD:workbench/generation-ui-timeout-tools-20260818
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
