@@ -708,6 +708,7 @@
 
     <!-- Cost & Tokens -->
     <string name="cost_tokens">消耗 %1$d Tokens</string>
+    <string name="reply_token_usage">Token 总消耗：%1$d</string>
     <string name="total_tokens">总计：%1$d Tokens</string>
 
     <!-- General Actions -->
