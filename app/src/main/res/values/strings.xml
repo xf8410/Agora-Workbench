@@ -126,6 +126,7 @@
     <string name="arguments_label">Arguments:</string>
     <string name="result_label">Result:</string>
     <string name="cost_tokens">Cost %1$d tokens</string>
+    <string name="reply_token_usage">Total usage: %1$d tokens</string>
     <string name="thinking_ellipsis">Thinking...</string>
     <string name="answering_ellipsis">Answering...</string>
     <string name="sending_ellipsis">Sending...</string>
@@ -949,4 +950,7 @@
     <string name="settings_github_desc">Sign in, manage private repositories, Actions, Codespaces, and memory sync</string>
     <string name="settings_uma">赛马娘工作台</string>
     <string name="settings_uma_desc">Agora 内置 SO 端点工具、后台监听和游戏浮窗</string>
+
+    <string name="tool_detail_loading">Loading complete tool details…</string>
+    <string name="tool_detail_load_failed">Complete tool details could not be loaded.</string>
 </resources>

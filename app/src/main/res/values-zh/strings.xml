@@ -708,6 +708,7 @@
 
     <!-- Cost & Tokens -->
     <string name="cost_tokens">消耗 %1$d Tokens</string>
+    <string name="reply_token_usage">Token 总消耗：%1$d</string>
     <string name="total_tokens">总计：%1$d Tokens</string>
 
     <!-- General Actions -->
@@ -1020,4 +1021,7 @@
     <string name="proxy_password">密码(可选)</string>
     <string name="proxy_bypass">直连列表</string>
     <string name="proxy_bypass_desc">直接连接、不经过代理的主机和 CIDR 网段,每行一个</string>
+
+    <string name="tool_detail_loading">正在加载完整工具详情…</string>
+    <string name="tool_detail_load_failed">无法加载完整工具详情。</string>
 </resources>

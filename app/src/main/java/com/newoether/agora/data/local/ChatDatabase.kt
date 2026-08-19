@@ -170,6 +170,26 @@ data class MessageEntity(
     val attachmentMeta: String? = null
 )
 
+/** Normal chat-list row. Full tool payloads are deliberately excluded when large. */
+data class MessageListRow(
+    val id: String,
+    val conversationId: String,
+    val parentId: String?,
+    val text: String,
+    val images: List<String>,
+    val thoughts: String?,
+    val thoughtTitle: String?,
+    val tokenCount: Int,
+    val status: MessageStatus,
+    val participant: Participant,
+    val timestamp: Long,
+    val thoughtTimeMs: Long?,
+    val modelName: String?,
+    val toolCallSummaryJson: String?,
+    val toolPayloadAvailable: Boolean,
+    val attachmentMeta: String?,
+)
+
 /** Lightweight projection for startup cleanup; never loads message bodies. */
 data class MessageImagesProjection(
     val images: List<String>,
@@ -205,8 +225,9 @@ interface ChatDao {
 [… thoughts preview truncated]'
             ELSE thoughts END AS thoughts,
           thoughtTitle, tokenCount, status, participant, timestamp, thoughtTimeMs, modelName,
-          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) > :maxToolJsonChars
-            THEN NULL ELSE toolCallJson END AS toolCallJson,
+          CASE WHEN toolCallJson IS NOT NULL AND length(toolCallJson) <= :maxToolSummaryChars
+            THEN toolCallJson ELSE NULL END AS toolCallSummaryJson,
+          CASE WHEN toolCallJson IS NOT NULL THEN 1 ELSE 0 END AS toolPayloadAvailable,
           CASE WHEN attachmentMeta IS NOT NULL AND length(attachmentMeta) > :maxAttachmentMetaChars
             THEN NULL ELSE attachmentMeta END AS attachmentMeta
         FROM (
@@ -221,9 +242,13 @@ interface ChatDao {
         limit: Int = 200,
         maxTextChars: Int = 65536,
         maxThoughtChars: Int = 32768,
-        maxToolJsonChars: Int = 131072,
+        maxToolSummaryChars: Int = 4096,
         maxAttachmentMetaChars: Int = 32768,
-    ): Flow<List<MessageEntity>>
+    ): Flow<List<MessageListRow>>
+
+    /** Full payload query used only after the user opens tool details. */
+    @Query("SELECT toolCallJson FROM messages WHERE id = :messageId LIMIT 1")
+    suspend fun getToolCallJson(messageId: String): String?
 
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
     fun getMessageCountForConversation(conversationId: String): Flow<Int>

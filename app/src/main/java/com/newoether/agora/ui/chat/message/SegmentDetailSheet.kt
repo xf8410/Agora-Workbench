@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,6 +55,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import com.newoether.agora.ui.components.DialogWindowEdgeToEdge
 import com.newoether.agora.R
 import com.newoether.agora.model.ChatMessage
+import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.ui.theme.ChatType
 import com.newoether.agora.util.noOpBringIntoView
 import com.mikepenz.markdown.m3.Markdown
@@ -89,11 +91,26 @@ internal fun SegmentDetailSheet(
     thoughtMarkdownPadding: MarkdownPadding,
     markdownComponents: MarkdownComponents,
     markdownFlavour: MarkdownFlavourDescriptor,
+    loadToolSegments: suspend (String) -> List<MessageSegment>?,
     onDismiss: () -> Unit
 ) {
-    val liveSegs = remember(message.segments) {
+    val initialSegs = remember(message.segments) {
         mergeAdjacentSegments(message.segments.orEmpty()).filter { it.type != "answer" }
     }
+    var loadedSegs by remember(message.id) { mutableStateOf<List<MessageSegment>?>(null) }
+    var payloadLoading by remember(message.id) { mutableStateOf(false) }
+    var payloadLoadFailed by remember(message.id) { mutableStateOf(false) }
+    val needsPayload = initialSegs.any { it.payloadDeferred }
+    LaunchedEffect(message.id, needsPayload) {
+        if (needsPayload) {
+            payloadLoading = true
+            val full = loadToolSegments(message.id)
+            if (full == null) payloadLoadFailed = true
+            else loadedSegs = mergeAdjacentSegments(full).filter { it.type != "answer" }
+            payloadLoading = false
+        }
+    }
+    val liveSegs = loadedSegs ?: initialSegs
     val selectedSegs = remember(liveSegs, selectedSegmentIndices, selectedSegmentIndex) {
         selectedSegmentIndices.mapNotNull { liveSegs.getOrNull(it) }
             .ifEmpty { liveSegs.getOrNull(selectedSegmentIndex)?.let { listOf(it) }.orEmpty() }
@@ -373,7 +390,11 @@ internal fun SegmentDetailSheet(
                                         modifier = Modifier.padding(top = if (index == 0) 0.dp else 18.dp, bottom = 8.dp)
                                     )
                                     if (detailSeg.type == "tool") {
-                                        ToolDetailContent(detailSeg)
+                                        when {
+                                            payloadLoading -> ToolPayloadLoading()
+                                            payloadLoadFailed -> ToolPayloadLoadError()
+                                            else -> SelectionContainer { ToolDetailContent(detailSeg) }
+                                        }
                                     } else if (detailSeg.type == "transcription" && detailSeg.content.isBlank()) {
                                         Text(
                                             text = "Image transcription is empty.",
@@ -411,7 +432,11 @@ internal fun SegmentDetailSheet(
                                     }
                                 }
                             } else if (seg.type == "tool") {
-                                ToolDetailContent(seg)
+                                when {
+                                    payloadLoading -> ToolPayloadLoading()
+                                    payloadLoadFailed -> ToolPayloadLoadError()
+                                    else -> SelectionContainer { ToolDetailContent(seg) }
+                                }
                             } else if (seg.type == "transcription" && seg.content.isBlank()) {
                                 Text(
                                     text = "Image transcription is empty.",
@@ -493,4 +518,23 @@ internal fun SegmentDetailSheet(
             }
         }
     }
+}
+
+
+@Composable
+private fun ToolPayloadLoading() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+        CircularProgressIndicator()
+        Text(stringResource(R.string.tool_detail_loading), modifier = Modifier.padding(top = 12.dp))
+    }
+}
+
+@Composable
+private fun ToolPayloadLoadError() {
+    Text(
+        text = stringResource(R.string.tool_detail_load_failed),
+        color = MaterialTheme.colorScheme.error,
+        style = ChatType.body,
+        modifier = Modifier.padding(vertical = 24.dp),
+    )
 }

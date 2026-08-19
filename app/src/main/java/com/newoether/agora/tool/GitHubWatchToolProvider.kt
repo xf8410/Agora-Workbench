@@ -7,6 +7,7 @@ import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
 import com.newoether.agora.github.GitHubRunWatchManager
 import com.newoether.agora.viewmodel.GenerationContext
+import com.newoether.agora.viewmodel.GitHubMutationConfirmation
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -14,10 +15,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Persistent Actions watches plus guarded PR mutations. */
+/** Persistent Actions watches plus guarded GitHub mutations. */
 class GitHubWatchToolProvider(context: Context) : ToolProvider {
     private val manager = GitHubRunWatchManager(context.applicationContext)
     private val pullRequests = GitHubPullRequestToolProvider(context.applicationContext)
+    private val workflowRunMutations = GitHubWorkflowRunMutationToolProvider(context.applicationContext).also { provider ->
+        provider.confirm = { _, summary -> GitHubMutationConfirmation.confirm(summary) }
+    }
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val watchNames = setOf(
         "github_watch_workflow_run", "github_list_watches",
@@ -37,11 +41,12 @@ class GitHubWatchToolProvider(context: Context) : ToolProvider {
             tool("github_cancel_watch", "Stop one local watch. This does not cancel the GitHub Actions run.", mapOf(
                 "watch_id" to string("Watch ID to cancel.")), listOf("watch_id")),
         )
-        return watches + pullRequests.definitions(ctx)
+        return watches + pullRequests.definitions(ctx) + workflowRunMutations.definitions(ctx)
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
         if (pullRequests.handles(name)) return pullRequests.execute(name, arguments, ctx)
+        if (workflowRunMutations.handles(name)) return workflowRunMutations.execute(name, arguments, ctx)
         val args = runCatching { json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" }) }
             .getOrElse { return error("Invalid tool arguments") }
         fun text(key: String) = (args[key] as? JsonPrimitive)?.content.orEmpty()
@@ -62,5 +67,6 @@ class GitHubWatchToolProvider(context: Context) : ToolProvider {
         ToolDefinition(function = ToolFunction(name = name, description = description,
             parameters = ToolParameters(properties = properties, required = required)))
     private fun error(message: String) = buildJsonObject { put("ok", false); put("error", message.take(500)) }.toString()
-    override fun handles(name: String) = name in watchNames || pullRequests.handles(name)
+    override fun handles(name: String) =
+        name in watchNames || pullRequests.handles(name) || workflowRunMutations.handles(name)
 }

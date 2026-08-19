@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.Participant
+import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.model.StableModelAliases
 import com.newoether.agora.model.ToolCallDisplayModes
 import com.newoether.agora.ui.common.LocalAgoraHaptics
@@ -51,6 +52,7 @@ fun MessageItem(
     onMediaClick: (List<String>, Int) -> Unit = { _, _ -> },
     onFileContentClick: ((fileName: String, content: String) -> Unit)? = null,
     onPdfPagesClick: ((pages: List<String>, startIndex: Int) -> Unit)? = null,
+    loadToolSegments: suspend (String) -> List<MessageSegment>? = { null },
     onHeightChanged: (Int) -> Unit = {},
     thoughtExpandedStates: SnapshotStateMap<String, Boolean> = remember { mutableStateMapOf() }
 ) {
@@ -227,6 +229,7 @@ fun MessageItem(
             thoughtMarkdownPadding = thoughtMarkdownPadding,
             markdownComponents = customMarkdownComponents,
             markdownFlavour = markdownFlavour,
+            loadToolSegments = loadToolSegments,
             onDismiss = { showSegmentDetail = false }
         )
     }

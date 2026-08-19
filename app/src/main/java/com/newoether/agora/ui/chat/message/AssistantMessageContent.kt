@@ -146,7 +146,6 @@ internal fun AssistantMessageContent(
                 val toolCallingStatus = stringResource(R.string.tool_calling_ellipsis)
                 val transcribingStatus = stringResource(R.string.transcription_ellipsis)
                 val statusText = when {
-                    message.status == MessageStatus.SUCCESS -> if (message.tokenCount > 0) stringResource(R.string.cost_tokens, message.tokenCount) else null
                     isStreaming && isTranscribing -> transcribingStatus
                     isStreaming && isToolCalling -> toolCallingStatus
                     isStreaming && thinkingNow -> thinkingStatus
@@ -616,7 +615,14 @@ internal fun AssistantMessageContent(
 
                 if (message.participant == Participant.MODEL) {
                     AnimatedVisibility(
-                        visible = shouldShowAssistantActions(isStreaming, message.text),
+                        visible = shouldShowAssistantActions(
+                            isStreaming = isStreaming,
+                            text = message.text,
+                            hasRenderableContent = message.images.isNotEmpty() ||
+                                !message.segments.isNullOrEmpty() ||
+                                message.status == MessageStatus.ERROR ||
+                                message.status == MessageStatus.STOPPED,
+                        ),
                         enter = fadeIn(tween(400)) + expandVertically(tween(400)),
                         exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
                     ) {
@@ -676,6 +682,20 @@ internal fun AssistantMessageContent(
                             }
                         }
                     }
+                }
+
+                AnimatedVisibility(
+                    visible = message.participant == Participant.MODEL &&
+                        shouldShowAssistantTokenUsage(message.status, message.tokenCount),
+                    enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+                    exit = fadeOut(tween(200)) + shrinkVertically(tween(200)),
+                ) {
+                    Text(
+                        text = stringResource(R.string.reply_token_usage, message.tokenCount),
+                        style = ChatType.meta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

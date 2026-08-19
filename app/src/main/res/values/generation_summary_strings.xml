@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="generation_config_summary_action">Current configuration</string>
+    <string name="generation_config_summary_title">Current request configuration</string>
+    <string name="generation_reset_defaults_action">Restore defaults</string>
+    <string name="generation_reset_defaults_title">Restore generation defaults?</string>
+    <string name="generation_reset_defaults_message">Temperature, max output tokens, Top P, frequency penalty, and presence penalty will return to provider defaults. Models, API keys, context window, thinking settings, and conversation overrides will not change.</string>
+    <string name="generation_reset_defaults_confirm">Restore</string>
+</resources>

@@ -54,12 +54,12 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:102:31 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/MainActivity.kt:574:33 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/DuckDuckGoScraper.kt:205:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:170:58 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:172:32 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:224:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:226:93 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:237:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:246:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:167:58 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:169:32 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:221:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:223:93 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:234:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/HttpClient.kt:243:53 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:189:61 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:195:52 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/api/gemini/GeminiProvider.kt:217:76 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ToolCallData'.
@@ -80,7 +80,7 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/bottombar/ChatBottomBar.kt:365:21 'fun ExposedDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = ..., scrollState: ScrollState = ..., focusable: Boolean = ..., matchTextFieldWidth: Boolean = ..., shape: Shape = ..., containerColor: Color = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ..., border: BorderStroke? = ..., content: ComposableFunction1<ColumnScope, Unit>): Unit' is deprecated. The `focusable` parameter is unused. Pass the proper ExposedDropdownMenuAnchorType to Modifier.menuAnchor instead, which will handle focusability automatically.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/bottombar/ChatBottomBar.kt:426:21 'fun ExposedDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = ..., scrollState: ScrollState = ..., focusable: Boolean = ..., matchTextFieldWidth: Boolean = ..., shape: Shape = ..., containerColor: Color = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ..., border: BorderStroke? = ..., content: ComposableFunction1<ColumnScope, Unit>): Unit' is deprecated. The `focusable` parameter is unused. Pass the proper ExposedDropdownMenuAnchorType to Modifier.menuAnchor instead, which will handle focusability automatically.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/bottombar/ChatBottomBarComponents.kt:29:60 Redundant call of conversion method.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt:332:63 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Long'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/message/AssistantMessageContent.kt:331:63 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Long'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/message/MessageDialogs.kt:37:39 Unnecessary safe call on a non-null receiver of type 'String'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/chat/message/MessageItemTimeline.kt:242:53 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Long'.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/components/DialogWindowEdgeToEdge.kt:23:16 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
@@ -120,13 +120,16 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/co
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTitleGenPage.kt:67:75 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTranscriptionPage.kt:78:86 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
 w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/settings/SettingsTranscriptionPage.kt:97:71 'val Icons.Filled.Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat.
-w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt:674:47 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/uma/UmaGitTreeClient.kt:131:25 Unnecessary non-null assertion (!!) on a non-null receiver of type 'GitHubApiResponse'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/uma/UmaGitTreeClient.kt:132:32 Unnecessary non-null assertion (!!) on a non-null receiver of type 'GitHubApiResponse'.
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt:675:47 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/viewmodel/ChatViewModel.kt:721:123 Elvis operator (?:) is useless if the left operand is null.
 
 > Task :app:compileFdroidDebugJavaWithJavac NO-SOURCE
 > Task :app:processFdroidDebugJavaRes
 > Task :app:bundleFdroidDebugClassesToCompileJar
-> Task :app:kspFdroidDebugUnitTestKotlin
 > Task :app:transformFdroidDebugClassesWithAsm
+> Task :app:kspFdroidDebugUnitTestKotlin
 > Task :app:bundleFdroidDebugClassesToRuntimeJar
 
 > Task :app:compileFdroidDebugUnitTestKotlin
@@ -143,14 +146,20 @@ w: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/test/java/co
 
 > Task :app:testFdroidDebugUnitTest
 
-GenerationErrorTest > Timeout userMessage FAILED
-    org.junit.ComparisonFailure at GenerationErrorTest.kt:105
+HttpClientTimeoutPolicyTest > ordinaryRequests_remainBounded FAILED
+    java.lang.AssertionError at HttpClientTimeoutPolicyTest.kt:19
+
+HttpGenerationErrorPolicyTest > plain 502 gateway failure is retryable and is not context overflow FAILED
+    java.lang.AssertionError at HttpGenerationErrorPolicyTest.kt:15
+
+HttpGenerationErrorPolicyTest > 502 with explicit provider context evidence is classified from body FAILED
+    java.lang.AssertionError at HttpGenerationErrorPolicyTest.kt:24
 
 OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
 
 > Task :app:testFdroidDebugUnitTest
 
-280 tests completed, 1 failed
+305 tests completed, 3 failed
 
 > Task :app:testFdroidDebugUnitTest FAILED
 
@@ -305,5 +314,5 @@ Caused by: org.gradle.api.internal.exceptions.MarkedVerificationException: There
 	... 30 more
 
 
-BUILD FAILED in 2m 8s
+BUILD FAILED in 2m 23s
 31 actionable tasks: 31 executed

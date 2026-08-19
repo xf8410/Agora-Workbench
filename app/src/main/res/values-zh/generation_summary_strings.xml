@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="generation_config_summary_action">当前配置</string>
+    <string name="generation_config_summary_title">当前请求配置</string>
+    <string name="generation_reset_defaults_action">恢复默认值</string>
+    <string name="generation_reset_defaults_title">恢复默认生成参数？</string>
+    <string name="generation_reset_defaults_message">温度、最大输出 Token、Top P、频率惩罚和存在惩罚将恢复为提供商默认值。模型、API Key、上下文窗口、思考设置和对话级覆盖不会改变。</string>
+    <string name="generation_reset_defaults_confirm">恢复</string>
+</resources>

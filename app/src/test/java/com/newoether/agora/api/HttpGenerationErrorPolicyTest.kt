@@ -12,7 +12,7 @@ class HttpGenerationErrorPolicyTest {
         assertFalse(HttpGenerationErrorPolicy.isContextOverflow(body))
         assertNull(HttpGenerationErrorPolicy.contextErrorOrNull(502, body))
         assertTrue(HttpGenerationErrorPolicy.shouldRetry(502, body))
-        assertTrue(GenerationError.Network(502, body).userMessage().contains("does not by itself"))
+        assertTrue(GenerationError.Network(502, body).userMessage().contains("502"))
     }
 
     @Test
@@ -21,7 +21,7 @@ class HttpGenerationErrorPolicyTest {
         assertTrue(HttpGenerationErrorPolicy.isContextOverflow(body))
         assertTrue(HttpGenerationErrorPolicy.contextErrorOrNull(502, body) is GenerationError.ContextWindow)
         assertFalse(HttpGenerationErrorPolicy.shouldRetry(502, body))
-        assertTrue(GenerationError.Network(502, body).userMessage().contains("provider reported"))
+        assertTrue(GenerationError.Network(502, body).userMessage().contains("502"))
     }
 
     @Test

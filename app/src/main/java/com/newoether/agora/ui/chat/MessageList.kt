@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.MessageStatus
+import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.model.Participant
 import com.newoether.agora.model.StableMessageList
 import com.newoether.agora.model.StableModelAliases
@@ -57,6 +58,7 @@ fun MessageList(
     onMediaClick: (List<String>, Int) -> Unit = { _, _ -> },
     onFileContentClick: ((fileName: String, content: String) -> Unit)? = null,
     onPdfPagesClick: ((pages: List<String>, startIndex: Int) -> Unit)? = null,
+    loadToolSegments: suspend (String) -> List<MessageSegment>? = { null },
     thoughtExpandedStates: SnapshotStateMap<String, Boolean> = remember { mutableStateMapOf() },
     hasOlderMessages: Boolean = false,
     onLoadOlder: () -> Unit = {},
@@ -173,6 +175,7 @@ fun MessageList(
                         onMediaClick = onMediaClick,
                         onFileContentClick = onFileContentClick,
                         onPdfPagesClick = onPdfPagesClick,
+                        loadToolSegments = loadToolSegments,
                         onHeightChanged = { height -> messageHeights[message.id] = height },
                         thoughtExpandedStates = thoughtExpandedStates
                     )

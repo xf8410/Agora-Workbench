@@ -3,9 +3,9 @@ name: Build Agora Workbench APK
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, 'workbench/**']
   push:
-    branches: [main]
+    branches: [main, 'workbench/**']
 
 permissions:
   contents: write
@@ -56,6 +56,13 @@ jobs:
           HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log
+      - name: Preserve unit test diagnostics on failure
+        if: steps.unit_tests.outcome == 'failure'
+        env:
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
           cp unit-test-console.log ci-failure-summary.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
@@ -63,9 +70,6 @@ jobs:
           git commit -m "保存单元测试原始诊断 [skip ci]"
           git push origin "HEAD:${HEAD_BRANCH}"
           exit 1
-      - name: Fail after preserved unit test diagnostics
-        if: steps.unit_tests.outcome == 'failure'
-        run: exit 1
       - name: Build APK (verify main SHA compiles)
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - name: Verify APK output
