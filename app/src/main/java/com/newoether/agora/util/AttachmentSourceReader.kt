@@ -16,34 +16,20 @@ object AttachmentSourceReader {
     }
 
     fun readText(context: Context, source: String, maxChars: Int): String? =
-        if (source.endsWith(".zip", ignoreCase = true)) readZipText(context, source)
-        else readText(source, maxChars) { uriSource -> context.contentResolver.openInputStream(Uri.parse(uriSource)) }
-
-    /** Streams every non-directory ZIP entry into a readable text representation. */
-    private fun readZipText(context: Context, source: String): String? = try {
-        open(context, source)?.use { input ->
-            ZipInputStream(input.buffered()).use { zip ->
-                val result = StringBuilder()
-                val buffer = CharArray(8_192)
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    if (!entry.isDirectory) {
-                        result.append("\n===== ").append(entry.name).append(" =====\n")
-                        val reader = InputStreamReader(zip, Charsets.UTF_8)
-                        while (true) {
-                            val count = reader.read(buffer)
-                            if (count <= 0) break
-                            result.append(buffer, 0, count)
-                        }
-                        result.append('\n')
-                    }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
-                }
-                result.toString()
+        if (source.endsWith(".zip", ignoreCase = true)) null else
+            readText(source, maxChars) { uriSource ->
+                context.contentResolver.openInputStream(Uri.parse(uriSource))
             }
-        }
-    } catch (_: Exception) { null }
+
+    /**
+     * ZIP files are opaque simulator/workspace attachments, not text documents.
+     * Never expand them into a String: the result is persisted in messages.attachmentMeta and
+     * can exceed Android's CursorWindow limit even when the ZIP itself is only a few megabytes.
+     * The original URI is retained in AttachmentMeta so the complete ZIP can still be opened or
+     * uploaded as one file.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun readZipText(context: Context, source: String): String? = null
 
     internal fun open(source: String, uriOpener: (String) -> InputStream?): InputStream? = try {
         when {
