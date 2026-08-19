@@ -16,31 +16,25 @@ sealed class GenerationError {
     object Timeout : GenerationError()
 
     fun userMessage(): String = when (this) {
-        is Network -> HttpGenerationErrorPolicy.contextErrorOrNull(statusCode, message)?.userMessage()
-            ?: when (statusCode) {
-                401 -> "Authentication failed. Please check your API key."
-                429 -> "Rate limit exceeded. Please wait and try again."
-                502 -> "Gateway error (502). The upstream service failed; this does not by itself mean the context is too long."
-                in 500..599 -> "Server error ($statusCode). The service may be temporarily unavailable."
-                else -> "Network error ($statusCode): $message"
-            }
-        is Api -> HttpGenerationErrorPolicy.contextErrorOrNull(code?.toIntOrNull() ?: 0, message)?.userMessage()
-            ?: buildString {
-                if (code != null) append(code)
-                if (type != null) append(" [$type]")
-                if (isNotEmpty()) append(": ")
-                append(message)
-            }
-        is ContextWindow -> "The provider reported that this request exceeds its context or input-token limit. Reduce the configured context window or start a new conversation. Provider response: $providerMessage"
-        is SseParse -> "Failed to parse server response."
-        is ToolExecution -> "Tool '$toolName' failed: $message"
-        is Transcription -> "Image transcription failed: $message"
-        is Embedding -> "Embedding failed: $message"
+        is Network -> when (statusCode) {
+            401 -> "身份验证失败。请检查这个模型提供商的 API 密钥。"
+            403 -> "没有权限使用这个模型。请检查 API 密钥权限或更换模型。"
+            429 -> "请求过于频繁或额度已用完。请稍后重试，并检查账户额度。"
+            404 -> "请求的接口地址不存在。请检查服务地址配置。"
+            in 500..599 -> "服务器错误（$statusCode）。服务可能暂时不可用。"
+            else -> "网络错误（$statusCode）：$message"
+        }
+        is Api -> apiMessage(code, type, message)
+        is ContextWindow -> "模型服务报告本次请求超出上下文长度。请减少附件或新建对话后重试。"
+        is SseParse -> "解析服务端响应失败。"
+        is ToolExecution -> "工具"$toolName"执行失败。请检查参数或重试。"
+        is Transcription -> "图片转录失败：$message"
+        is Embedding -> "向量化失败：$message"
         is LocalModel -> message
         is Configuration -> message
-        is Unknown -> cause.localizedMessage ?: "An unexpected error occurred."
-        Cancelled -> "Generation cancelled."
-        Timeout -> "A network connection, request write, or upstream transport operation timed out. There is no local elapsed read limit for ordinary or streaming responses. Local messages and completed tool progress were preserved; retry or continue from the latest checkpoint."
+        is Unknown -> unknownMessage(cause)
+        Cancelled -> "已取消生成。"
+        Timeout -> "网络连接或请求超时。普通和流式请求没有本地读取时间限制。本地消息和已完成的工具进度已保留，可从最近的检查点重试或继续。"
     }
 
     private fun apiMessage(code: String?, type: String?, raw: String): String {
