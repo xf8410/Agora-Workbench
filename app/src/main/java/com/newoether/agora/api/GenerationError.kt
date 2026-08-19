@@ -27,7 +27,7 @@ sealed class GenerationError {
         is Api -> apiMessage(code, type, message)
         is ContextWindow -> "模型服务报告本次请求超出上下文长度。请减少附件或新建对话后重试。"
         is SseParse -> "解析服务端响应失败。"
-        is ToolExecution -> "工具"$toolName"执行失败。请检查参数或重试。"
+        is ToolExecution -> "工具「$toolName」执行失败。请检查参数或重试。"
         is Transcription -> "图片转录失败：$message"
         is Embedding -> "向量化失败：$message"
         is LocalModel -> message
