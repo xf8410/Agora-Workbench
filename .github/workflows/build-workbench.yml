@@ -6,6 +6,8 @@ on:
     branches: [main, 'workbench/**']
   push:
     branches: [main, 'workbench/**']
+    paths-ignore:
+      - '**/*.md'
 
 permissions:
   contents: write
@@ -14,74 +16,136 @@ concurrency:
   group: build-workbench-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BUILD_FILE: app/build.gradle.kts
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Verify checked-out identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            git fetch origin main
+            test "$(git rev-parse origin/main)" = "${GITHUB_SHA}"
+          fi
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
+
       - uses: android-actions/setup-android@v3
+
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
-      - name: Unit tests
-        id: unit_tests
+
+      - name: Build proot native binaries
+        run: bash build-proot.sh
+
+      - name: Unit tests and APK build
+        id: gradle
         continue-on-error: true
+        shell: bash
         run: |
           set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test-console.log
-      - name: Preserve unit test diagnostics artifact
-        if: steps.unit_tests.outcome == 'failure'
-        continue-on-error: true
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest assembleFdroidDebug 2>&1 | tee gradle-build.log
+
+      - name: Upload unit test and build diagnostics
+        if: steps.gradle.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-diagnostics-${{ github.sha }}
+          name: agora-failure-diagnostics-${{ github.sha }}-${{ github.run_id }}
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 30
           path: |
-            unit-test-console.log
+            gradle-build.log
             app/build/reports/tests/
             app/build/test-results/
-      - name: Commit unit test diagnostics fallback
-        if: steps.unit_tests.outcome == 'failure' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
-        env:
-          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+            app/build/outputs/logs/
+
+      - name: Write bounded CI failure summary
+        if: steps.gradle.outcome == 'failure'
+        shell: bash
         run: |
           set -euo pipefail
-          chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log
-      - name: Preserve unit test diagnostics on failure
-        if: steps.unit_tests.outcome == 'failure'
-        env:
-          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          cp unit-test-console.log ci-failure-summary.txt
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add ci-failure-summary.txt
-          git commit -m "保存单元测试原始诊断 [skip ci]"
-          git push origin "HEAD:${HEAD_BRANCH}"
-          exit 1
-      - name: Build APK (verify main SHA compiles)
-        run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
-      - name: Verify APK output
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "ref=${GITHUB_REF_NAME}"
+            echo "head_sha=$(git rev-parse HEAD)"
+            echo
+            grep -E '(^e: |^w: |FAILURE:|What went wrong|Execution failed|Compilation error|There were failing tests|Caused by:)' gradle-build.log | tail -n 200 || true
+            echo
+            echo '--- tail ---'
+            tail -n 200 gradle-build.log
+          } > ci-failure-summary.txt
+
+      - name: Enforce Gradle success
+        if: steps.gradle.outcome == 'failure'
+        run: exit 1
+
+      - name: Prepare traceable APK and manifest
+        id: package
+        shell: bash
         run: |
           set -euo pipefail
-          apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          test -n "$apk_path"
-          test -s "$apk_path"
-      - name: Upload APK
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$BUILD_FILE" | head -n1)"
+          version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$BUILD_FILE" | head -n1)"
+          build_sha="$(git rev-parse HEAD)"
+          short_sha="${build_sha:0:12}"
+          built_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          source_apk="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$source_apk"
+          mkdir -p release
+          apk_name="Agora-Workbench-${version_name}-vc${version_code}-${short_sha}-run${GITHUB_RUN_ID}.apk"
+          cp "$source_apk" "release/$apk_name"
+          apk_sha256="$(sha256sum "release/$apk_name" | awk '{print $1}')"
+          printf '%s  %s\n' "$apk_sha256" "$apk_name" > "release/$apk_name.sha256"
+          cat > release/build-manifest.json <<EOF
+          {"repository":"${GITHUB_REPOSITORY}","branch":"${GITHUB_REF_NAME}","commit":"${build_sha}","versionName":"${version_name}","versionCode":${version_code},"runId":${GITHUB_RUN_ID},"runAttempt":${GITHUB_RUN_ATTEMPT},"builtAtUtc":"${built_at}","apk":"${apk_name}","sha256":"${apk_sha256}"}
+          EOF
+          cat > release/RELEASE_NOTES.md <<EOF
+          Automated Agora Workbench build from the exact checked-out commit.
+          - Version: ${version_name} (code ${version_code})
+          - Branch: ${GITHUB_REF_NAME}
+          - Commit: ${build_sha}
+          - Actions run: ${GITHUB_RUN_ID}
+          - SHA-256: ${apk_sha256}
+          EOF
+          echo "artifact_name=Agora-Workbench-${version_name}-${short_sha}-run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agora-workbench-debug
-          path: app/build/outputs/apk/fdroid/debug/*.apk
-          if-no-files-found: warn
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: release/*
+          if-no-files-found: error
           retention-days: 90
+
+      - name: Publish verified main HEAD
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: workbench-latest
+          target_commitish: ${{ github.sha }}
+          name: Agora Workbench ${{ steps.package.outputs.version_name }} (${{ github.sha }})
+          make_latest: true
+          body_path: release/RELEASE_NOTES.md
+          files: |
+            release/*.apk
+            release/*.sha256
+            release/build-manifest.json
+          fail_on_unmatched_files: true
+          overwrite_files: true
