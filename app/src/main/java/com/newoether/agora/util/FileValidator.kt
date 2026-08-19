@@ -4,6 +4,13 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 
+/**
+ * Attachment metadata helpers.
+ *
+ * File selection is intentionally not restricted by MIME type or size. Android document
+ * providers frequently report ZIP files as application/octet-stream (or no MIME at all),
+ * so validation must not reject them before the importer can inspect the bytes.
+ */
 object FileValidator {
     enum class Error {
         UNKNOWN_TYPE,
@@ -11,87 +18,41 @@ object FileValidator {
         TOO_LARGE
     }
 
-    private val MIME_WHITELIST = setOf(
-        "text/",
-        "application/json",
-        "application/xml",
-        "application/yaml",
-        "application/pdf"
-    )
-    private const val MAX_SIZE = 20L * 1024 * 1024
-
     data class Result(val valid: Boolean, val error: Error? = null, val mimeType: String? = null)
 
+    /** Accept every readable document; type/size checks belong to the parser/consumer. */
     fun validate(context: Context, uri: Uri): Result {
-        val mimeType = try {
-            context.contentResolver.getType(uri)
-        } catch (_: Exception) { null }
+        val mimeType = try { context.contentResolver.getType(uri) } catch (_: Exception) { null }
+        return Result(valid = true, mimeType = mimeType)
+    }
 
-        if (mimeType == null)
-            return Result(false, Error.UNKNOWN_TYPE, null)
+    fun resolveMimeType(context: Context, uriString: String): String? =
+        try { context.contentResolver.getType(Uri.parse(uriString)) } catch (_: Exception) { null }
 
-        val allowed = MIME_WHITELIST.any { mimeType.startsWith(it) } ||
-                      mimeType in MIME_WHITELIST
-        if (!allowed)
-            return Result(false, Error.UNSUPPORTED_TYPE, mimeType)
-
-        val fileSize = try {
-            val cursor = context.contentResolver.query(
-                uri, arrayOf(OpenableColumns.SIZE), null, null, null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val idx = it.getColumnIndex(OpenableColumns.SIZE)
-                    if (idx >= 0) it.getLong(idx) else null
+    fun resolveFileName(context: Context, uri: Uri): String? = try {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c ->
+                if (c.moveToFirst()) {
+                    val index = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) c.getString(index) else null
                 } else null
             }
-        } catch (_: Exception) { null }
+    } catch (_: Exception) { null }
 
-        if (fileSize != null && fileSize > MAX_SIZE && mimeType != "application/pdf")
-            return Result(false, Error.TOO_LARGE, mimeType)
-
-        return Result(true, mimeType = mimeType)
-    }
-
-    fun resolveMimeType(context: Context, uriString: String): String? {
-        return try {
-            context.contentResolver.getType(Uri.parse(uriString))
-        } catch (_: Exception) { null }
-    }
-
-    fun resolveFileName(context: Context, uri: Uri): String? {
-        return try {
-            val cursor = context.contentResolver.query(
-                uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val idx = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (idx >= 0) it.getString(idx) else null
+    fun resolveFileSize(context: Context, uri: Uri): Long? = try {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+            ?.use { c ->
+                if (c.moveToFirst()) {
+                    val index = c.getColumnIndex(OpenableColumns.SIZE)
+                    if (index >= 0) c.getLong(index) else null
                 } else null
             }
-        } catch (_: Exception) { null }
-    }
+    } catch (_: Exception) { null }
 
-    fun resolveFileSize(context: Context, uri: Uri): Long? {
-        return try {
-            val cursor = context.contentResolver.query(
-                uri, arrayOf(OpenableColumns.SIZE), null, null, null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val idx = it.getColumnIndex(OpenableColumns.SIZE)
-                    if (idx >= 0) it.getLong(idx) else null
-                } else null
-            }
-        } catch (_: Exception) { null }
-    }
-
-    fun errorMessage(context: Context, error: Error, mimeType: String? = null): String {
-        return when (error) {
+    fun errorMessage(context: Context, error: Error, mimeType: String? = null): String =
+        when (error) {
             Error.UNKNOWN_TYPE -> context.getString(com.newoether.agora.R.string.file_unknown_type)
             Error.UNSUPPORTED_TYPE -> context.getString(com.newoether.agora.R.string.file_unsupported_type, mimeType ?: "?")
             Error.TOO_LARGE -> context.getString(com.newoether.agora.R.string.file_too_large)
         }
-    }
 }
