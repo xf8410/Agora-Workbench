@@ -150,7 +150,7 @@ object HttpClient {
         .build()
 
     /** Streaming generation has no elapsed read deadline and remains explicitly cancellable. */
-    private val streamingClient: OkHttpClient = baseBuilder()
+    internal val streamingClient: OkHttpClient = baseBuilder()
         .readTimeout(HttpTimeoutPolicy.STREAM_READ_MINUTES, TimeUnit.MINUTES)
         .writeTimeout(HttpTimeoutPolicy.STREAM_WRITE_MINUTES, TimeUnit.MINUTES)
         .build()
