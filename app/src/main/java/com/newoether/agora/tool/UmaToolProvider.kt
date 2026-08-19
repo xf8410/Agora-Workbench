@@ -4,10 +4,14 @@ import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.api.ToolFunction
 import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
+import com.newoether.agora.uma.UmaApplicationContext
 import com.newoether.agora.uma.UmaProtocolCapture
 import com.newoether.agora.uma.UmaRuntimeState
+import com.newoether.agora.util.Constants
 import com.newoether.agora.viewmodel.GenerationContext
+import com.newoether.agora.viewmodel.GitHubMutationConfirmation
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URLEncoder
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -18,10 +22,27 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+internal fun umaSoReadTimeoutMs(path: String, maxBytes: Int): Int {
+    val expensivePath = path.startsWith("/il2cpp/classes") ||
+        path.startsWith("/scan") || path.startsWith("/dump") ||
+        path.startsWith("/memory") || path.startsWith("/process") ||
+        path.startsWith("/private") || path.startsWith("/storage/")
+    return if (expensivePath || maxBytes > 2 * 1024 * 1024) {
+        Constants.UMA_SO_LARGE_READ_TIMEOUT_MS
+    } else {
+        Constants.UMA_SO_SMALL_READ_TIMEOUT_MS
+    }
+}
+
 /** Local tools for the hlpatch server injected into the foreground game process. */
 class UmaToolProvider : ToolProvider {
     private val json = Json { ignoreUnknownKeys = true }
     private val base = "http://127.0.0.1:18765"
+    private val sessionExportTools by lazy {
+        UmaSessionExportToolProvider(UmaApplicationContext.require()).also { provider ->
+            provider.confirm = { _, summary -> GitHubMutationConfirmation.confirm(summary) }
+        }
+    }
     private val names = setOf(
         "uma_health", "uma_status", "uma_summary", "uma_get_snapshot", "uma_get_changes",
         "uma_event_choices", "uma_event_observations", "uma_hook_diagnostics",
@@ -34,7 +55,7 @@ class UmaToolProvider : ToolProvider {
         fun string(description: String) = ToolProperty("string", description)
         fun integer(description: String) = ToolProperty("integer", description)
         fun bool(description: String) = ToolProperty("boolean", description)
-        return listOf(
+        val localTools = listOf(
             tool("uma_health", "Check the local hlpatch SO version and health.", emptyMap()),
             tool("uma_status", "Read the local hlpatch initialization/status snapshot.", emptyMap()),
             tool("uma_summary", "Read the current Uma training state from the local SO.", emptyMap()),
@@ -64,9 +85,11 @@ class UmaToolProvider : ToolProvider {
             tool("uma_find_method", "Search for an IL2CPP method name.", mapOf(
                 "method" to string("Method keyword, 1-500 characters.")), listOf("method")),
         )
+        return localTools + sessionExportTools.definitions(ctx)
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
+        if (sessionExportTools.handles(name)) return sessionExportTools.execute(name, arguments, ctx)
         if (name !in names) return toolError("Unknown Uma tool")
         if (name == "uma_get_snapshot") return UmaRuntimeState.snapshotJson()
         if (name == "uma_get_changes") return UmaRuntimeState.changesJson()
@@ -127,17 +150,16 @@ class UmaToolProvider : ToolProvider {
         require(input.length in 2..1000) { "path length must be 2-1000" }
         require(!input.startsWith("//") && "://" !in input) { "absolute/network URLs are not allowed" }
         require(input.none { it == '\r' || it == '\n' || it == '\u0000' }) { "path contains control characters" }
-        // Private fork: all hlpatch GET endpoints are allowed, including sniff,
-        // private-file, process-memory and credential-bearing routes.
         return input
     }
 
     private suspend fun get(path: String, maxChars: Int): String = withContext(Dispatchers.IO) {
+        val timeoutMs = umaSoReadTimeoutMs(path, maxChars)
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"
-            connection.connectTimeout = 3_000
-            connection.readTimeout = 30_000
+            connection.connectTimeout = 5_000
+            connection.readTimeout = timeoutMs
             connection.useCaches = false
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
@@ -145,18 +167,25 @@ class UmaToolProvider : ToolProvider {
                 ?: throw IllegalStateException("hlpatch returned HTTP $code without a body")
             reader.use {
                 val out = StringBuilder(minOf(maxChars, 8_192))
-                val chunk = CharArray(2_048)
+                val chunk = CharArray(16 * 1024)
                 while (true) {
                     val count = it.read(chunk)
                     if (count < 0) break
                     if (out.length + count > maxChars) throw IllegalStateException(
-                        "hlpatch response exceeded the ${maxChars / 1024} KiB limit")
+                        "hlpatch response exceeded the ${maxChars / 1024} KiB limit; use a bounded/range endpoint")
                     out.append(chunk, 0, count)
                 }
                 if (code !in 200..299) throw IllegalStateException("hlpatch HTTP $code: ${out.take(300)}")
                 out.toString()
             }
-        } finally { connection.disconnect() }
+        } catch (timeout: SocketTimeoutException) {
+            throw IllegalStateException(
+                "hlpatch read timed out after ${timeoutMs / 1000}s at $path; use a narrower search/range endpoint or retry",
+                timeout,
+            )
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun tool(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String> = emptyList()) =
@@ -164,5 +193,5 @@ class UmaToolProvider : ToolProvider {
             parameters = ToolParameters(properties = properties, required = required)))
 
     private fun toolError(message: String) = buildJsonObject { put("ok", false); put("error", message) }.toString()
-    override fun handles(name: String): Boolean = name in names
+    override fun handles(name: String): Boolean = name in names || sessionExportTools.handles(name)
 }

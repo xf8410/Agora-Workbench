@@ -2,9 +2,13 @@ name: Build Agora Workbench APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main, 'workbench/**']
+  push:
+    branches: [main, 'workbench/**']
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -28,11 +32,45 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
       - name: Unit tests
+        id: unit_tests
+        continue-on-error: true
         run: |
           set -o pipefail
           chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test-console.log
+      - name: Preserve unit test diagnostics artifact
+        if: steps.unit_tests.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-diagnostics-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            unit-test-console.log
+            app/build/reports/tests/
+            app/build/test-results/
+      - name: Commit unit test diagnostics fallback
+        if: steps.unit_tests.outcome == 'failure' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+        env:
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log
-      - name: Build APK
+      - name: Preserve unit test diagnostics on failure
+        if: steps.unit_tests.outcome == 'failure'
+        env:
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          cp unit-test-console.log ci-failure-summary.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ci-failure-summary.txt
+          git commit -m "保存单元测试原始诊断 [skip ci]"
+          git push origin "HEAD:${HEAD_BRANCH}"
+          exit 1
+      - name: Build APK (verify main SHA compiles)
         run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
       - name: Verify APK output
         run: |

@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""Agora anonymous crash-report receiver.
+"""Agora crash-report receiver.
 
 Dependency-free (Python standard library only). Listens on a loopback port and is
 reverse-proxied by nginx at https://newoether.space/crash. Accepts a single JSON
-POST per crash and appends a sanitized record to a JSONL log.
-
-Privacy: only the fields the client sends (stack trace + coarse, non-identifying
-environment data) are stored. The client IP is intentionally NOT recorded, to match
-the in-app promise that no other information is collected.
+POST per crash and appends the complete record to a JSONL log.
 """
+
 import json
 import os
 import time
@@ -17,17 +14,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = "127.0.0.1"
 PORT = 8092
 MAX_BODY = 64 * 1024              # bytes; mirrors nginx client_max_body_size
-MAX_STR = 64 * 1024              # per-field char cap
 MAX_LOG_BYTES = 50 * 1024 * 1024  # rotate crashes.jsonl past this size
 RATE_LIMIT = 60                   # max accepted reports per ROLLING window
 RATE_WINDOW = 60.0                # seconds
 
 DATA_DIR = "/var/lib/agora-crash"
 LOG_FILE = os.path.join(DATA_DIR, "crashes.jsonl")
-ALLOWED_FIELDS = (
-    "trace", "appVersion", "versionCode",
-    "androidApi", "androidRelease", "device", "ts",
-)
 
 _recent = []  # timestamps of recently accepted reports (rolling rate limit)
 
@@ -49,22 +41,6 @@ def _rotate_if_needed():
             os.replace(LOG_FILE, LOG_FILE + ".1")
     except OSError:
         pass
-
-
-def _sanitize(data):
-    clean = {}
-    for k in ALLOWED_FIELDS:
-        if k not in data:
-            continue
-        v = data[k]
-        if isinstance(v, str):
-            clean[k] = v[:MAX_STR]
-        elif isinstance(v, bool):
-            clean[k] = v
-        elif isinstance(v, (int, float)):
-            clean[k] = v
-    clean["received_at"] = int(time.time())
-    return clean
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -95,11 +71,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400)
         if not isinstance(data, dict):
             return self._send(400)
-        record = _sanitize(data)
+        data["received_at"] = int(time.time())
         try:
             _rotate_if_needed()
             with open(LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.write(json.dumps(data, ensure_ascii=False) + "\n")
         except OSError:
             return self._send(500)
         self._send(204)

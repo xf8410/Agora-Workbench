@@ -1,10 +1,10 @@
 package com.newoether.agora.api
 
-/** Typed error hierarchy for LLM generation failures. User-facing text is concise Chinese. */
+/** Typed error hierarchy for LLM generation failures. */
 sealed class GenerationError {
     data class Network(val statusCode: Int, val message: String) : GenerationError()
     data class Api(val code: String?, val type: String?, val message: String) : GenerationError()
-    data class ContextWindow(val statusCode: Int) : GenerationError()
+    data class ContextWindow(val statusCode: Int, val providerMessage: String) : GenerationError()
     data class SseParse(val rawLine: String, val cause: String) : GenerationError()
     data class ToolExecution(val toolName: String, val arguments: String, val message: String) : GenerationError()
     data class Transcription(val imagePath: String, val message: String) : GenerationError()
@@ -18,34 +18,29 @@ sealed class GenerationError {
     fun userMessage(): String = when (this) {
         is Network -> HttpGenerationErrorPolicy.contextErrorOrNull(statusCode, message)?.userMessage()
             ?: when (statusCode) {
-                0 -> "无法连接到模型服务。请检查网络、代理和服务地址后重试。"
-                400 -> "请求格式不正确，模型服务无法处理。请检查模型设置或换一个模型后重试。"
-                401 -> "身份验证失败。请检查这个模型提供商的 API 密钥。"
-                403 -> "模型服务拒绝了请求。请检查 API 密钥权限、账户状态或模型访问权限。"
-                404 -> "找不到模型接口或模型。请检查服务地址、/v1 路径和模型名称。"
-                408 -> "模型服务等待请求超时。请检查网络后重试。"
-                413 -> "发送的内容太大。请减少附件或消息内容后重试。"
-                422 -> "模型服务无法接受当前参数。请检查模型名称和生成设置。"
-                429 -> "请求过于频繁或额度已用完。请稍后重试，并检查账户额度。"
-                500 -> "模型服务内部出错。你的消息已保留，请稍后重试。"
-                502 -> "上游模型服务暂时没有正常响应（502）。这不一定是消息过长，请稍后重试。"
-                503 -> "模型服务当前不可用（503）。请稍后重试。"
-                504 -> "上游模型服务响应超时（504）。请稍后重试。"
-                in 500..599 -> "模型服务暂时出错（$statusCode）。你的消息已保留，请稍后重试。"
-                else -> "请求模型服务失败（$statusCode）。请检查网络和模型设置后重试。"
+                401 -> "Authentication failed. Please check your API key."
+                429 -> "Rate limit exceeded. Please wait and try again."
+                502 -> "Gateway error (502). The upstream service failed; this does not by itself mean the context is too long."
+                in 500..599 -> "Server error ($statusCode). The service may be temporarily unavailable."
+                else -> "Network error ($statusCode): $message"
             }
         is Api -> HttpGenerationErrorPolicy.contextErrorOrNull(code?.toIntOrNull() ?: 0, message)?.userMessage()
-            ?: apiMessage(code, type, message)
-        is ContextWindow -> "当前对话内容超过了模型的消息上限，模型无法继续读取。请新建对话，或删除、缩短较早的消息后重试。"
-        is SseParse -> "模型返回的数据格式不完整，应用无法读取这次回复。请重试；如果反复出现，请检查服务兼容性。"
-        is ToolExecution -> "工具“$toolName”执行失败。请检查工具设置后重试。"
-        is Transcription -> "图片转文字失败。请检查图片格式、转写模型和网络后重试。"
-        is Embedding -> "文本索引生成失败。请检查嵌入模型、API 密钥和服务地址。"
-        is LocalModel -> localizeFallback(message, "本地模型运行失败。请检查模型文件和设备内存。")
-        is Configuration -> localizeFallback(message, "模型配置不完整。请检查 API 密钥、服务地址和模型名称。")
-        is Unknown -> unknownMessage(cause)
-        Cancelled -> "已停止生成。"
-        Timeout -> "连接或发送请求超时。你的消息和已经生成的内容已保留，请检查网络后重试。"
+            ?: buildString {
+                if (code != null) append(code)
+                if (type != null) append(" [$type]")
+                if (isNotEmpty()) append(": ")
+                append(message)
+            }
+        is ContextWindow -> "The provider reported that this request exceeds its context or input-token limit. Reduce the configured context window or start a new conversation. Provider response: $providerMessage"
+        is SseParse -> "Failed to parse server response."
+        is ToolExecution -> "Tool '$toolName' failed: $message"
+        is Transcription -> "Image transcription failed: $message"
+        is Embedding -> "Embedding failed: $message"
+        is LocalModel -> message
+        is Configuration -> message
+        is Unknown -> cause.localizedMessage ?: "An unexpected error occurred."
+        Cancelled -> "Generation cancelled."
+        Timeout -> "A network connection, request write, or upstream transport operation timed out. There is no local elapsed read limit for ordinary or streaming responses. Local messages and completed tool progress were preserved; retry or continue from the latest checkpoint."
     }
 
     private fun apiMessage(code: String?, type: String?, raw: String): String {

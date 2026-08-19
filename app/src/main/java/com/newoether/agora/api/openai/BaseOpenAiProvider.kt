@@ -1,7 +1,6 @@
 package com.newoether.agora.api.openai
 
 import com.newoether.agora.api.*
-
 import com.newoether.agora.util.DebugLog
 import com.newoether.agora.api.util.StreamingThinkTagParser
 import com.newoether.agora.api.util.convertToOpenAiMessages
@@ -23,37 +22,13 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 abstract class BaseOpenAiProvider : LlmProvider {
-
     protected val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
 
-    // -- Override points --
-
-    /**
-     * Modify the outgoing request before serialization (e.g. add reasoning_effort, plugins).
-     * The default implementation returns the request unchanged.
-     */
     protected open fun customizeRequest(request: OpenAiChatRequest, config: ProviderConfig): OpenAiChatRequest = request
-
-    /**
-     * Extra HTTP headers to include in the POST to /chat/completions.
-     */
     protected open fun getExtraHeaders(config: ProviderConfig): Map<String, String> = emptyMap()
-
-    /**
-     * Transform the system prompt before it is sent. Default: pass-through.
-     */
     protected open fun transformSystemPrompt(prompt: String?): String? = prompt
 
-    /**
-     * Parse the delta from one SSE event and emit TextChunk / ThoughtChunk events.
-     * The base class handles tool_calls accumulation, finish_reason emission, and usage
-     * emission automatically.
-     *
-     * The default implementation covers the common OpenAI-compatible shape: a separate
-     * `reasoning_content` field (gated on [ProviderConfig.thinkingEnabled]) plus `content`.
-     * Providers with a different reasoning representation (e.g. OpenRouter's
-     * `reasoning_details`) override this.
-     */
+    /** Parse both structured reasoning_content and inline <think> blocks carried by content. */
     protected open suspend fun parseDeltaContent(
         delta: OpenAiDelta,
         config: ProviderConfig,
@@ -66,33 +41,30 @@ abstract class BaseOpenAiProvider : LlmProvider {
             }
         }
         delta.content?.let { content ->
-            if (content.isNotEmpty()) emit(StreamEvent.TextChunk(content))
+            if (content.isNotEmpty()) {
+                thinkParser.feed(
+                    content = content,
+                    thinkingEnabled = config.thinkingEnabled,
+                    onText = { emit(StreamEvent.TextChunk(it)) },
+                    onThought = { emit(StreamEvent.ThoughtChunk(it)) }
+                )
+            }
         }
     }
 
     protected open val retryableStatusCodes: Set<Int> = setOf(429, 502, 503, 504)
-
     protected open val retryMissingV1BaseUrl: Boolean = false
-
     protected open fun retryDelayMillis(statusCode: Int, attempt: Int): Long = 1000L * attempt
 
-    // -- Template method --
-
-    override fun generateResponse(
-        messages: List<ChatMessage>,
-        config: ProviderConfig
-    ): Flow<StreamEvent> = flow {
+    override fun generateResponse(messages: List<ChatMessage>, config: ProviderConfig): Flow<StreamEvent> = flow {
         val baseUrl = config.baseUrl?.trimEnd('/')?.ifBlank { null } ?: defaultBaseUrl
         val endpointUrls = endpointCandidates(baseUrl, "chat/completions")
-
         val validatedMessages = prepareMessages(messages, config.maxContextWindow)
-
         val apiMessages = convertToOpenAiMessages(
             messages = validatedMessages,
             systemPrompt = transformSystemPrompt(config.systemPrompt),
             includeImages = config.includeImages
         )
-
         var request = OpenAiChatRequest(
             model = config.modelId,
             messages = apiMessages,
@@ -106,13 +78,11 @@ abstract class BaseOpenAiProvider : LlmProvider {
             presencePenalty = config.presencePenalty
         )
         request = customizeRequest(request, config)
-
         val thinkParser = StreamingThinkTagParser()
 
         try {
             val requestBodyJson = json.encodeToString(OpenAiChatRequest.serializer(), request)
             DebugLog.d("AgoraAPI", "[$name] REQ -> ${endpointUrls.first()} | model=${config.modelId} | msgs=${apiMessages.size} | tools=${config.tools?.size ?: 0}")
-
             val headers = mutableMapOf("Content-Type" to "application/json")
             if (config.apiKey.isNotBlank()) headers["Authorization"] = "Bearer ${config.apiKey}"
             for ((key, value) in getExtraHeaders(config)) headers[key] = value
@@ -120,12 +90,10 @@ abstract class BaseOpenAiProvider : LlmProvider {
             val maxAttempts = 3
             var attempt = 0
             var finished = false
-
             while (attempt < maxAttempts && !finished) {
                 attempt++
                 var endpointIndex = 0
                 var retryScheduled = false
-
                 while (endpointIndex < endpointUrls.size && !finished && !retryScheduled) {
                     val endpointUrl = endpointUrls[endpointIndex]
                     val handle = HttpClient.streamPost(endpointUrl, requestBodyJson, headers)
@@ -141,9 +109,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
                                 endpointIndex++
                                 continue
                             }
-
                             DebugLog.e("AgoraAPI", "[$name] ERR ${handle.code} at $endpointUrl: $errorRaw")
-
                             if (handle.code in retryableStatusCodes && attempt < maxAttempts) {
                                 val retryDelayMs = retryDelayMillis(handle.code, attempt)
                                 DebugLog.w("AgoraAPI", "[$name] Transient error ${handle.code} on attempt $attempt/$maxAttempts, retrying in ${retryDelayMs}ms...")
@@ -165,13 +131,11 @@ abstract class BaseOpenAiProvider : LlmProvider {
         } catch (e: SocketTimeoutException) {
             emit(StreamEvent.Error(GenerationError.Timeout))
         } catch (e: ConnectException) {
-            emit(StreamEvent.Error(GenerationError.Network(statusCode = 0, message = e.localizedMessage ?: "Connection refused")))
+            emit(StreamEvent.Error(GenerationError.Network(0, e.localizedMessage ?: "Connection refused")))
         } catch (e: UnknownHostException) {
-            emit(StreamEvent.Error(GenerationError.Network(statusCode = 0, message = e.localizedMessage ?: "Unknown host")))
+            emit(StreamEvent.Error(GenerationError.Network(0, e.localizedMessage ?: "Unknown host")))
         } catch (e: Exception) {
-            if (currentCoroutineContext().isActive) {
-                emit(StreamEvent.Error(GenerationError.Unknown(e)))
-            }
+            if (currentCoroutineContext().isActive) emit(StreamEvent.Error(GenerationError.Unknown(e)))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -182,8 +146,6 @@ abstract class BaseOpenAiProvider : LlmProvider {
         emit: suspend (StreamEvent) -> Unit
     ) {
         val pendingToolCalls = mutableMapOf<Int, PendingToolCall>()
-        // Accumulate answer content so that, if the server emits tool calls as content text rather
-        // than as structured delta.tool_calls (#33 path B), we can recover them at stream end.
         val contentBuf = StringBuilder()
         val emitAndAccumulate: suspend (StreamEvent) -> Unit = { event ->
             if (event is StreamEvent.TextChunk) contentBuf.append(event.text)
@@ -198,32 +160,25 @@ abstract class BaseOpenAiProvider : LlmProvider {
                 if (!currentCoroutineContext().isActive) break
                 continue
             } ?: break
-
             if (!line.startsWith("data: ")) continue
             val jsonStr = line.substring(6).trim()
             if (jsonStr == "[DONE]") break
-
             try {
                 val response = json.decodeFromString<OpenAiStreamResponse>(jsonStr)
                 val choice = response.choices?.firstOrNull()
-
                 choice?.delta?.let { delta ->
                     parseDeltaContent(delta, config, thinkParser, emitAndAccumulate)
-
                     delta.toolCalls?.forEach { tc ->
                         val existing = if (tc.id != null) pendingToolCalls.values.firstOrNull { it.id == tc.id } else null
-                        val pending = if (existing != null) existing else {
+                        val pending = existing ?: run {
                             val idx = tc.index ?: pendingToolCalls.size
                             pendingToolCalls.getOrPut(idx) { PendingToolCall() }
                         }
                         if (tc.id != null) pending.id = tc.id
                         tc.function?.name?.let { if (it.isNotEmpty()) pending.name = it }
-                        tc.function?.arguments?.let {
-                            pending.args.append(if (it is JsonPrimitive) it.content else it.toString())
-                        }
+                        tc.function?.arguments?.let { pending.args.append(if (it is JsonPrimitive) it.content else it.toString()) }
                     }
                 }
-
                 if (choice?.finishReason == "tool_calls" && pendingToolCalls.isNotEmpty()) {
                     val calls = pendingToolCalls.values.filter { it.name.isNotEmpty() }.map {
                         StreamEvent.ToolCallRequest(it.id, it.name, it.args.toString())
@@ -232,10 +187,7 @@ abstract class BaseOpenAiProvider : LlmProvider {
                     if (calls.size == 1) { structuredToolCallsEmitted = true; emit(calls.first()) }
                     else if (calls.size > 1) { structuredToolCallsEmitted = true; emit(StreamEvent.ToolCallsRequest(calls)) }
                 }
-
-                response.usage?.let { usage ->
-                    emit(StreamEvent.UsageUpdate(usage.toTokenUsage()))
-                }
+                response.usage?.let { emit(StreamEvent.UsageUpdate(it.toTokenUsage())) }
             } catch (e: Exception) {
                 DebugLog.e("AgoraAPI", "Parse error: ${e.message}", e)
             }
@@ -246,12 +198,6 @@ abstract class BaseOpenAiProvider : LlmProvider {
             onThought = { emitAndAccumulate(StreamEvent.ThoughtChunk(it)) }
         )
 
-        // Fallback (#33 path B): some OpenAI-compatible servers (llama.cpp et al.) finish with
-        // finish_reason == "stop" and put the tool call in the content text instead of the
-        // structured delta.tool_calls field. If we never saw structured tool calls but tools were
-        // offered, parse them out of the accumulated content so the generation enters the
-        // tool-call phase instead of just printing the JSON as an answer. Brings these servers to
-        // parity with Ollama, which reads its structured tool_calls field directly.
         if (!structuredToolCallsEmitted && !config.tools.isNullOrEmpty()) {
             val parsed = ToolCallTextParser.parse(contentBuf.toString())
             if (parsed.size == 1) {
@@ -262,48 +208,30 @@ abstract class BaseOpenAiProvider : LlmProvider {
                 }))
             }
         }
-
-        if (!currentCoroutineContext().isActive) {
-            throw CancellationException("Stream cancelled")
-        }
+        if (!currentCoroutineContext().isActive) throw CancellationException("Stream cancelled")
     }
 
     private fun endpointCandidates(baseUrl: String, path: String): List<String> {
         val normalizedBaseUrl = baseUrl.trimEnd('/')
         val cleanPath = path.trimStart('/')
         val primary = "$normalizedBaseUrl/$cleanPath"
-        if (!retryMissingV1BaseUrl || normalizedBaseUrl.isBlank() ||
-            BaseUrlResolver.hasVersionSegment(normalizedBaseUrl)
-        ) {
+        if (!retryMissingV1BaseUrl || normalizedBaseUrl.isBlank() || BaseUrlResolver.hasVersionSegment(normalizedBaseUrl)) {
             return listOf(primary)
         }
         return listOf(primary, "$normalizedBaseUrl/v1/$cleanPath")
     }
 
-    /** Synthetic id for tool calls recovered from content text (#33 path B), where the server
-     *  provides no id. Unique per call so the result can still be paired back to the request. */
-    private fun syntheticToolCallId(): String =
-        "call_text_${java.util.UUID.randomUUID()}"
+    private fun syntheticToolCallId(): String = "call_text_${java.util.UUID.randomUUID()}"
 
-    private fun buildGenerationError(
-        statusCode: Int,
-        errorRaw: String,
-        endpointUrls: List<String>
-    ): GenerationError {
+    private fun buildGenerationError(statusCode: Int, errorRaw: String, endpointUrls: List<String>): GenerationError {
         val endpointHint = if (statusCode == 404 && endpointUrls.size > 1) {
             "\nTried ${endpointUrls.joinToString(" and ")}. OpenAI-compatible servers often require a /v1 Base URL."
-        } else {
-            ""
-        }
+        } else ""
         return try {
             val errorJson = json.decodeFromString<OpenAiErrorResponse>(errorRaw)
-            GenerationError.Api(
-                code = errorJson.error.code ?: statusCode.toString(),
-                type = errorJson.error.type,
-                message = errorJson.error.message + endpointHint
-            )
+            GenerationError.Api(errorJson.error.code ?: statusCode.toString(), errorJson.error.type, errorJson.error.message + endpointHint)
         } catch (_: Exception) {
-            GenerationError.Network(statusCode = statusCode, message = errorRaw + endpointHint)
+            GenerationError.Network(statusCode, errorRaw + endpointHint)
         }
     }
 
@@ -316,32 +244,21 @@ abstract class BaseOpenAiProvider : LlmProvider {
             val endpointUrls = endpointCandidates(effectiveBaseUrl, "models")
             val headers = authHeaders(apiKey)
             var lastParseError: Exception? = null
-
             for ((index, endpointUrl) in endpointUrls.withIndex()) {
                 val responseText = HttpClient.fetchModels(endpointUrl, headers)
                 if (responseText == null) {
-                    if (index < endpointUrls.lastIndex) {
-                        DebugLog.w("AgoraAPI", "Failed to fetch $name models from $endpointUrl; retrying ${endpointUrls[index + 1]}")
-                    }
+                    if (index < endpointUrls.lastIndex) DebugLog.w("AgoraAPI", "Failed to fetch $name models from $endpointUrl; retrying ${endpointUrls[index + 1]}")
                     continue
                 }
-
                 try {
-                    return@withContext json.decodeFromString<OpenAiModelListResponse>(responseText)
-                        .data.map { it.id }.sorted()
+                    return@withContext json.decodeFromString<OpenAiModelListResponse>(responseText).data.map { it.id }.sorted()
                 } catch (e: Exception) {
                     lastParseError = e
-                    if (index < endpointUrls.lastIndex) {
-                        DebugLog.w("AgoraAPI", "Failed to parse $name models from $endpointUrl; retrying ${endpointUrls[index + 1]}")
-                    }
+                    if (index < endpointUrls.lastIndex) DebugLog.w("AgoraAPI", "Failed to parse $name models from $endpointUrl; retrying ${endpointUrls[index + 1]}")
                 }
             }
-
-            if (lastParseError != null) {
-                DebugLog.e("AgoraAPI", "Failed to parse $name models", lastParseError)
-            } else {
-                DebugLog.e("AgoraAPI", "Failed to fetch $name models: empty response")
-            }
+            if (lastParseError != null) DebugLog.e("AgoraAPI", "Failed to parse $name models", lastParseError)
+            else DebugLog.e("AgoraAPI", "Failed to fetch $name models: empty response")
             emptyList()
         } catch (e: Exception) {
             DebugLog.e("AgoraAPI", "Failed to fetch $name models", e)

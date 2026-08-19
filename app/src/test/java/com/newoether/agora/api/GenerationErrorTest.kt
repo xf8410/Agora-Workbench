@@ -57,7 +57,51 @@ class GenerationErrorTest {
         assertTrue(message.contains("拒绝连接"))
     }
 
-    @Test fun `cancelled is Chinese`() {
-        assertTrue(GenerationError.Cancelled.userMessage().contains("停止"))
+    @Test
+    fun `Transcription error userMessage`() {
+        val msg = GenerationError.Transcription("/path/to/img.jpg", "Unsupported format").userMessage()
+        assertEquals("Image transcription failed: Unsupported format", msg)
+    }
+
+    @Test
+    fun `Embedding error userMessage`() {
+        val msg = GenerationError.Embedding("emb-model-1", "Connection refused").userMessage()
+        assertEquals("Embedding failed: Connection refused", msg)
+    }
+
+    @Test
+    fun `LocalModel error userMessage`() {
+        assertEquals("Model file not found", GenerationError.LocalModel("Model file not found").userMessage())
+    }
+
+    @Test
+    fun `Configuration error userMessage`() {
+        assertEquals("Base URL not set", GenerationError.Configuration("Base URL not set").userMessage())
+    }
+
+    @Test
+    fun `Unknown error userMessage`() {
+        val ex = RuntimeException("Boom!")
+        assertEquals("Boom!", GenerationError.Unknown(ex).userMessage())
+    }
+
+    @Test
+    fun `Unknown error userMessage fallback for null message`() {
+        val ex = RuntimeException()
+        assertEquals("An unexpected error occurred.", GenerationError.Unknown(ex).userMessage())
+    }
+
+    @Test
+    fun `Cancelled userMessage`() {
+        assertEquals("Generation cancelled.", GenerationError.Cancelled.userMessage())
+    }
+
+    @Test
+    fun `Timeout userMessage matches unlimited read policy and recovery`() {
+        val msg = GenerationError.Timeout.userMessage()
+        assertFalse(msg.contains("30 minutes"))
+        assertTrue(msg.contains("no local elapsed read limit"))
+        assertTrue(msg.contains("completed tool progress were preserved"))
+        assertTrue(msg.contains("latest checkpoint"))
     }
 }

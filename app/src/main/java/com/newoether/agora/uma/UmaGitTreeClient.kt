@@ -1,7 +1,9 @@
 package com.newoether.agora.uma
 
 import com.newoether.agora.github.GitHubApiClient
+import com.newoether.agora.github.GitHubApiResponse
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -66,7 +68,7 @@ internal fun parseUmaGitTreeSha(body: String, json: Json = Json): String {
     return sha.lowercase()
 }
 
-/** Creates one Git tree that overlays uploaded session blobs on an existing repository tree. */
+/** Creates Git trees that overlay uploaded session blobs on an existing repository tree. */
 class UmaGitTreeClient(
     private val client: GitHubApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true },
@@ -79,11 +81,7 @@ class UmaGitTreeClient(
     ): UmaGitTreeResult = withContext(Dispatchers.IO) {
         val safeRepo = client.validateRepo(repo)
         val body = buildUmaGitTreeBody(baseTreeSha, directory, blobs)
-        val response = client.request(
-            method = "POST",
-            path = "/repos/$safeRepo/git/trees",
-            body = body,
-        )
+        val response = requestWithRetry(safeRepo, body)
         if (response.code !in 200..299) {
             val message = runCatching {
                 json.parseToJsonElement(response.body).jsonObject["message"]?.jsonPrimitive?.content
@@ -94,6 +92,56 @@ class UmaGitTreeClient(
             treeSha = parseUmaGitTreeSha(response.body, json),
             entryCount = blobs.size,
         )
+    }
+
+    /**
+     * Overlays a large path set through cumulative, bounded trees. Only the final tree is committed,
+     * avoiding oversized GitHub requests while retaining one atomic repository commit.
+     */
+    suspend fun createBatched(
+        repo: String,
+        baseTreeSha: String,
+        directory: String,
+        blobs: List<UmaGitTreeBlob>,
+        batchSize: Int = DEFAULT_TREE_BATCH_SIZE,
+    ): UmaGitTreeResult {
+        require(blobs.isNotEmpty()) { "tree requires at least one blob" }
+        require(batchSize in 1..MAX_TREE_BATCH_SIZE) { "invalid Git tree batch size" }
+        require(blobs.map { joinUmaGitTreePath(directory, it.relativePath) }.toSet().size == blobs.size) {
+            "duplicate Git tree path"
+        }
+        var currentTreeSha = baseTreeSha
+        var completed = 0
+        blobs.chunked(batchSize).forEach { batch ->
+            val result = create(repo, currentTreeSha, directory, batch)
+            currentTreeSha = result.treeSha
+            completed += result.entryCount
+        }
+        return UmaGitTreeResult(currentTreeSha, completed)
+    }
+
+    private suspend fun requestWithRetry(repo: String, body: JsonObject): GitHubApiResponse {
+        var response: GitHubApiResponse? = null
+        repeat(MAX_ATTEMPTS) { attempt ->
+            response = client.request(
+                method = "POST",
+                path = "/repos/$repo/git/trees",
+                body = body,
+            )
+            if (response!!.code !in RETRYABLE_CODES || attempt == MAX_ATTEMPTS - 1) {
+                return response!!
+            }
+            delay(INITIAL_RETRY_DELAY_MS * (1L shl attempt))
+        }
+        return requireNotNull(response)
+    }
+
+    companion object {
+        const val DEFAULT_TREE_BATCH_SIZE = 200
+        const val MAX_TREE_BATCH_SIZE = 500
+        private const val MAX_ATTEMPTS = 5
+        private const val INITIAL_RETRY_DELAY_MS = 1_000L
+        private val RETRYABLE_CODES = setOf(429, 500, 502, 503, 504)
     }
 }
 
