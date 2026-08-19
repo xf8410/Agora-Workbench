@@ -5,6 +5,7 @@ import android.net.Uri
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
+import java.io.InputStreamReader
 import java.net.URI
 import java.util.zip.ZipInputStream
 
@@ -23,11 +24,17 @@ object AttachmentSourceReader {
         open(context, source)?.use { input ->
             ZipInputStream(input.buffered()).use { zip ->
                 val result = StringBuilder()
+                val buffer = CharArray(8_192)
                 var entry = zip.nextEntry
                 while (entry != null) {
                     if (!entry.isDirectory) {
                         result.append("\n===== ").append(entry.name).append(" =====\n")
-                        zip.bufferedReader(Charsets.UTF_8).use { it.copyTo(result) }
+                        val reader = InputStreamReader(zip, Charsets.UTF_8)
+                        while (true) {
+                            val count = reader.read(buffer)
+                            if (count <= 0) break
+                            result.append(buffer, 0, count)
+                        }
                         result.append('\n')
                     }
                     zip.closeEntry()
