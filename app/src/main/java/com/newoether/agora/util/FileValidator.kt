@@ -16,7 +16,14 @@ object FileValidator {
         "application/json",
         "application/xml",
         "application/yaml",
-        "application/pdf"
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/csv"
+    )
+    private val SUPPORTED_EXTENSIONS = setOf(
+        "txt", "md", "markdown", "json", "xml", "yaml", "yml",
+        "csv", "tsv", "xlsx", "ods", "pdf"
     )
     private const val MAX_SIZE = 20L * 1024 * 1024
 
@@ -26,27 +33,20 @@ object FileValidator {
         val mimeType = try {
             context.contentResolver.getType(uri)
         } catch (_: Exception) { null }
+        val fileName = resolveFileName(context, uri)
+        val extension = fileName?.substringAfterLast('.', "")?.lowercase()
+        val allowedByExtension = extension != null && extension in SUPPORTED_EXTENSIONS
 
-        if (mimeType == null)
+        if (mimeType == null && !allowedByExtension)
             return Result(false, Error.UNKNOWN_TYPE, null)
 
-        val allowed = MIME_WHITELIST.any { mimeType.startsWith(it) } ||
-                      mimeType in MIME_WHITELIST
-        if (!allowed)
+        val allowedByMime = mimeType != null && (
+            MIME_WHITELIST.any { mimeType.startsWith(it) } || mimeType in MIME_WHITELIST
+        )
+        if (!allowedByMime && !allowedByExtension)
             return Result(false, Error.UNSUPPORTED_TYPE, mimeType)
 
-        val fileSize = try {
-            val cursor = context.contentResolver.query(
-                uri, arrayOf(OpenableColumns.SIZE), null, null, null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val idx = it.getColumnIndex(OpenableColumns.SIZE)
-                    if (idx >= 0) it.getLong(idx) else null
-                } else null
-            }
-        } catch (_: Exception) { null }
-
+        val fileSize = resolveFileSize(context, uri)
         if (fileSize != null && fileSize > MAX_SIZE && mimeType != "application/pdf")
             return Result(false, Error.TOO_LARGE, mimeType)
 
