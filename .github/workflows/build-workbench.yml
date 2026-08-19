@@ -78,3 +78,10 @@ jobs:
           apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$apk_path"
           test -s "$apk_path"
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: agora-workbench-debug
+          path: app/build/outputs/apk/fdroid/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 90
