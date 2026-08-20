@@ -13,7 +13,7 @@ import org.junit.Test
 class DataImporterAutomationPolicyTest {
     @Test
     fun scheduledTask_isRestoredFailClosed() {
-        val imported = sanitizeImportedTask(
+        val imported = disarmImportedTask(
             task(cron = "  * * * * *  ", nextRunAt = 123L).copy(
                 name = "  Task  ",
                 prompt = "  Prompt  ",
@@ -29,7 +29,7 @@ class DataImporterAutomationPolicyTest {
 
     @Test
     fun blankRequiredTaskFields_remainVisibleButDisabled() {
-        val imported = sanitizeImportedTask(
+        val imported = disarmImportedTask(
             task(cron = "not a cron", nextRunAt = Long.MAX_VALUE).copy(
                 name = "  ",
                 prompt = "\n",
@@ -44,8 +44,8 @@ class DataImporterAutomationPolicyTest {
 
     @Test
     fun manualAndDisabledTasks_haveNoScheduledEpoch() {
-        val manual = sanitizeImportedTask(task(cron = "  ", nextRunAt = 123L))
-        val disabled = sanitizeImportedTask(
+        val manual = disarmImportedTask(task(cron = "  ", nextRunAt = 123L))
+        val disabled = disarmImportedTask(
             task(cron = "* * * * *", nextRunAt = 456L).copy(enabled = false),
         )
 
@@ -57,7 +57,7 @@ class DataImporterAutomationPolicyTest {
 
     @Test
     fun legacyUnboundedLoop_getsBoundedDefault() {
-        val imported = sanitizeImportedLoop(loop(maxCycles = null))
+        val imported = disarmImportedLoop(loop(maxCycles = null))
 
         assertEquals(LoopPolicy.DEFAULT_MAX_CYCLES, imported.maxCycles)
         assertFalse(imported.active)
@@ -66,13 +66,13 @@ class DataImporterAutomationPolicyTest {
 
     @Test
     fun everyImportedLoop_isInactiveAndHasNoArmedEpoch() {
-        val valid = sanitizeImportedLoop(loop())
-        val badInterval = sanitizeImportedLoop(loop(intervalMs = 1L))
-        val badMaximum = sanitizeImportedLoop(loop(maxCycles = Int.MAX_VALUE))
-        val exhausted = sanitizeImportedLoop(
+        val valid = disarmImportedLoop(loop())
+        val badInterval = disarmImportedLoop(loop(intervalMs = 1L))
+        val badMaximum = disarmImportedLoop(loop(maxCycles = Int.MAX_VALUE))
+        val exhausted = disarmImportedLoop(
             loop(maxCycles = 2, cycleCount = 2),
         )
-        val negative = sanitizeImportedLoop(loop(cycleCount = -1))
+        val negative = disarmImportedLoop(loop(cycleCount = -1))
 
         assertFalse(valid.active)
         assertEquals(0L, valid.nextFireAt)
@@ -86,7 +86,7 @@ class DataImporterAutomationPolicyTest {
 
     @Test
     fun orphanTaskConversation_isDetachedAndGraduated() {
-        val imported = sanitizeImportedConversation(
+        val imported = normalizeImportedConversation(
             conversation = ChatEntity(
                 id = "execution",
                 title = "Execution",
@@ -112,7 +112,7 @@ class DataImporterAutomationPolicyTest {
             graduated = false,
         )
 
-        val imported = sanitizeImportedConversation(
+        val imported = normalizeImportedConversation(
             conversation = conversation,
             availableTaskIds = setOf("existing-task", "imported-task"),
         )

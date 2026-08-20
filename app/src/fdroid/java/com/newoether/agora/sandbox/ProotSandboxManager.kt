@@ -481,7 +481,7 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
     override suspend fun apkInstall(packageName: String, onProgress: (String) -> Unit): Boolean = withContext(Dispatchers.IO) {
         if (!isAvailable()) { onProgress("Sandbox not installed"); return@withContext false }
         val requested = try {
-            sanitizePackageName(packageName)
+            validatePackageName(packageName)
         } catch (e: IllegalArgumentException) {
             onProgress("FAIL: ${e.message}")
             lastError = e.message
@@ -618,7 +618,7 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
     override suspend fun apkDelete(packageName: String): Boolean = withContext(Dispatchers.IO) {
         if (!isAvailable()) { _terminalOutput.value += "Sandbox not available\n"; return@withContext false }
         val requested = try {
-            sanitizePackageName(packageName)
+            validatePackageName(packageName)
         } catch (e: IllegalArgumentException) {
             _terminalOutput.value += "FAIL: ${e.message}\n"
             lastError = e.message
@@ -909,7 +909,7 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
 
     // ── Helpers ────────────────────────────────────────
 
-    private fun sanitizePackageName(packageName: String): String {
+    private fun validatePackageName(packageName: String): String {
         val trimmed = packageName.trim()
         require(packageNameRegex.matches(trimmed)) { "Invalid package name: $packageName" }
         return trimmed
@@ -990,13 +990,13 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
     private fun readExplicitPackages(): LinkedHashSet<String> {
         if (!explicitPackagesFile.exists()) return linkedSetOf()
         return explicitPackagesFile.readLines(Charsets.UTF_8)
-            .mapNotNull { runCatching { sanitizePackageName(it) }.getOrNull() }
+            .mapNotNull { runCatching { validatePackageName(it) }.getOrNull() }
             .toCollection(linkedSetOf())
     }
 
     private fun writeExplicitPackages(packages: Collection<String>) {
         metadataDir.mkdirs()
-        val clean = packages.mapNotNull { runCatching { sanitizePackageName(it) }.getOrNull() }.toCollection(linkedSetOf())
+        val clean = packages.mapNotNull { runCatching { validatePackageName(it) }.getOrNull() }.toCollection(linkedSetOf())
         explicitPackagesFile.writeText(clean.joinToString("\n", postfix = if (clean.isEmpty()) "" else "\n"), Charsets.UTF_8)
     }
 
@@ -1009,7 +1009,7 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
             val migratedExplicit = readWorldLines()
                 .map { worldPackageName(it) }
                 .filter { it !in baseNames }
-                .mapNotNull { runCatching { sanitizePackageName(it) }.getOrNull() }
+                .mapNotNull { runCatching { validatePackageName(it) }.getOrNull() }
                 .toCollection(linkedSetOf())
             writeExplicitPackages(migratedExplicit)
         }
@@ -1023,14 +1023,14 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
         val normalized = linkedSetOf<String>()
         normalized.addAll(base)
         explicitPackages
-            .mapNotNull { runCatching { sanitizePackageName(it) }.getOrNull() }
+            .mapNotNull { runCatching { validatePackageName(it) }.getOrNull() }
             .filter { it !in baseNames }
             .forEach { normalized.add(it) }
         writeWorldLines(normalized)
     }
 
     private fun addExplicitPackage(packageName: String) {
-        val name = sanitizePackageName(packageName)
+        val name = validatePackageName(packageName)
         ensurePackageMetadata()
         val next = readExplicitPackages().apply { add(name) }
         writeExplicitPackages(next)

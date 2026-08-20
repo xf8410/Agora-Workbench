@@ -94,7 +94,7 @@ class UmaToolProvider : ToolProvider {
         if (name == "uma_get_snapshot") return UmaRuntimeState.snapshotJson()
         if (name == "uma_get_changes") return UmaRuntimeState.changesJson()
         if (name == "uma_protocol_metadata") return runCatching {
-            UmaProtocolCapture.readSanitizedMetadata()
+            UmaProtocolCapture.readMetadata()
         }.getOrElse { toolError(it.message ?: "Protocol metadata read failed") }
         val args = runCatching {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })

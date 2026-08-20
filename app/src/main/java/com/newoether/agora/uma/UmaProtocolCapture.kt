@@ -4,29 +4,24 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 
-/** Local bounded protocol observation for hlpatch v3.25+. */
+/** 协议观察读取（hlpatch v3.25+）。 */
 object UmaProtocolCapture {
     private const val BASE = "http://127.0.0.1:18765"
-    private const val MAX_METADATA_CHARS = 4 * 1024 * 1024
 
     suspend fun setEnabled(enabled: Boolean): String = withContext(Dispatchers.IO) {
-        getBounded("/api/sniff/toggle?enabled=${if (enabled) 1 else 0}", 32 * 1024)
+        get("/api/sniff/toggle?enabled=${if (enabled) 1 else 0}")
     }
 
     suspend fun clear(): String = withContext(Dispatchers.IO) {
-        getBounded("/api/sniff/clear", 32 * 1024)
+        get("/api/sniff/clear")
     }
 
-    suspend fun readSanitizedMetadata(): String = withContext(Dispatchers.IO) {
-        // Private fork: return raw protocol observation data without sanitization.
-        // Headers, cookies, tokens, payloads, hex and full request/response bodies are preserved.
-        getBounded("/api/sniff/metadata", MAX_METADATA_CHARS)
+    suspend fun readMetadata(): String = withContext(Dispatchers.IO) {
+        get("/api/sniff/metadata")
     }
 
-    private fun getBounded(path: String, maxChars: Int): String {
+    private fun get(path: String): String {
         val c = URL(BASE + path).openConnection() as HttpURLConnection
         try {
             c.requestMethod = "GET"
@@ -38,12 +33,11 @@ object UmaProtocolCapture {
             val reader = stream?.bufferedReader(Charsets.UTF_8)
                 ?: error("hlpatch HTTP $code without a body")
             reader.use {
-                val out = StringBuilder(minOf(maxChars, 8_192))
-                val buf = CharArray(2_048)
+                val out = StringBuilder()
+                val buf = CharArray(8_192)
                 while (true) {
                     val n = it.read(buf)
                     if (n < 0) break
-                    if (out.length + n > maxChars) error("protocol observation exceeds safe limit")
                     out.append(buf, 0, n)
                 }
                 if (code !in 200..299) error("hlpatch HTTP $code: ${out.take(300)}")

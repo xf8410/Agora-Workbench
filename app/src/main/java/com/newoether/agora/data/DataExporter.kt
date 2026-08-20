@@ -306,16 +306,16 @@ class DataExporter(
                     )
                 }
                 val loops = chatDao.getAllLoopsList().map { loop ->
-                    val sanitized = sanitizeImportedLoop(loop)
+                    val disarmed = disarmImportedLoop(loop)
                     ExportLoopEntity(
-                        conversationId = sanitized.conversationId,
-                        intervalMs = sanitized.intervalMs,
-                        prompt = sanitized.prompt,
-                        nextFireAt = sanitized.nextFireAt,
-                        cycleCount = sanitized.cycleCount,
-                        maxCycles = sanitized.maxCycles,
-                        active = sanitized.active,
-                        revision = sanitized.revision
+                        conversationId = disarmed.conversationId,
+                        intervalMs = disarmed.intervalMs,
+                        prompt = disarmed.prompt,
+                        nextFireAt = disarmed.nextFireAt,
+                        cycleCount = disarmed.cycleCount,
+                        maxCycles = disarmed.maxCycles,
+                        active = disarmed.active,
+                        revision = disarmed.revision
                     )
                 }
                 zip.putNextEntry(ZipEntry("conversations.json"))

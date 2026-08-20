@@ -200,8 +200,8 @@ class MemoryManager(context: Context) {
     }
 
     private fun resolveFile(name: String): File {
-        val sanitized = name.replace(Regex("""[/\\]"""), "_")
-        val file = File(memoryDir, if (sanitized.endsWith(".md")) sanitized else "$sanitized.md")
+        val fileSafeName = name.replace(Regex("""[/\\]"""), "_")
+        val file = File(memoryDir, if (fileSafeName.endsWith(".md")) fileSafeName else "$fileSafeName.md")
         val canonicalPath = file.canonicalPath
         val canonicalDir = memoryDir.canonicalPath
         if (!canonicalPath.startsWith(canonicalDir)) {

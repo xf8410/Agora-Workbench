@@ -33,7 +33,7 @@ import java.util.zip.ZipFile
  * Imported automations are content, not permission to spend tokens in the background. Preserve a
  * valid cron for the user to review, but always restore the task disabled with no armed epoch.
  */
-internal fun sanitizeImportedTask(task: TaskEntity): TaskEntity {
+internal fun disarmImportedTask(task: TaskEntity): TaskEntity {
     val cron = task.cronExpr.trim()
     return task.copy(
         name = task.name.trim(),
@@ -48,7 +48,7 @@ internal fun sanitizeImportedTask(task: TaskEntity): TaskEntity {
  * Converts legacy unbounded loops to the bounded default. Invalid cadence/cycle state is kept
  * visible for diagnostics where useful, but is always made inactive so it cannot be scheduled.
  */
-internal fun sanitizeImportedLoop(loop: LoopEntity): LoopEntity {
+internal fun disarmImportedLoop(loop: LoopEntity): LoopEntity {
     val importedMaxCycles = loop.maxCycles
     val maxCycles = importedMaxCycles
         ?.takeIf { it in LoopPolicy.MIN_MAX_CYCLES..LoopPolicy.MAX_MAX_CYCLES }
@@ -65,7 +65,7 @@ internal fun sanitizeImportedLoop(loop: LoopEntity): LoopEntity {
 }
 
 /** Prevents a missing Task row from making an imported execution permanently unreachable. */
-internal fun sanitizeImportedConversation(
+internal fun normalizeImportedConversation(
     conversation: ChatEntity,
     availableTaskIds: Set<String>,
 ): ChatEntity = if (conversation.taskId != null && conversation.taskId !in availableTaskIds) {
@@ -275,7 +275,7 @@ class DataImporter(
                     archive.stream("conversations.json")?.use { stream ->
                         val data = importJson.decodeFromStream<ExportConversations>(stream)
                         val taskEntities = data.tasks.map { task ->
-                            sanitizeImportedTask(TaskEntity(
+                            disarmImportedTask(TaskEntity(
                                 id = task.id,
                                 name = task.name,
                                 prompt = task.prompt,
@@ -297,7 +297,7 @@ class DataImporter(
                             addAll(taskEntities.map { it.id })
                         }
                         val convEntities = data.conversations.map { c ->
-                            sanitizeImportedConversation(ChatEntity(
+                            normalizeImportedConversation(ChatEntity(
                                 id = c.id,
                                 title = c.title,
                                 lastUpdated = c.lastUpdated,
@@ -329,7 +329,7 @@ class DataImporter(
                         val loopEntities = data.loops
                             .filter { it.conversationId in availableConversationIds }
                             .map { loop ->
-                                sanitizeImportedLoop(LoopEntity(
+                                disarmImportedLoop(LoopEntity(
                                     conversationId = loop.conversationId,
                                     intervalMs = loop.intervalMs,
                                     prompt = loop.prompt,

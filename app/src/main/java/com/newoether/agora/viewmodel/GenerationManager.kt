@@ -10,7 +10,7 @@ import com.newoether.agora.data.MemoryManager
 
 import com.newoether.agora.data.local.MessageEntity
 import com.newoether.agora.model.ChatMessage
-import com.newoether.agora.model.MessagePersistenceGuard
+import com.newoether.agora.model.MessageSegmentsCodec
 import com.newoether.agora.model.MessageSegment
 import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.model.Participant
@@ -611,7 +611,7 @@ class GenerationManager(
                     timestamp = startTime,
                     thoughtTimeMs = totalThoughtTimeMs,
                     modelName = modelName,
-                    toolCallJson = MessagePersistenceGuard.encodeSegmentsBounded(liveSegments),
+                    toolCallJson = MessageSegmentsCodec.encodeSegments(liveSegments),
                 ))
                 lastCheckpointMs = now
             }
@@ -807,7 +807,7 @@ class GenerationManager(
                 // Bound the aggregate: a model message row crams every tool round into one
                 // toolCallJson column, so many rounds × a clipped 100KB result can still exceed the
                 // 2MB CursorWindow. The guard halves the largest results until it fits (#51).
-                val allSegmentsJson = MessagePersistenceGuard.encodeSegmentsBounded(allSegments)
+                val allSegmentsJson = MessageSegmentsCodec.encodeSegments(allSegments)
                 val resultMsgs = tcds.map { tcData ->
                     val rid = "${Constants.RESULT_MSG_PREFIX}${UUID.randomUUID()}"
                     val displayText = SearchResultFormatter.format(tcData.result, context)
@@ -872,7 +872,7 @@ class GenerationManager(
                             id = msg.id, conversationId = conversationId, parentId = msg.parentId,
                             text = msg.text, thoughts = null, status = msg.status,
                             participant = msg.participant, timestamp = System.currentTimeMillis(),
-                            toolCallJson = msg.segments?.let { MessagePersistenceGuard.encodeSegmentsBounded(it) }
+                            toolCallJson = msg.segments?.let { MessageSegmentsCodec.encodeSegments(it) }
                                 ?: msg.toolCall?.let { Json.encodeToString(listOf(
                                     MessageSegment(type = "tool", toolName = it.toolName, toolArgs = it.arguments, toolResult = it.result, signature = it.signature, toolCallId = it.toolCallId)
                                 )) }
@@ -925,13 +925,11 @@ class GenerationManager(
                                 currentThoughtDurationMs.takeIf { it > 0L }
                             )
                                 ?: segments.toList().ifEmpty { null }
-                            // Bound the row's toolCallJson aggregate (#51) and the unbounded answer
-                            // text column — together they can exceed the 2MB CursorWindow otherwise.
-                            val segmentsJson = MessagePersistenceGuard.encodeSegmentsBounded(finalSegments)
+                            val segmentsJson = MessageSegmentsCodec.encodeSegments(finalSegments)
                             val effectiveParentId = parentId
                             val terminalEntity = MessageEntity(
                                 id = modelMessageId, conversationId = conversationId, parentId = effectiveParentId,
-                                text = MessagePersistenceGuard.clipText(totalText), images = generatedImages.toList(),
+                                text = totalText, images = generatedImages.toList(),
                                 thoughts = totalThoughts.ifBlank { null },
                                 thoughtTitle = totalThoughtTitle, tokenCount = totalTokenCount,
                                 status = currentStatus, participant = Participant.MODEL, timestamp = startTime,
@@ -943,7 +941,7 @@ class GenerationManager(
                                 try {
                                     conversations.upsertMessage(terminalEntity)
                                     val stored = conversations.getMessagesByIds(listOf(modelMessageId)).firstOrNull()
-                                    val expected = MessagePersistenceGuard.sanitize(terminalEntity)
+                                    val expected = terminalEntity
                                     verified = stored != null &&
                                         stored.conversationId == conversationId &&
                                         stored.status == expected.status &&
