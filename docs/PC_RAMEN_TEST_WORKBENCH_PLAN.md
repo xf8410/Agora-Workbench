@@ -1,126 +1,287 @@
-# PC 拉面杯测试工作台计划
+# PC 拉面杯测试工作台计划（以上游最新版本为基线）
 
-## 目标
+## 0. 上游基线（必须动态记录）
 
-在 Agora Workbench 中增加一个面向上游 PC 源码的测试工作台：
+上游仓库：`xulai1001/umaai-rs`
+默认分支：`master`
+本次抓取 commit：`ead54762fedc25cafdf2759846d4396a6333aa40`
 
-- 运行上游 `xulai1001/umaai-rs`，不混入手机版 `xf8410/ramen-manual`；
-- 支持自动完整跑局和后续真实交互式手动游玩；
-- 保存可复现的仓库、commit、配置、日志和运行结果；
-- 将测试运行关联到聊天，用于判断上游 bug、手机版适配 bug 和暂停恢复 bug；
-- 恢复并保留 Agora 的客户端日志、CI 诊断和可追溯 APK 产物能力。
+最新上游重点：
 
-## 固定 PC 测试配置
+- 新增 `.trae/documents/tests_overview.md`，列出 121 个测试；
+- 拉面杯相关测试 99 个；
+- 配置加载集中化、`UMAI_DATA_DIR`、统一校验；
+- 第三年地区 Fixed 策略；
+- 回合菜单约束；
+- 排名数据和拉面杯参数补全；
+- `ramen_manual` 继续使用真实 `RamenGame` + `ManualTrainer`；
+- `ramen_manual` 当前使用系统熵源生成 RNG，手动入口不保证复现。
 
-- Repository: `xulai1001/umaai-rs`
-- Ref: `master`（运行开始时必须记录解析后的 commit SHA）
-- Scenario: `ramen`
-- Trainer: `manual` for interactive mode
-- Seed: `20240816`
-- Uma: `102601`
-- Deck: `302424,302894,303044,302924,303024,303054`
+Agora 运行记录必须保存：
 
-手机版测试必须单独记录：
+```text
+upstream_repo
+upstream_ref
+upstream_commit
+upstream_commit_time
+upstream_tests_overview_sha
+upstream_config_sha
+upstream_gamedata_sha
+```
 
-- Repository: `xf8410/ramen-manual`
-- Branch: `workbench/mobile-ramen-apk`
-- PR #1 / commit `46ae136d803f1789ffe63a51822c5aeb30988e93`
-- Previous CI-passing commit: `2434f6e6e74ce52bdd8d2503ea67a7adbbe41460`
+不能把 `master` 当作稳定版本。每次同步都必须解析并固定实际 commit。
 
-## 阶段
+## 1. 核心原则：快速同步 + 隔离层
 
-### 0. 基线
+上游正在高频更新，Agora 不应复制、修改或长期维护 `umaai-rs` 核心代码。采用以下边界：
 
-- 使用 `workbench/*` 分支；禁止直接修改 `main`。
-- 记录当前 main SHA、分支 SHA、Actions run 和构建状态。
-- 不把“源码已提交”写成“已验证”。
+```text
+Agora Workbench
+  ├── UpstreamSync：clone/fetch/固定 commit/生成 manifest
+  ├── UpstreamTestRunner：按上游文档执行测试
+  ├── RamenRunAdapter：解析有限的测试结果和日志
+  ├── RamenDecisionAdapter：只在需要时适配结构化决策
+  └── ChatContext：把运行产物关联到 runId
 
-### 1. 恢复日志和 CI
+xulai1001/umaai-rs
+  ├── crates/umasim/src/game/ramen/     原样使用
+  ├── crates/umasim/src/bin/ramen_manual.rs
+  ├── .trae/documents/tests_overview.md
+  └── 上游 gamedata/config/tests
+```
 
-- CI 构建 PRoot native binaries。
-- 单元测试输出实时写入 console log。
-- 测试失败时保存 bounded summary 和测试报告 artifact。
-- APK 产物包含 version、versionCode、commit、run ID、构建时间和 SHA-256。
-- 上传 APK、校验文件和 build manifest。
-- 只对精确的 main HEAD 发布 `workbench-latest`。
-- 保留失败日志，不通过静默重试掩盖错误。
-- 检查并恢复客户端 DebugLog/崩溃诊断入口。
+### 不允许的做法
 
-### 2. PC 自动运行基础
+- 不把上游 `game/ramen` 复制进 Agora；
+- 不直接修改上游规则代码来适配 Agora；
+- 不依赖行号、日志中文文本或内部字段布局作为长期 API；
+- 不把一个 seed 的结果当作全部规则正确；
+- 不把工作分支中的临时 patch 当作上游同步方案。
 
-- 在 Local Sandbox 固定目录 clone 上游。
-- 检查 `rustc`、`cargo` 和 `cargo metadata`。
-- 支持 `test_ramen_silent_loop`、`test_ramen_game_full_loop`。
-- 保存 stdout、stderr、exit code、timeout、panic、manifest 和最终摘要。
-- 自动测试必须明确标记为自动玩家，不能冒充手动游玩。
+## 2. 上游同步机制
 
-### 3. PC 测试页面
+### 2.1 版本清单
 
-侧边栏增加独立入口：
+每次运行前：
 
-- 新建运行；
-- 当前运行；
-- 自动测试；
-- 手动游玩；
-- 运行历史；
-- 失败详情；
-- 发送到聊天分析。
+1. fetch 上游 `master`；
+2. 读取最新 SHA；
+3. 生成 `upstream-manifest.json`；
+4. 以 commit SHA 建立不可变运行目录；
+5. 记录 tests overview、Cargo.lock、配置和关键数据文件 SHA；
+6. 运行结束后把 manifest 和结果与聊天 `runId` 关联。
 
-### 4. 交互式手动游玩
+### 2.2 自动检测更新
 
-- 使用 PTY 启动 `ramen_manual`。
-- 支持上下键、回车、Ctrl+C、实时输出、暂停、继续、停止。
-- 记录原始终端输出和每次用户选择。
-- 不把大量终端内容直接塞入聊天上下文。
+Agora 提供：
 
-### 5. 覆盖与复现
+- “检查上游更新”；
+- “同步最新上游”；
+- “使用当前固定 commit 重跑”；
+- “比较两个上游 commit”；
+- “更新后运行测试矩阵”。
 
-- 多 seed 批量测试发现未知问题。
-- 固定 seed 回归已发现问题。
-- 强制覆盖回合 2、23、24、47、48、71、72-77。
-- 覆盖不吃面、吃面、隐藏风味、训练、休息、出游、比赛、事件和超级拉面。
-- 记录 turn/stage/action/pending 状态，并检查状态不变量。
+同步前显示：
 
-### 6. 聊天修 bug
+```text
+旧 commit → 新 commit
+改变文件数
+是否改动 game/ramen
+是否改动 tests
+是否改动 gamedata
+是否改动配置接口
+```
 
-- 每次运行生成 `runId`。
-- 聊天可以读取 manifest、失败摘要、指定回合和有限日志。
-- 支持“分析当前失败”“分析这个回合”“比较 PC 与手机版”“生成 bug 报告”。
-- 代码修改必须进入 `workbench/*` 分支并经过确认。
-- 修复后运行固定回归测试，再决定是否创建 PR。
+### 2.3 变更风险分类
 
-### 7. 上游协同
+```text
+低风险：docs、tests_overview、changelog
+中风险：配置、gamedata、trainer、输出格式
+高风险：game/ramen、game/traits、RNG、Cargo.lock、数据加载
+```
 
-Agora 不能替代上游核心能力。后续上游需要提供：
+不同风险自动选择不同验证集，不把所有变化都归类为普通更新。
 
-- 固定 RNG 的 headless probe；
-- 结构化 JSON 结果；
-- 决策日志；
-- 完整游戏快照；
-- 可恢复 RNG；
-- 暂停恢复测试。
+## 3. 测试策略（以最新上游指南为准）
 
-## 验收标准
+上游目前已有 121 个测试，其中拉面杯 99 个。Agora 不重新发明测试清单，而是：
 
-### PC 完整流程
+### 每次同步的快速门禁
 
-- 能启动；
-- 能推进到第 77 回合；
-- 事件选择后继续；
-- 拉面、隐藏风味、训练选择正常；
-- 无 panic、重复事件、卡死；
-- 输出 score、PT、RMJ、地区和超级拉面结果。
+```bash
+cargo test --workspace --release
+```
 
-### Agora CI
+并保存：
 
-- 单元测试失败时保留日志 artifact；
-- APK artifact、manifest、SHA-256 一一对应；
-- main HEAD 构建身份可验证；
-- 失败不会被自动提交污染 main；
-- Release 只发布精确验证过的 main HEAD。
+- 121 个测试的通过/失败/忽略数量；
+- 编译和运行时间；
+- stdout/stderr；
+- 失败测试名称；
+- 上游 commit。
 
-## 当前状态
+### 拉面杯门禁
 
-- 工作分支：`workbench/pc-ramen-test-workbench`
-- 当前阶段：基线与 CI/日志恢复
-- 尚未宣称任何 PC 实机运行或 APK 构建已经通过。
+至少执行并记录上游已有测试：
+
+```bash
+cargo test -p umasim test_ramen_silent_loop --release -- --nocapture
+cargo test -p umasim test_ramen_game_full_loop --release -- --nocapture
+cargo test -p umasim test_three_stage_decision_flow --release -- --nocapture
+cargo test -p umasim test_combined_decision_path --release -- --nocapture
+cargo test -p umasim test_manual_trainer_full_game --release -- --nocapture
+```
+
+实际命令以最新 `Cargo.toml` 和上游文档为准，命令失败时读取测试发现结果，不硬编码旧测试名。
+
+### 手动测试
+
+上游 `ramen_manual` 当前：
+
+- 读取根目录 `game_config.toml`；
+- 要求 `scenario=ramen`、`trainer=manual`；
+- 使用真实 `RamenGame`；
+- 使用 `ManualTrainer` + `inquire`；
+- 使用系统熵源随机种子；
+- 使用上下键、回车和 Ctrl+C。
+
+因此手动测试必须保存实际配置，但不能宣称可由 seed 复现。需要回归时，优先使用上游已有静默测试或新增上游固定 RNG probe，而不是在 Agora 侧偷偷改规则。
+
+## 4. 固定种子与多种子
+
+- 固定 seed：用于回归、PC/手机版对照和 bug 复现；
+- 多种子：用于发现随机路径问题；
+- 上游当前手动入口不打印 seed，不能把手动日志称为可复现证据；
+- Agora 应识别“非复现手动运行”和“可复现自动运行”两类结果。
+
+如果上游愿意增加 probe，建议在上游提供稳定的：
+
+```text
+RamenProbeConfig
+RamenDecision
+TurnSnapshot
+GameSummary
+RngSeed
+```
+
+但该接口必须由上游拥有，Agora 只适配版本化 JSON，不复制 `RamenGame`。
+
+## 5. 隔离层接口
+
+建议 Agora 只依赖以下外部边界：
+
+```text
+UpstreamSource {
+  repo, ref, commit, workspace_dir
+}
+
+TestRecipe {
+  command, workdir, env, timeout, expected_exit_code
+}
+
+RunManifest {
+  run_id, upstream, recipe, config_hash, started_at, ended_at
+}
+
+RunResult {
+  status, exit_code, failed_tests, summary, artifacts
+}
+
+DecisionSnapshot {
+  turn, stage, options, selected_index
+}
+```
+
+日志适配优先顺序：
+
+1. JSON/机器可读结果；
+2. JUnit XML/test result；
+3. cargo test 标准输出；
+4. 人类日志仅作展示，不作核心判断。
+
+## 6. Agora 功能阶段
+
+### 阶段 A：CI 和日志恢复
+
+- 恢复 PRoot 构建；
+- 上传单元测试和 Gradle 失败日志；
+- APK manifest + SHA-256；
+- 精确 commit/run 溯源；
+- 客户端日志与运行产物持久化。
+
+### 阶段 B：上游同步器
+
+- clone/fetch 上游；
+- 固定 commit；
+- 生成 manifest；
+- 比较 commit；
+- 检测高风险目录变化；
+- 不修改上游工作树。
+
+### 阶段 C：测试运行器
+
+- 自动执行上游 tests overview 对应测试；
+- `--release`；
+- 保存完整日志和结构化摘要；
+- 支持固定 commit 重跑；
+- 支持多 seed 任务（仅针对上游提供的 seed/probe 接口）。
+
+### 阶段 D：独立测试页面
+
+侧边栏入口：
+
+```text
+PC 拉面杯测试
+  ├── 上游版本
+  ├── 同步/比较
+  ├── 测试矩阵
+  ├── 自动运行
+  ├── 手动运行
+  ├── 历史记录
+  └── 发送到聊天
+```
+
+### 阶段 E：聊天修 bug
+
+聊天只读取：
+
+- runId；
+- upstream manifest；
+- 失败测试；
+- 指定回合/快照；
+- 有界日志；
+- commit diff。
+
+修复上游代码时，必须创建上游 `workbench/*` 分支或 PR；Agora 自己只修改隔离适配层。
+
+## 7. 验收标准
+
+### 同步
+
+- 上游更新后不需要手工复制文件；
+- 每次运行可精确还原 commit；
+- 上游规则改动不会污染 Agora 源码；
+- 可比较更新前后的测试结果。
+
+### 测试
+
+- 121 个测试的结果可见；
+- 拉面杯 99 个测试可单独查看；
+- 测试运行使用 release 模式；
+- 手动测试明确标记为不可复现（除非上游提供 seed）；
+- 失败日志和 artifacts 可发给聊天分析。
+
+### 客户端
+
+- Agora 本身的 CI、APK 和客户端日志不回退；
+- 新功能不阻塞聊天；
+- 长测试可后台运行、恢复和取消；
+- 不把完整日志一次性塞入上下文。
+
+## 8. 当前工作状态
+
+- Agora 分支：`workbench/pc-ramen-test-workbench`
+- Agora 分支基线：`main` SHA `4f307e3a1c1b961a76baa81f2b9f29fc329ab7e5`
+- 上游最新抓取：`ead54762fedc25cafdf2759846d4396a6333aa40`
+- 本阶段：更新计划，等待按新上游边界实现
+- 未宣称上游测试或手机版测试已通过
