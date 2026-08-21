@@ -12,7 +12,6 @@ import com.newoether.agora.data.local.MessageEntity
 import com.newoether.agora.data.repository.ConversationRepository
 import com.newoether.agora.model.Participant
 import com.newoether.agora.util.Constants
-import com.newoether.agora.util.DebugLog
 import com.newoether.agora.viewmodel.GenerationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -92,8 +91,6 @@ class RagToolProvider(
             val windows = mutableListOf<SearchWindow>()
             for ((conversationId, matchIds) in byConversation) {
                 val conversation = conversations.getSearchableConversation(conversationId) ?: continue
-                // Business branch reconstruction requires complete MessageEntity rows. The bounded
-                // MessageListRow projection is UI-only and intentionally omits large payloads.
                 val allMessages = conversations.getMessagesForConversationSnapshot(conversationId)
                     .filter { it.participant == Participant.USER || it.participant == Participant.MODEL }
                 val branch = buildSelectedBranch(allMessages, conversation.selectedBranchesJson)
