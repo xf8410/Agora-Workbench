@@ -24,15 +24,15 @@ Daemon will be stopped at the end of the build
 > Task :app:parseFdroidDebugLocalResources
 > Task :app:javaPreCompileFdroidDebug
 > Task :app:generateFdroidDebugRFile
-> Task :app:mapFdroidDebugSourceSetPaths
 > Task :app:checkFdroidDebugAarMetadata
+> Task :app:mapFdroidDebugSourceSetPaths
 > Task :app:compileFdroidDebugNavigationResources
 > Task :app:createFdroidDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksFdroidDebug
 > Task :app:processFdroidDebugMainManifest
 > Task :app:processFdroidDebugManifest
-> Task :app:preFdroidDebugUnitTestBuild UP-TO-DATE
 > Task :app:processFdroidDebugManifestForPackage
+> Task :app:preFdroidDebugUnitTestBuild UP-TO-DATE
 > Task :app:javaPreCompileFdroidDebugUnitTest
 > Task :app:mergeFdroidDebugResources
 > Task :app:processFdroidDebugResources
@@ -239,5 +239,5 @@ Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilat
 	... 2 more
 
 
-BUILD FAILED in 1m 9s
+BUILD FAILED in 1m 16s
 23 actionable tasks: 23 executed
