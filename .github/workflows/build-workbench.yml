@@ -34,10 +34,15 @@ jobs:
       - name: Unit tests
         id: unit_tests
         continue-on-error: true
+        timeout-minutes: 20
         run: |
           set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test-console.log
+          # Do not let a stuck Gradle worker consume the whole 45-minute job. --info records
+          # the last executing test/task so the existing diagnostics fallback is actionable.
+          timeout --signal=TERM --kill-after=60s 18m \
+            ./gradlew --no-daemon --stacktrace --info testFdroidDebugUnitTest \
+            2>&1 | tee unit-test-console.log
       - name: Preserve unit test diagnostics artifact
         if: steps.unit_tests.outcome == 'failure'
         continue-on-error: true
@@ -56,8 +61,9 @@ jobs:
           HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
-          chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log
+          # Never rerun a test suite that just timed out. Preserve the first run instead.
+          test -f unit-test-console.log
+          cp unit-test-console.log unit-test.log
       - name: Preserve unit test diagnostics on failure
         if: steps.unit_tests.outcome == 'failure'
         env:
