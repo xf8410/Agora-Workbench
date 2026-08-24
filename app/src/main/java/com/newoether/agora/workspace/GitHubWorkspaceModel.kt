@@ -47,9 +47,9 @@ fun defaultWorkspaceLanes(): List<WorkspaceLaneConfig> = listOf(
     WorkspaceLaneConfig(
         id = WorkspaceLaneId.ITERATION,
         title = "实验迭代",
-        description = "保留实验历史、矩阵、工作流与报告",
+        description = "持续更新现有 ramen_workbench 实验线与 PR",
         forkRepository = "xf8410/umaai-rs",
-        forkBaseBranch = "master",
+        forkBaseBranch = "ramen_workbench",
         upstreamRepository = "xulai1001/umaai-rs",
         upstreamBaseBranch = "ramen_workbench",
         squashRequired = false,
@@ -66,14 +66,19 @@ fun defaultWorkspaceLanes(): List<WorkspaceLaneConfig> = listOf(
     ),
 )
 
-/** Persists the workspace independently from ordinary chat conversations and drafts. */
+/** Persists workspace selection independently from ordinary chat conversations and drafts. */
 class GitHubWorkspaceStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("github_workspaces", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    fun load(): GitHubWorkspaceState = runCatching {
-        json.decodeFromString<GitHubWorkspaceState>(prefs.getString(KEY_STATE, "").orEmpty())
-    }.getOrElse { GitHubWorkspaceState() }
+    fun load(): GitHubWorkspaceState {
+        val saved = runCatching {
+            json.decodeFromString<GitHubWorkspaceState>(prefs.getString(KEY_STATE, "").orEmpty())
+        }.getOrNull()
+        // Lane routing is application policy, not user data. Always adopt the current definitions
+        // while preserving only the selected lane across upgrades.
+        return GitHubWorkspaceState(selectedLane = saved?.selectedLane ?: WorkspaceLaneId.ITERATION)
+    }
 
     fun save(state: GitHubWorkspaceState) {
         prefs.edit().putString(KEY_STATE, json.encodeToString(GitHubWorkspaceState.serializer(), state)).apply()
