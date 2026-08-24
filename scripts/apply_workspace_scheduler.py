@@ -3,8 +3,9 @@ from pathlib import Path
 
 def replace(path, old, new, count=1):
     p=Path(path); t=p.read_text(encoding='utf-8')
-    if t.count(old)!=count: raise SystemExit(f'{path}: expected {count}, got {t.count(old)}')
-    p.write_text(t.replace(old,new),encoding='utf-8')
+    found=t.count(old)
+    if found < count: raise SystemExit(f'{path}: expected at least {count}, got {found}')
+    p.write_text(t.replace(old,new,count),encoding='utf-8')
 
 # Extend execution engine only at its public entry and locked implementation. Loop entry keeps defaults.
 p='app/src/main/java/com/newoether/agora/automation/TaskExecutionEngine.kt'
@@ -16,7 +17,7 @@ replace(p,
         precondition: suspend () -> Boolean = { true },
         githubWorkspaceMode: Boolean = false,
         githubAllowedRepositories: Set<String> = emptySet(),
-    ): Result = automationExecutionGate.withExecution {''',1)
+    ): Result = automationExecutionGate.withExecution {''')
 replace(p,
 '''                foregroundServiceManagedExternally = foregroundServiceManagedExternally,
                 precondition = precondition,
@@ -25,20 +26,17 @@ replace(p,
                 precondition = precondition,
                 githubWorkspaceMode = githubWorkspaceMode,
                 githubAllowedRepositories = githubAllowedRepositories,
-            )''',1)
-# loop call into locked implementation needs defaults explicitly
-needle='''            foregroundServiceManagedExternally = foregroundServiceManagedExternally,
+            )''')
+# The loop entry calls the same locked implementation but is not a GitHub workspace.
+replace(p,
+'''            foregroundServiceManagedExternally = foregroundServiceManagedExternally,
             precondition = precondition,
-        )'''
-t=Path(p).read_text(encoding='utf-8')
-pos=t.find(needle)
-if pos<0: raise SystemExit('loop locked call not found')
-t=t[:pos]+t[pos:].replace(needle,'''            foregroundServiceManagedExternally = foregroundServiceManagedExternally,
+        )''',
+'''            foregroundServiceManagedExternally = foregroundServiceManagedExternally,
             precondition = precondition,
             githubWorkspaceMode = false,
             githubAllowedRepositories = emptySet(),
-        )''',1)
-Path(p).write_text(t,encoding='utf-8')
+        )''')
 replace(p,
 '''        foregroundServiceManagedExternally: Boolean,
         precondition: suspend () -> Boolean,
@@ -54,7 +52,7 @@ replace(p,
 '''                foregroundServiceManagedExternally = foregroundServiceManagedExternally,
                 githubWorkspaceMode = githubWorkspaceMode,
                 githubAllowedRepositories = githubAllowedRepositories,
-            )''',1)
+            )''')
 
 # Generation context and dispatch guard.
 p='app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt'
@@ -104,13 +102,11 @@ replace(p,
         }
         return try {''')
 
-# UI: one plan input, ordered run and selected-stage test; no per-stage concurrent execute.
+# UI: one workspace plan, ordered run and selected-stage test; never two concurrent run buttons.
 p='app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt'
 t=Path(p).read_text(encoding='utf-8')
 t=t.replace('runner.state(state.workspaceId, lane.config.id.name)', 'runner.state(state.workspaceId)')
 t=t.replace('runner.state(state.workspaceId, laneKey)', 'runner.state(state.workspaceId)')
-t=t.replace('agent.running', 'agent.running')
-# Replace run call block.
 old='''                                        runner.run(
                                             workspaceId = state.workspaceId,
                                             laneKey = laneKey,
@@ -125,7 +121,6 @@ new='''                                        runner.runAll(
 if t.count(old)!=1: raise SystemExit(f'UI run call {t.count(old)}')
 t=t.replace(old,new)
 t=t.replace('runner.stop(state.workspaceId, laneKey)', 'runner.stop(state.workspaceId)')
-# Add test-selected button next to normal run.
 anchor='''                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
                                     Text(" 执行")
                                 }
@@ -147,7 +142,6 @@ insert='''                                    Icon(Icons.Default.PlayArrow, cont
                             }'''
 if t.count(anchor)!=1: raise SystemExit(f'UI button anchor {t.count(anchor)}')
 t=t.replace(anchor,insert)
-# State fields changed: use selected stage for result/error/request.
 t=t.replace('agent.lastRequest.isNotBlank()', 'agent.request.isNotBlank()')
 t=t.replace('agent.lastRequest, style', 'agent.request, style')
 t=t.replace('agent.lastResult.isNotBlank()', 'agent.stages[laneKey]?.result.orEmpty().isNotBlank()')
