@@ -1,0 +1,30 @@
+name: Fix workspace imports once
+
+on:
+  push:
+    branches:
+      - workbench/fork-upstream-pr-workspace
+    paths:
+      - .github/workflows/fix-workspace-imports-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/fork-upstream-pr-workspace
+          fetch-depth: 0
+      - run: python3 scripts/fix_workspace_imports.py
+      - run: git rm scripts/fix_workspace_imports.py .github/workflows/fix-workspace-imports-once.yml
+      - run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/newoether/agora/ui/chat/ChatDrawerContent.kt \
+                  app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt
+          git commit -m "fix(workspace): 补齐 Compose 图标与布局导入"
+          git push origin HEAD:workbench/fork-upstream-pr-workspace
