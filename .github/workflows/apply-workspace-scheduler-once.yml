@@ -1,0 +1,25 @@
+name: Apply workspace scheduler once
+on:
+  push:
+    branches: [workbench/fork-upstream-pr-workspace]
+    paths: [.github/workflows/apply-workspace-scheduler-once.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: workbench/fork-upstream-pr-workspace, fetch-depth: 0}
+      - run: python3 scripts/apply_workspace_scheduler.py
+      - run: git rm scripts/apply_workspace_scheduler.py .github/workflows/apply-workspace-scheduler-once.yml
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/newoether/agora/automation/TaskExecutionEngine.kt \
+                  app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt \
+                  app/src/main/java/com/newoether/agora/tool/GitHubToolProvider.kt \
+                  app/src/main/java/com/newoether/agora/tool/GitHubWorkspaceToolProvider.kt \
+                  app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt
+          git commit -m "feat(workspace): 顺序执行分支并禁止开发 CI 进入主分支"
+          git push origin HEAD:workbench/fork-upstream-pr-workspace
