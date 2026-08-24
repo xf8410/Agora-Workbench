@@ -36,19 +36,12 @@ object WorkspaceOutputPolicy {
 
     private fun isRawGithubTreePayload(text: String): Boolean {
         if (text.length < 200) return false
-        val candidates = sequenceOf(text, text.substringAfter('\n', ""))
-        return candidates.any { candidate ->
-            if (!(candidate.trimStart().startsWith("{") || candidate.trimStart().startsWith("["))) {
-                // Models sometimes prepend a sentence before the tool payload.
-                val start = minOf(
-                    candidate.indexOf("[{\"path\""),
-                    candidate.indexOf("{\"path\""),
-                ).takeIf { it >= 0 } ?: return@any false
-                isTreeJson(candidate.substring(start))
-            } else {
-                isTreeJson(candidate.trim())
-            }
-        }
+        if (isTreeJson(text)) return true
+
+        // Tool output can be truncated or prefixed by prose. A repeated Git tree entry
+        // signature is sufficient to suppress the payload even when the JSON is incomplete.
+        val signature = Regex("\\\"path\\\"\\s*:\\s*\\\"[^\\\"]+\\\"\\s*,\\s*\\\"type\\\"\\s*:\\s*\\\"blob\\\".*?\\\"sha\\\"\\s*:", RegexOption.DOT_MATCHES_ALL)
+        return signature.findAll(text).count() >= 2
     }
 
     private fun isTreeJson(text: String): Boolean = runCatching {
