@@ -44,7 +44,7 @@ import com.newoether.agora.model.ThinkingLevels
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val BudgetToggleToSliderSpacing = 32.dp
+private val BudgetToggleToSliderSpacing = 12.dp
 private val AdvancedChevronSize = 18.dp
 
 @Composable
@@ -86,7 +86,7 @@ fun ThinkingControlPanel(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.gen_thinking_enabled),
@@ -100,10 +100,10 @@ fun ThinkingControlPanel(
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Switch(checked = enabled, onCheckedChange = onEnabledChange)
             }
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         Row(
@@ -116,7 +116,7 @@ fun ThinkingControlPanel(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 2.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -151,7 +151,7 @@ fun ThinkingControlPanel(
                     },
                     valueRange = 0f..maxIndex.toFloat(),
                     steps = if (maxIndex > 0) maxIndex - 1 else 0,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     enabled = sliderEnabled
                 )
             }
@@ -194,7 +194,7 @@ fun ThinkingControlPanel(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 2.dp)
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.thinking_use_budget),
@@ -208,7 +208,7 @@ fun ThinkingControlPanel(
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Switch(
                         checked = budgetEnabled,
                         onCheckedChange = if (enabled) { { checked ->
@@ -244,7 +244,7 @@ fun ThinkingControlPanel(
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 2.dp)
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
@@ -273,7 +273,7 @@ fun ThinkingControlPanel(
                                     },
                                     valueRange = 0f..(budgetPresets.size - 1).toFloat(),
                                     steps = budgetPresets.size - 2,
-                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                                     enabled = enabled
                                 )
                             }

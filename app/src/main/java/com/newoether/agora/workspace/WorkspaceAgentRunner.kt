@@ -143,10 +143,11 @@ class WorkspaceAgentRunner(
                     githubAllowedRepositories = setOf(lane.forkRepository, lane.upstreamRepository),
                 )) {
                     is TaskExecutionEngine.Result.Success -> {
-                        previousResult = result.text
+                        val visibleResult = WorkspaceOutputPolicy.sanitize(result.text)
+                        previousResult = visibleResult
                         updateStage(state, laneKey, state.value.stages.getValue(laneKey).copy(
                             status = WorkspaceStageStatus.SUCCESS,
-                            result = result.text,
+                            result = visibleResult,
                             error = null,
                         ), active = null)
                     }
