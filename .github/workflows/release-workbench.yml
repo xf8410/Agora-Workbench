@@ -2,15 +2,6 @@ name: Release Agora Workbench APK
 
 on:
   workflow_dispatch:
-    inputs:
-      version_name:
-        description: 'Version name'
-        required: false
-        default: '1.4.9-workbench'
-      version_code:
-        description: 'Version code'
-        required: false
-        default: '37'
 
 permissions:
   contents: write
@@ -21,6 +12,7 @@ concurrency:
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -29,10 +21,17 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Verify on latest main SHA
+      - name: Read authoritative source version
+        id: version
         run: |
-          echo "Building release from ${{ github.sha }}"
-          git log --oneline -1
+          set -euo pipefail
+          version_name="$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)"
+          version_code="$(sed -n 's/.*versionCode = \([0-9][0-9]*\).*/\1/p' app/build.gradle.kts | head -1)"
+          test -n "$version_name"
+          [[ "$version_code" =~ ^[1-9][0-9]*$ ]]
+          echo "name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version_name" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
@@ -45,27 +44,23 @@ jobs:
 
       - name: Unit tests
         run: |
-          set -euo pipefail
+          set -o pipefail
+          mkdir -p release-logs
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest \
+            2>&1 | tee release-logs/unit-test-console.log
 
-      - name: Set version
-        run: |
-          set -euo pipefail
-          test -n "${{ inputs.version_name }}"
-          [[ "${{ inputs.version_code }}" =~ ^[1-9][0-9]*$ ]]
-          sed -i "s/versionCode = .*/versionCode = ${{ inputs.version_code }}/" app/build.gradle.kts
-          sed -i "s/versionName = .*/versionName = \"${{ inputs.version_name }}\"/" app/build.gradle.kts
-          grep -E "versionCode|versionName" app/build.gradle.kts
-
-      # fdroidDebug is signed automatically with the runner-generated Android
-      # debug key. It is installable, but a later build may require uninstalling
-      # the previous APK because GitHub-hosted runners do not retain this key.
       - name: Build debug-signed APK
-        run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace assembleFdroidDebug \
+            2>&1 | tee release-logs/apk-build-console.log
 
-      - name: Verify signature and prepare release asset
+      - name: Verify signature and prepare release assets
         id: apk
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           set -euo pipefail
           apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
@@ -73,30 +68,89 @@ jobs:
           test -s "$apk_path"
           apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
           test -x "$apksigner_path"
-          "$apksigner_path" verify --verbose --print-certs "$apk_path"
-          asset="Agora-Workbench-${{ inputs.version_name }}-arm64-v8a-debug-signed.apk"
+          "$apksigner_path" verify --verbose --print-certs "$apk_path" | tee release-logs/signature.txt
+          asset="Agora-Workbench-${VERSION_NAME}-arm64-v8a-debug-signed.apk"
           cp "$apk_path" "$asset"
+          sha256sum "$asset" | tee "$asset.sha256"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          cat > release-manifest.json <<EOF
+          {
+            "version_name": "${VERSION_NAME}",
+            "version_code": ${VERSION_CODE},
+            "tag": "v${VERSION_NAME}",
+            "repository": "${GITHUB_REPOSITORY}",
+            "commit": "${GITHUB_SHA}",
+            "workflow_run": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}",
+            "artifact": "${asset}"
+          }
+          EOF
+          cat > "CHANGELOG-${VERSION_NAME}.md" <<EOF
+          # Agora Workbench ${VERSION_NAME}
+
+          - Version code: ${VERSION_CODE}
+          - Commit: ${GITHUB_SHA}
+          - Actions run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - APK SHA-256: $(cut -d' ' -f1 "$asset.sha256")
+
+          ## Changes
+          EOF
+          previous_tag="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
+          if [ -n "$previous_tag" ]; then
+            git log --no-merges --pretty='- %s (`%h`)' "$previous_tag..$GITHUB_SHA" >> "CHANGELOG-${VERSION_NAME}.md"
+          else
+            git log -n 30 --no-merges --pretty='- %s (`%h`)' "$GITHUB_SHA" >> "CHANGELOG-${VERSION_NAME}.md"
+          fi
+
+      - name: Upload release logs and manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-logs-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            release-logs/
+            release-manifest.json
+            CHANGELOG-*.md
+            *.sha256
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Refuse to retarget an existing version tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin "refs/tags/$TAG^{}" | cut -f1)"
+          if [ -z "$remote_sha" ]; then
+            remote_sha="$(git ls-remote origin "refs/tags/$TAG" | cut -f1)"
+          fi
+          if [ -n "$remote_sha" ] && [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "Tag $TAG already points to $remote_sha, not $GITHUB_SHA" >&2
+            exit 1
+          fi
 
       - name: Create tag when absent
         env:
-          TAG: v${{ inputs.version_name }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           set -euo pipefail
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists; keeping it and updating the release assets."
-          else
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             git config user.name 'Agora Workbench Bot'
             git config user.email 'agora-workbench@users.noreply.github.com'
-            git tag -a "$TAG" -m "Release ${{ inputs.version_name }} (code ${{ inputs.version_code }})"
+            git tag -a "$TAG" -m "Release $VERSION_NAME (code $VERSION_CODE)"
             git push origin "$TAG"
           fi
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ inputs.version_name }}"
-          name: "Agora Workbench ${{ inputs.version_name }}"
-          generate_release_notes: true
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Agora Workbench ${{ steps.version.outputs.name }}
+          body_path: CHANGELOG-${{ steps.version.outputs.name }}.md
           overwrite_files: true
-          files: "${{ steps.apk.outputs.asset }}"
+          files: |
+            ${{ steps.apk.outputs.asset }}
+            ${{ steps.apk.outputs.asset }}.sha256
+            release-manifest.json
+            CHANGELOG-${{ steps.version.outputs.name }}.md
