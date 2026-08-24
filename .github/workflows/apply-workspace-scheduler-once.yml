@@ -1,5 +1,6 @@
 name: Apply workspace scheduler once
 on:
+  workflow_dispatch:
   push:
     branches: [workbench/fork-upstream-pr-workspace]
     paths: [.github/workflows/apply-workspace-scheduler-once.yml]
