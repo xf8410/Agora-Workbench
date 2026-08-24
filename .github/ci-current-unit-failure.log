@@ -1,0 +1,42 @@
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/di/AppContainer.kt:134:61 Unresolved reference 'WorkspaceAgentRunner'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/di/AppContainer.kt:134:82 Property delegate must have a 'getValue(AppContainer, KProperty1<AppContainer, ??? (Unresolved qualified name: com.newoether.agora.workspace.WorkspaceAgentRunner)>)' method. None of the following functions is applicable:
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/di/AppContainer.kt:134:85 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/di/AppContainer.kt:134:85 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/di/AppContainer.kt:135:39 Unresolved reference 'WorkspaceAgentRunner'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/tool/GitHubWorkspaceToolProvider.kt:90:82 Argument type mismatch: actual type is 'Map<String, ToolProperty>', but 'String' was expected.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/tool/GitHubWorkspaceToolProvider.kt:90:94 Argument type mismatch: actual type is 'List<String>', but 'Map<String, ToolProperty>' was expected.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:13:43 Cannot access 'val RowColumnParentData?.weight: Float': it is internal in file.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:53:38 Unresolved reference 'WorkspaceAgentRunner'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:62:13 Unresolved reference 'WorkspaceAgentRunner'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:112:35 Property delegate must have a 'getValue(Nothing?, KProperty0<??? (Unknown type for type parameter T)>)' method. None of the following functions is applicable:
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:112:38 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:112:45 Unresolved reference 'state'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:112:70 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:116:54 Unresolved reference 'running'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:118:43 Unresolved reference 'running'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:140:27 Property delegate must have a 'getValue(Nothing?, KProperty0<??? (Unknown type for type parameter T)>)' method. None of the following functions is applicable:
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:140:30 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:140:37 Unresolved reference 'state'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:140:62 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:164:46 Unresolved reference 'running'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:169:39 Unresolved reference 'running'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:170:59 Unresolved reference 'stop'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:177:48 Unresolved reference 'runAll'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:190:48 Unresolved reference 'testOne'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:202:88 Unresolved reference 'running'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:208:35 Unresolved reference 'request'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:210:40 Unresolved reference 'request'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:212:35 Unresolved reference 'stages'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:212:52 Unresolved reference 'result'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:214:44 Unresolved reference 'stages'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:214:61 Unresolved reference 'result'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:217:31 Unresolved reference 'stages'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:217:48 Unresolved reference 'error'.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:217:55 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:217:55 Cannot infer type for type parameter 'R'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/ui/workspace/GitHubWorkspaceScreen.kt:217:59 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///home/runner/work/Agora-Workbench/Agora-Workbench/app/src/main/java/com/newoether/agora/workspace/WorkspaceAgentRunner.kt:245:1 Syntax error: Unclosed comment.
+> Task :app:compileFdroidDebugKotlin FAILED
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+BUILD FAILED in 2m 29s
