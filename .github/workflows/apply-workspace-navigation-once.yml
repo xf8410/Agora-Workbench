@@ -1,0 +1,31 @@
+name: Apply workspace navigation once
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/workbench/fork-upstream-pr-workspace'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/fork-upstream-pr-workspace
+          fetch-depth: 0
+      - name: Patch top-level workspace navigation
+        run: python3 scripts/apply_workspace_navigation.py
+      - name: Remove one-time patch machinery
+        run: git rm scripts/apply_workspace_navigation.py .github/workflows/apply-workspace-navigation-once.yml
+      - name: Commit navigation integration
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/newoether/agora/MainActivity.kt \
+                  app/src/main/java/com/newoether/agora/ui/chat/ChatApp.kt \
+                  app/src/main/java/com/newoether/agora/ui/chat/ChatDrawerContent.kt
+          git commit -m "feat(workspace): 从左侧抽屉进入独立双通道工作区"
+          git push origin HEAD:workbench/fork-upstream-pr-workspace
