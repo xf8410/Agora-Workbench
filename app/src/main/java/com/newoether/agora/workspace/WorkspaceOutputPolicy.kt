@@ -30,7 +30,7 @@ object WorkspaceOutputPolicy {
                 if (line.isNotBlank() || out.lastOrNull()?.isNotBlank() == true) out.add(line)
                 out
             }
-            .joinToString("\\n")
+            .joinToString("\n")
             .trim()
     }
 
