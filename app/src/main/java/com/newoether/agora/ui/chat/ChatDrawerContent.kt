@@ -98,6 +98,7 @@ internal fun ChatDrawerContent(
     onSettingsButtonTop: (Float) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenTasks: () -> Unit,
+    onOpenWorkspace: () -> Unit,
     onRequestRename: (String, String) -> Unit,
     onRequestDelete: (String) -> Unit,
 ) {
@@ -162,6 +163,23 @@ internal fun ChatDrawerContent(
             Spacer(modifier = Modifier.height(12.dp))
 
             if (!search.isActive) {
+                FilledTonalButton(
+                    onClick = {
+                        haptics.action()
+                        focusManager.clearFocus()
+                        onOpenWorkspace()
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = CircleShape
+                ) {
+                    Icon(Icons.Default.Code, null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("工作区", style = ChatType.drawerButton)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 FilledTonalButton(
                     onClick = {
                         haptics.action()

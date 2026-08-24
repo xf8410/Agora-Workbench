@@ -85,6 +85,7 @@ fun ChatApp(
     viewModel: ChatViewModel,
     onOpenSettings: () -> Unit,
     onOpenTasks: (String?) -> Unit = {},
+    onOpenWorkspace: () -> Unit = {},
     onMediaClick: (List<String>, Int) -> Unit,
     onFileContentClick: ((String, String) -> Unit)? = null,
     onPdfPagesClick: ((List<String>, Int) -> Unit)? = null,
@@ -514,6 +515,7 @@ fun ChatApp(
                 onSettingsButtonTop = { settingsButtonTopDp = it },
                 onOpenSettings = onOpenSettings,
                 onOpenTasks = { onOpenTasks(null) },
+                onOpenWorkspace = onOpenWorkspace,
                 onRequestRename = { id, title -> showRenameDialog = id; conversationToRename = title },
                 onRequestDelete = { id -> showDeleteConfirmDialog = id },
             )

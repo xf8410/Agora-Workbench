@@ -412,6 +412,7 @@ fun MainNavigation(
     val appContext = LocalContext.current.applicationContext
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showTasks by rememberSaveable { mutableStateOf(false) }
+    var showWorkspace by rememberSaveable { mutableStateOf(false) }
     var taskToOpen by rememberSaveable { mutableStateOf<String?>(null) }
     val notificationTarget by notificationConversationId.collectAsState()
     LaunchedEffect(notificationTarget) {
@@ -424,6 +425,7 @@ fun MainNavigation(
             if (exists) {
                 showSettings = false
                 showTasks = false
+                showWorkspace = false
                 taskToOpen = null
                 viewModel.selectConversation(id)
             }
@@ -459,7 +461,7 @@ fun MainNavigation(
     // Layout callbacks and inset changes can briefly produce a negative Dp while the
     // bottom bar is being removed or recomposed. Compose padding rejects negatives.
     val targetSnackbarPadding = (
-        if (showSettings || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
+        if (showSettings || showTasks || showWorkspace || fullScreenMediaUrls != null) navBarPadding else chatSnackbarOffset
     ).coerceAtLeast(0.dp)
     val snackbarBottomPadding by animateDpAsState(
         targetValue = targetSnackbarPadding,
@@ -776,6 +778,9 @@ fun MainNavigation(
                     taskToOpen = taskId
                     showTasks = true
                 },
+                onOpenWorkspace = {
+                    showWorkspace = true
+                },
                 onMediaClick = { urls, index ->
                     focusManager.clearFocus()
                     fullScreenMediaUrls = urls
@@ -831,6 +836,15 @@ fun MainNavigation(
                         showTasks = false
                         viewModel.selectConversation(conversationId)
                     }
+                )
+            }
+
+            SettingsOverlayHost(
+                visible = showWorkspace,
+                onDismiss = { showWorkspace = false }
+            ) {
+                com.newoether.agora.ui.workspace.GitHubWorkspaceScreen(
+                    onBack = { showWorkspace = false }
                 )
             }
 
