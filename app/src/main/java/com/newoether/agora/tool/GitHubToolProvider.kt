@@ -68,7 +68,13 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         fun arg(key: String, default: String = "") = (args[key] as? JsonPrimitive)?.content ?: default
         fun intArg(key: String, default: Int) = arg(key).toIntOrNull() ?: default
         fun boolArg(key: String, default: Boolean) = arg(key).toBooleanStrictOrNull() ?: default
+        fun requireWorkspaceRepo(repo: String) {
+            if (ctx.githubWorkspaceMode) require(repo in ctx.githubAllowedRepositories) {
+                "Repository is outside the active workspace stage"
+            }
+        }
         return runCatching {
+            arg("repo").takeIf { it.isNotBlank() }?.let(::requireWorkspaceRepo)
             when (name) {
                 "github_list_repositories" -> listRepositories()
                 "github_list_user_repositories" -> listUserRepositories(arg("owner"), intArg("limit", 30))
@@ -99,6 +105,9 @@ class GitHubToolProvider(context: Context) : ToolProvider {
                     buildJsonObject { put("commit_sha", client.writeFile(arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content"))); put("ok", true) }.toString()
                 }
                 "github_dispatch_workflow" -> {
+                    if (ctx.githubWorkspaceMode) require(arg("ref", "main") !in setOf("main", "master")) {
+                        "Workspace development CI cannot run on main/master"
+                    }
                     confirmMutation(arg("repo"), "Dispatch ${arg("repo")} workflow ${arg("workflow")} on ${arg("ref", "main")}")
                     dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))
                 }

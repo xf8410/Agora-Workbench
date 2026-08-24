@@ -131,6 +131,14 @@ class AppContainer(private val appContext: Context) {
         )
     }
 
+    val workspaceAgentRunner: com.newoether.agora.workspace.WorkspaceAgentRunner by lazy {
+        com.newoether.agora.workspace.WorkspaceAgentRunner(
+            conversations = conversationRepository,
+            engine = taskExecutionEngine,
+            scope = appScope,
+        )
+    }
+
     val taskManager: TaskManager by lazy {
         TaskManager(
             taskRepository = taskRepository,

@@ -94,7 +94,8 @@ class RagToolProvider(
                 val conversation = conversations.getSearchableConversation(conversationId) ?: continue
                 // Business branch reconstruction requires complete MessageEntity rows. The bounded
                 // MessageListRow projection is UI-only and intentionally omits large payloads.
-                val allMessages = conversations.getMessagesForConversationSnapshot(conversationId)
+                val allMessages: List<MessageEntity> = conversations
+                    .getMessagesForConversationSnapshot(conversationId)
                     .filter { it.participant == Participant.USER || it.participant == Participant.MODEL }
                 val branch = buildSelectedBranch(allMessages, conversation.selectedBranchesJson)
                 val indexById = branch.withIndex().associate { it.value.id to it.index }
@@ -155,7 +156,8 @@ class RagToolProvider(
         return try {
             val conversation = conversations.getSearchableConversation(id)
                 ?: return buildJsonObject { put("type", "read_conversation"); put("conversation_id", id); put("error", "not_found") }.toString()
-            val allMessages = conversations.getMessagesForConversationSnapshot(id)
+            val allMessages: List<MessageEntity> = conversations
+                .getMessagesForConversationSnapshot(id)
                 .filter { it.participant == Participant.USER || it.participant == Participant.MODEL }
             val branch = buildSelectedBranch(allMessages, conversation.selectedBranchesJson)
                 .filter { !it.id.startsWith(Constants.TOOL_MSG_PREFIX) && !it.id.startsWith(Constants.RESULT_MSG_PREFIX) }

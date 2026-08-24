@@ -8,7 +8,7 @@ on:
     branches: [main, 'workbench/**']
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -31,57 +31,96 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
+
+      - name: Record CI metadata
+        run: |
+          mkdir -p ci-logs
+          cat > ci-logs/manifest.json <<EOF
+          {
+            "repository": "${GITHUB_REPOSITORY}",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "event": "${GITHUB_EVENT_NAME}",
+            "ref": "${GITHUB_REF}",
+            "head_sha": "${GITHUB_SHA}",
+            "actor": "${GITHUB_ACTOR}",
+            "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          }
+          EOF
+
       - name: Unit tests
         id: unit_tests
         continue-on-error: true
+        timeout-minutes: 20
         run: |
           set -o pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test-console.log
-      - name: Preserve unit test diagnostics artifact
-        if: steps.unit_tests.outcome == 'failure'
+          timeout --signal=TERM --kill-after=60s 18m \
+            ./gradlew --no-daemon --stacktrace --info testFdroidDebugUnitTest \
+            2>&1 | tee ci-logs/unit-test-console.log
+
+      - name: Build APK
+        id: build_apk
+        if: steps.unit_tests.outcome == 'success'
         continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-diagnostics-${{ github.sha }}
-          if-no-files-found: warn
-          retention-days: 7
-          path: |
-            unit-test-console.log
-            app/build/reports/tests/
-            app/build/test-results/
-      - name: Commit unit test diagnostics fallback
-        if: steps.unit_tests.outcome == 'failure' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
-        env:
-          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          set -euo pipefail
-          chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest 2>&1 | tee unit-test.log
-      - name: Preserve unit test diagnostics on failure
-        if: steps.unit_tests.outcome == 'failure'
-        env:
-          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          cp unit-test-console.log ci-failure-summary.txt
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add ci-failure-summary.txt
-          git commit -m "保存单元测试原始诊断 [skip ci]"
-          git push origin "HEAD:${HEAD_BRANCH}"
-          exit 1
-      - name: Build APK (verify main SHA compiles)
-        run: ./gradlew --no-daemon --stacktrace assembleFdroidDebug
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace assembleFdroidDebug \
+            2>&1 | tee ci-logs/apk-build-console.log
+
       - name: Verify APK output
+        id: verify_apk
+        if: steps.unit_tests.outcome == 'success' && steps.build_apk.outcome == 'success'
+        continue-on-error: true
         run: |
           set -euo pipefail
           apk_path="$(find app/build/outputs/apk/fdroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$apk_path"
           test -s "$apk_path"
-      - name: Upload APK
+          sha256sum "$apk_path" | tee ci-logs/apk.sha256
+
+      - name: Write CI conclusion
+        if: always()
+        env:
+          UNIT_OUTCOME: ${{ steps.unit_tests.outcome }}
+          BUILD_OUTCOME: ${{ steps.build_apk.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify_apk.outcome }}
+        run: |
+          cat > ci-logs/conclusion.txt <<EOF
+          unit_tests=${UNIT_OUTCOME}
+          build_apk=${BUILD_OUTCOME}
+          verify_apk=${VERIFY_OUTCOME}
+          EOF
+          cp -R app/build/reports/tests ci-logs/test-reports 2>/dev/null || true
+          cp -R app/build/test-results ci-logs/test-results 2>/dev/null || true
+          cat ci-logs/conclusion.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload durable CI logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agora-workbench-debug
-          path: app/build/outputs/apk/fdroid/debug/*.apk
-          if-no-files-found: warn
+          name: ci-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: ci-logs/
+          if-no-files-found: error
           retention-days: 90
+
+      - name: Upload APK
+        if: steps.unit_tests.outcome == 'success' && steps.build_apk.outcome == 'success' && steps.verify_apk.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agora-workbench-debug-${{ github.sha }}
+          path: app/build/outputs/apk/fdroid/debug/*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Enforce CI result
+        if: always()
+        env:
+          UNIT_OUTCOME: ${{ steps.unit_tests.outcome }}
+          BUILD_OUTCOME: ${{ steps.build_apk.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify_apk.outcome }}
+        run: |
+          test "$UNIT_OUTCOME" = success
+          test "$BUILD_OUTCOME" = success
+          test "$VERIFY_OUTCOME" = success

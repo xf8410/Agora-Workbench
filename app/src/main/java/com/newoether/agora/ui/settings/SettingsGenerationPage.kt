@@ -50,7 +50,7 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     CollapsingSettingsScaffold(
         title = stringResource(R.string.generation_title),
         onBack = onBack,
-        floatingActionButton = { if (showDocFab) DocumentationFab("generation.md") }
+        actions = { if (showDocFab) DocumentationAction("generation.md") }
     ) {
             SettingsGroupColumn {
                 // ── Section 1: Default Context Window ──
@@ -67,7 +67,7 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 16.dp)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -79,7 +79,7 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(top = 2.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = stringResource(R.string.context_window),
@@ -103,7 +103,7 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                                 }
                                             },
                                             valueRange = 5f..100f,
-                                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                                         )
                                         Spacer(modifier = Modifier.height(12.dp))
                                     }
@@ -155,7 +155,7 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                 onLevelChange = { viewModel.settings.setThinkingLevel(it) },
                                 onBudgetEnabledChange = { viewModel.settings.setThinkingBudgetEnabled(it) },
                                 onBudgetTokensChange = { viewModel.settings.setThinkingBudgetTokens(it) },
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                 showHeader = false,
                                 providerName = null,
                                 animateSections = true
@@ -228,7 +228,6 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                 )
             }
 
-            if (showDocFab) { Spacer(modifier = Modifier.height(80.dp)) }
     }
 }
 
@@ -264,7 +263,7 @@ private fun GenParamSlider(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -276,7 +275,7 @@ private fun GenParamSlider(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 2.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -333,7 +332,7 @@ private fun GenParamSlider(
                     },
                     valueRange = valueRange,
                     steps = steps,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                 )
             }
         }
@@ -366,7 +365,7 @@ private fun GenParamSlider(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -378,7 +377,7 @@ private fun GenParamSlider(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 2.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -436,7 +435,7 @@ private fun GenParamSlider(
                     },
                     valueRange = 0f..(presets.size - 1).toFloat(),
                     steps = presets.size - 2,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                 )
             }
         }

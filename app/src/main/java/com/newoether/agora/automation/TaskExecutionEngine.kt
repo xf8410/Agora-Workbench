@@ -76,8 +76,15 @@ class TaskExecutionEngine(
         context = appContext,
         sandboxFactory = sandboxFactory,
     ).also {
-        // A headless worker cannot ask the user to approve a remote mutation. Fail closed.
+        // Remote shell remains unavailable to headless runs. Workspace GitHub mutations use
+        // GitHubMutationConfirmation and therefore still fail closed unless the foreground user
+        // approves the exact repository/ref/SHA dialog.
         it.onConfirmShellCommand = { _, _ -> false }
+        it.onConfirmGitHubAction = { repository, summary ->
+            com.newoether.agora.viewmodel.GitHubMutationConfirmation.confirm(
+                "$repository\n$summary"
+            )
+        }
     }
 
     /** Headless callbacks: no UI sink, always persist (this run owns the message). */
@@ -105,6 +112,8 @@ class TaskExecutionEngine(
         systemPromptOverride: String? = null,
         foregroundServiceManagedExternally: Boolean = false,
         precondition: suspend () -> Boolean = { true },
+        githubWorkspaceMode: Boolean = false,
+        githubAllowedRepositories: Set<String> = emptySet(),
     ): Result = automationExecutionGate.withExecution {
         executionCoordinator.withAutomationConversationLock(conversationId) {
             runOnceLocked(
@@ -114,6 +123,8 @@ class TaskExecutionEngine(
                 systemPromptOverride = systemPromptOverride,
                 foregroundServiceManagedExternally = foregroundServiceManagedExternally,
                 precondition = precondition,
+                githubWorkspaceMode = githubWorkspaceMode,
+                githubAllowedRepositories = githubAllowedRepositories,
             )
         }
     }
@@ -138,6 +149,8 @@ class TaskExecutionEngine(
             systemPromptOverride = systemPromptOverride,
             foregroundServiceManagedExternally = foregroundServiceManagedExternally,
             precondition = precondition,
+            githubWorkspaceMode = false,
+            githubAllowedRepositories = emptySet(),
         )
     }
 
@@ -148,6 +161,8 @@ class TaskExecutionEngine(
         systemPromptOverride: String?,
         foregroundServiceManagedExternally: Boolean,
         precondition: suspend () -> Boolean,
+        githubWorkspaceMode: Boolean,
+        githubAllowedRepositories: Set<String>,
     ): Result {
         // A Worker may construct the process from an alarm while every StateFlow still exposes
         // its eager default. Wait for the real DataStore snapshot, then synchronously materialize
@@ -260,6 +275,8 @@ class TaskExecutionEngine(
                 // not recursively create more tasks/loops without a user in the loop.
                 automationToolsEnabled = false,
                 foregroundServiceManagedExternally = foregroundServiceManagedExternally,
+                githubWorkspaceMode = githubWorkspaceMode,
+                githubAllowedRepositories = githubAllowedRepositories,
             )
 
             // No global slot: local model work is serialized inside LocalProvider via

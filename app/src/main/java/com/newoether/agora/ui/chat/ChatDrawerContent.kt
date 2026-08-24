@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
@@ -98,6 +99,7 @@ internal fun ChatDrawerContent(
     onSettingsButtonTop: (Float) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenTasks: () -> Unit,
+    onOpenWorkspace: () -> Unit,
     onRequestRename: (String, String) -> Unit,
     onRequestDelete: (String) -> Unit,
 ) {
@@ -162,6 +164,23 @@ internal fun ChatDrawerContent(
             Spacer(modifier = Modifier.height(12.dp))
 
             if (!search.isActive) {
+                FilledTonalButton(
+                    onClick = {
+                        haptics.action()
+                        focusManager.clearFocus()
+                        onOpenWorkspace()
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = CircleShape
+                ) {
+                    Icon(Icons.Default.Code, null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("工作区", style = ChatType.drawerButton)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 FilledTonalButton(
                     onClick = {
                         haptics.action()
