@@ -3,13 +3,17 @@ package com.newoether.agora.workspace
 import com.newoether.agora.automation.TaskExecutionEngine
 import com.newoether.agora.data.local.ChatEntity
 import com.newoether.agora.data.repository.ConversationRepository
-import java.util.UUID
+import com.newoether.agora.model.MessageStatus
+import com.newoether.agora.model.Participant
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** A branch stage is never run concurrently with another stage in the same workspace. */
@@ -25,16 +29,23 @@ data class WorkspaceStageState(
 
 data class WorkspacePlanState(
     val running: Boolean = false,
-    val mode: WorkspaceRunMode = WorkspaceRunMode.ALL_IN_ORDER,
+    val mode: WorkspaceRunMode = WorkspaceRunMode.TEST_ONE,
     val activeLaneKey: String? = null,
     val request: String = "",
     val stages: Map<String, WorkspaceStageState> = emptyMap(),
 )
 
+data class WorkspaceChatMessage(
+    val id: String,
+    val text: String,
+    val participant: Participant,
+    val status: MessageStatus,
+    val timestamp: Long,
+)
+
 /**
- * One scheduler owns one workspace execution slot. Normal runs execute lanes in list order and
- * stop on the first failure. Test mode executes exactly one selected lane and marks all others
- * SKIPPED. Intermediate commits and CI must remain on branches whose names start with workbench/.
+ * Owns the workspace execution slot and two durable, lane-scoped conversations. Every user turn
+ * in a lane is appended to the same deterministic conversation, so later turns retain context.
  */
 class WorkspaceAgentRunner(
     private val conversations: ConversationRepository,
@@ -44,8 +55,26 @@ class WorkspaceAgentRunner(
     private val states = ConcurrentHashMap<String, MutableStateFlow<WorkspacePlanState>>()
     private val jobs = ConcurrentHashMap<String, Job>()
 
-    fun state(workspaceId: String): StateFlow<WorkspacePlanState> =
-        mutableState(workspaceId).asStateFlow()
+    fun state(workspaceId: String): StateFlow<WorkspacePlanState> = mutableState(workspaceId).asStateFlow()
+
+    fun messages(workspaceId: String, laneKey: String): Flow<List<WorkspaceChatMessage>> =
+        conversations.getMessagesForConversation(conversationId(workspaceId, laneKey), limit = 500)
+            .map { rows ->
+                rows.map { row ->
+                    WorkspaceChatMessage(row.id, row.text, row.participant, row.status, row.timestamp)
+                }
+            }
+
+    suspend fun prepareLane(workspaceId: String, lane: WorkspaceLaneConfig): String =
+        ensureConversation(workspaceId, lane.id.name, lane)
+
+    fun send(
+        workspaceId: String,
+        lanes: List<WorkspaceLaneConfig>,
+        selectedLaneKey: String,
+        request: String,
+        modelId: String? = null,
+    ) = schedule(workspaceId, lanes, request, WorkspaceRunMode.TEST_ONE, selectedLaneKey, modelId)
 
     fun runAll(
         workspaceId: String,
@@ -60,17 +89,17 @@ class WorkspaceAgentRunner(
         selectedLaneKey: String,
         request: String,
         modelId: String? = null,
-    ) = schedule(workspaceId, lanes, request, WorkspaceRunMode.TEST_ONE, selectedLaneKey, modelId)
+    ) = send(workspaceId, lanes, selectedLaneKey, request, modelId)
 
     fun stop(workspaceId: String) {
-        jobs.remove(workspaceId)?.cancel()
+        jobs.remove(workspaceId)?.cancel(CancellationException("用户已停止任务"))
         val state = mutableState(workspaceId)
         state.value = state.value.copy(
             running = false,
             activeLaneKey = null,
             stages = state.value.stages.mapValues { (_, stage) ->
                 if (stage.status == WorkspaceStageStatus.RUNNING || stage.status == WorkspaceStageStatus.QUEUED) {
-                    stage.copy(status = WorkspaceStageStatus.STOPPED)
+                    stage.copy(status = WorkspaceStageStatus.STOPPED, error = null)
                 } else stage
             },
         )
@@ -96,29 +125,21 @@ class WorkspaceAgentRunner(
         val initial = lanes.associate { lane ->
             val key = lane.id.name
             key to WorkspaceStageState(
-                status = if (mode == WorkspaceRunMode.TEST_ONE && key != selectedLaneKey) {
-                    WorkspaceStageStatus.SKIPPED
-                } else WorkspaceStageStatus.QUEUED,
-                conversationId = state.value.stages[key]?.conversationId,
+                status = if (mode == WorkspaceRunMode.TEST_ONE && key != selectedLaneKey) WorkspaceStageStatus.SKIPPED
+                else WorkspaceStageStatus.QUEUED,
+                conversationId = conversationId(workspaceId, key),
             )
         }
-        state.value = WorkspacePlanState(
-            running = true,
-            mode = mode,
-            request = clean,
-            stages = initial,
-        )
+        state.value = WorkspacePlanState(running = true, mode = mode, request = clean, stages = initial)
 
         val job = scope.launch {
             var previousResult = ""
-            val selected = if (mode == WorkspaceRunMode.TEST_ONE) {
-                lanes.filter { it.id.name == selectedLaneKey }
-            } else lanes
+            val selected = if (mode == WorkspaceRunMode.TEST_ONE) lanes.filter { it.id.name == selectedLaneKey } else lanes
 
             for (lane in selected) {
                 val laneKey = lane.id.name
                 val current = state.value.stages.getValue(laneKey)
-                val conversationId = ensureConversation(workspaceId, laneKey, lane, current.conversationId)
+                val conversationId = ensureConversation(workspaceId, laneKey, lane)
                 updateStage(state, laneKey, current.copy(
                     status = WorkspaceStageStatus.RUNNING,
                     conversationId = conversationId,
@@ -146,21 +167,19 @@ class WorkspaceAgentRunner(
                         val visibleResult = WorkspaceOutputPolicy.sanitize(result.text)
                         previousResult = visibleResult
                         updateStage(state, laneKey, state.value.stages.getValue(laneKey).copy(
-                            status = WorkspaceStageStatus.SUCCESS,
-                            result = visibleResult,
-                            error = null,
+                            status = WorkspaceStageStatus.SUCCESS, result = visibleResult, error = null,
                         ), active = null)
                     }
                     is TaskExecutionEngine.Result.Failure -> {
                         updateStage(state, laneKey, state.value.stages.getValue(laneKey).copy(
-                            status = WorkspaceStageStatus.FAILED,
-                            error = result.reason,
+                            status = WorkspaceStageStatus.FAILED, error = result.reason,
                         ), active = null)
                         if (mode == WorkspaceRunMode.ALL_IN_ORDER) {
                             state.value = state.value.copy(stages = state.value.stages.mapValues { (_, stage) ->
-                                if (stage.status == WorkspaceStageStatus.QUEUED) {
-                                    stage.copy(status = WorkspaceStageStatus.SKIPPED, error = "Skipped because an earlier branch failed")
-                                } else stage
+                                if (stage.status == WorkspaceStageStatus.QUEUED) stage.copy(
+                                    status = WorkspaceStageStatus.SKIPPED,
+                                    error = "Skipped because an earlier branch failed",
+                                ) else stage
                             })
                         }
                         break
@@ -173,12 +192,16 @@ class WorkspaceAgentRunner(
         job.invokeOnCompletion { failure ->
             jobs.remove(workspaceId, job)
             if (failure != null) {
+                val cancelled = failure is CancellationException
                 state.value = state.value.copy(
                     running = false,
                     activeLaneKey = null,
                     stages = state.value.stages.mapValues { (_, stage) ->
                         if (stage.status == WorkspaceStageStatus.RUNNING || stage.status == WorkspaceStageStatus.QUEUED) {
-                            stage.copy(status = WorkspaceStageStatus.STOPPED, error = failure.message)
+                            stage.copy(
+                                status = if (cancelled) WorkspaceStageStatus.STOPPED else WorkspaceStageStatus.FAILED,
+                                error = if (cancelled) null else (failure.message ?: "任务执行失败"),
+                            )
                         } else stage
                     },
                 )
@@ -192,26 +215,26 @@ class WorkspaceAgentRunner(
         stage: WorkspaceStageState,
         active: String?,
     ) {
-        state.value = state.value.copy(
-            activeLaneKey = active,
-            stages = state.value.stages + (laneKey to stage),
-        )
+        state.value = state.value.copy(activeLaneKey = active, stages = state.value.stages + (laneKey to stage))
     }
+
+    private fun conversationId(workspaceId: String, laneKey: String): String =
+        "workspace_${workspaceId}_${laneKey.lowercase()}"
 
     private suspend fun ensureConversation(
         workspaceId: String,
         laneKey: String,
         config: WorkspaceLaneConfig,
-        currentId: String?,
     ): String {
-        if (currentId != null && conversations.getConversation(currentId) != null) return currentId
-        val id = "workspace_${UUID.randomUUID()}"
-        conversations.upsertConversation(ChatEntity(
-            id = id,
-            title = "${config.title} · ${config.forkRepository}",
-            origin = "workspace:$workspaceId:$laneKey",
-            graduated = false,
-        ))
+        val id = conversationId(workspaceId, laneKey)
+        if (conversations.getConversation(id) == null) {
+            conversations.upsertConversation(ChatEntity(
+                id = id,
+                title = "${config.title} · ${config.forkRepository}",
+                origin = "workspace:$workspaceId:$laneKey",
+                graduated = false,
+            ))
+        }
         return id
     }
 
@@ -224,21 +247,21 @@ class WorkspaceAgentRunner(
         config: WorkspaceLaneConfig,
         mode: WorkspaceRunMode,
     ): String = """
-        You are executing one ordered branch stage selected by the Agora workspace scheduler.
+        You are in a persistent GitHub workspace conversation.
         Workspace: $workspaceId
-        Stage: $laneKey (${config.title})
+        Lane: $laneKey (${config.title})
         Run mode: $mode
         Writable fork: ${config.forkRepository}
-        Baseline branch (read/base only): ${config.forkBaseBranch}
+        Persistent lane branch: ${config.forkBaseBranch}
         Upstream repository: ${config.upstreamRepository}
         Upstream target: ${config.upstreamBaseBranch}
         Squash required: ${config.squashRequired}
 
-        This stage is the only active stage. Do not start or simulate another stage. Put every
-        intermediate commit and every CI run on a workbench/* branch. Never dispatch development
-        tests on main or master, and never write directly to main/master or to the configured
-        baseline. Main/master may only be the final pull-request target after successful validation.
-        Re-read exact refs before mutations. If this stage fails, report the failure; the scheduler
-        will skip later stages. Remote mutations require foreground user confirmation.
+        Continue from this lane's existing conversation and repository state. Never act on the other
+        lane. Reuse the existing lane branch and existing pull request when the user asks to update
+        them; do not create a duplicate PR. Temporary implementation commits may use workbench/*,
+        but the validated result belongs on the configured persistent lane branch. Never write
+        directly to upstream main/master. Re-read exact refs before mutations. Remote mutations
+        require foreground user confirmation.
     """.trimIndent()
 }
