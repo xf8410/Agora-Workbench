@@ -844,6 +844,7 @@ fun MainNavigation(
                 onDismiss = { showWorkspace = false }
             ) {
                 com.newoether.agora.ui.workspace.GitHubWorkspaceScreen(
+                    runner = (appContext as AgoraApplication).container.workspaceAgentRunner,
                     onBack = { showWorkspace = false }
                 )
             }

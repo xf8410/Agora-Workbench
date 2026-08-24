@@ -76,8 +76,15 @@ class TaskExecutionEngine(
         context = appContext,
         sandboxFactory = sandboxFactory,
     ).also {
-        // A headless worker cannot ask the user to approve a remote mutation. Fail closed.
+        // Remote shell remains unavailable to headless runs. Workspace GitHub mutations use
+        // GitHubMutationConfirmation and therefore still fail closed unless the foreground user
+        // approves the exact repository/ref/SHA dialog.
         it.onConfirmShellCommand = { _, _ -> false }
+        it.onConfirmGitHubAction = { repository, summary ->
+            com.newoether.agora.viewmodel.GitHubMutationConfirmation.confirm(
+                "$repository\n$summary"
+            )
+        }
     }
 
     /** Headless callbacks: no UI sink, always persist (this run owns the message). */
