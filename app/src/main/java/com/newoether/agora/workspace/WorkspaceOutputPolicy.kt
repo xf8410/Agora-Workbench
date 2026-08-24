@@ -1,8 +1,8 @@
 package com.newoether.agora.workspace
 
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Workspace agents cannot keep working after a response has returned. Remove sentences that claim
@@ -35,21 +35,34 @@ object WorkspaceOutputPolicy {
     }
 
     private fun isRawGithubTreePayload(text: String): Boolean {
-        if (text.length < 200 || !(text.startsWith("{") || text.startsWith("["))) return false
-        return runCatching {
-            val element = Json.parseToJsonElement(text)
-            val objects = when {
-                element is kotlinx.serialization.json.JsonArray -> element.mapNotNull { it as? kotlinx.serialization.json.JsonObject }
-                element is kotlinx.serialization.json.JsonObject -> listOf(element)
-                else -> emptyList()
+        if (text.length < 200) return false
+        val candidates = sequenceOf(text, text.substringAfter('\n', ""))
+        return candidates.any { candidate ->
+            if (!(candidate.trimStart().startsWith("{") || candidate.trimStart().startsWith("["))) {
+                // Models sometimes prepend a sentence before the tool payload.
+                val start = minOf(
+                    candidate.indexOf("[{\"path\""),
+                    candidate.indexOf("{\"path\""),
+                ).takeIf { it >= 0 } ?: return@any false
+                isTreeJson(candidate.substring(start))
+            } else {
+                isTreeJson(candidate.trim())
             }
-            if (objects.isEmpty()) return@runCatching false
-            val treeLike = objects.count { obj ->
-                val keys = obj.keys
-                keys.intersect(githubTreeKeys).size >= 4 &&
-                    obj["type"]?.toString()?.contains("blob") == true
-            }
-            treeLike >= maxOf(1, objects.size / 2)
-        }.getOrDefault(false)
+        }
     }
+
+    private fun isTreeJson(text: String): Boolean = runCatching {
+        val element = Json.parseToJsonElement(text)
+        val objects = when (element) {
+            is JsonArray -> element.mapNotNull { it as? JsonObject }
+            is JsonObject -> listOf(element)
+            else -> emptyList()
+        }
+        if (objects.isEmpty()) return@runCatching false
+        val treeLike = objects.count { obj ->
+            obj.keys.intersect(githubTreeKeys).size >= 4 &&
+                obj["type"]?.toString()?.trim('"') == "blob"
+        }
+        treeLike >= maxOf(1, objects.size / 2)
+    }.getOrDefault(false)
 }
