@@ -1,0 +1,23 @@
+name: Register workspace provider once
+on:
+  push:
+    branches: [workbench/fork-upstream-pr-workspace]
+    paths: [.github/workflows/register-workspace-provider-once.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workbench/fork-upstream-pr-workspace
+          fetch-depth: 0
+      - run: python3 scripts/register_workspace_provider.py
+      - run: git rm scripts/register_workspace_provider.py .github/workflows/register-workspace-provider-once.yml
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/newoether/agora/viewmodel/GenerationManager.kt
+          git commit -m "feat(workspace): 注册 Fork 分支 PR Actions 完整工具集"
+          git push origin HEAD:workbench/fork-upstream-pr-workspace
