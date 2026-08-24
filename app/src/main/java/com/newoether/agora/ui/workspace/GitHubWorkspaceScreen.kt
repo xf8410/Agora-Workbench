@@ -8,17 +8,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,14 +50,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.newoether.agora.model.Participant
 import com.newoether.agora.workspace.GitHubWorkspaceStatusLoader
 import com.newoether.agora.workspace.GitHubWorkspaceStore
 import com.newoether.agora.workspace.WorkspaceAgentRunner
+import com.newoether.agora.workspace.WorkspaceChatMessage
 import com.newoether.agora.workspace.WorkspaceLaneId
 import com.newoether.agora.workspace.WorkspaceLaneSnapshot
+import com.newoether.agora.workspace.WorkspaceStageStatus
 import kotlinx.coroutines.launch
 
-/** Top-level developer workspace. Agent output stays in the lane, never in ordinary chat history. */
+/** A separate, persistent two-lane chat surface. Workspace conversations never use main chat UI. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GitHubWorkspaceScreen(
@@ -68,7 +74,13 @@ fun GitHubWorkspaceScreen(
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf(store.load()) }
     val refreshing = remember { mutableStateMapOf<WorkspaceLaneId, Boolean>() }
-    val requests = remember { mutableStateMapOf<WorkspaceLaneId, String>() }
+    val drafts = remember { mutableStateMapOf<WorkspaceLaneId, String>() }
+    val plan by runner.state(state.workspaceId).collectAsState()
+    val selected = state.lanes.first { it.config.id == state.selectedLane }
+    val laneKey = selected.config.id.name
+    val messages by runner.messages(state.workspaceId, laneKey).collectAsState(initial = emptyList())
+    val listState = rememberLazyListState()
+    val laneRunning = plan.running && plan.activeLaneKey == laneKey
 
     fun selectLane(id: WorkspaceLaneId) {
         state = state.copy(selectedLane = id)
@@ -87,177 +99,188 @@ fun GitHubWorkspaceScreen(
         }
     }
 
-    LaunchedEffect(Unit) { state.lanes.forEach { refreshLane(it.config.id) } }
+    LaunchedEffect(Unit) {
+        state.lanes.forEach {
+            runner.prepareLane(state.workspaceId, it.config)
+            refreshLane(it.config.id)
+        }
+    }
+    LaunchedEffect(messages.size, laneKey) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Column { Text("工作区"); Text(state.workspaceId, style = MaterialTheme.typography.labelSmall) } },
+                title = {
+                    Column {
+                        Text("GitHub 工作区")
+                        Text("${state.workspaceId} · ${selected.config.title}", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回普通对话")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { refreshLane(selected.config.id) }, enabled = !laneRunning) {
+                        if (refreshing[selected.config.id] == true) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                        } else Icon(Icons.Default.Refresh, contentDescription = "刷新通道")
                     }
                 },
             )
         },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    state.lanes.forEach { lane ->
-                        val agent by runner.state(state.workspaceId).collectAsState()
-                        FilterChip(
-                            selected = state.selectedLane == lane.config.id,
-                            onClick = { selectLane(lane.config.id) },
-                            label = { Text(if (agent.running) "${lane.config.title} · 运行中" else lane.config.title) },
-                            leadingIcon = {
-                                if (agent.running) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                                else Icon(
-                                    if (lane.config.id == WorkspaceLaneId.ITERATION) Icons.Default.Build else Icons.Default.RocketLaunch,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
+        bottomBar = {
+            Surface(tonalElevation = 3.dp) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(12.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = drafts[selected.config.id].orEmpty(),
+                        onValueChange = { drafts[selected.config.id] = it },
+                        modifier = Modifier.weight(1f),
+                        minLines = 1,
+                        maxLines = 6,
+                        enabled = !plan.running,
+                        placeholder = { Text("继续和${selected.config.title}对话…") },
+                    )
+                    if (laneRunning) {
+                        IconButton(onClick = { runner.stop(state.workspaceId) }) {
+                            Icon(Icons.Default.Stop, contentDescription = "停止")
+                        }
+                    } else {
+                        val draft = drafts[selected.config.id].orEmpty()
+                        IconButton(
+                            onClick = {
+                                runner.send(
+                                    workspaceId = state.workspaceId,
+                                    lanes = state.lanes.map { it.config },
+                                    selectedLaneKey = laneKey,
+                                    request = draft,
                                 )
+                                drafts[selected.config.id] = ""
                             },
-                        )
+                            enabled = draft.isNotBlank() && !plan.running,
+                        ) { Icon(Icons.Default.Send, contentDescription = "发送") }
                     }
                 }
             }
-            item {
-                val lane = state.lanes.first { it.config.id == state.selectedLane }
-                WorkspaceLaneCard(
-                    lane = lane,
-                    loading = refreshing[lane.config.id] == true,
-                    onRefresh = { refreshLane(lane.config.id) },
+        },
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                state.lanes.forEach { lane ->
+                    val key = lane.config.id.name
+                    val stage = plan.stages[key]?.status
+                    val running = plan.running && plan.activeLaneKey == key
+                    FilterChip(
+                        selected = state.selectedLane == lane.config.id,
+                        onClick = { selectLane(lane.config.id) },
+                        label = {
+                            Text(when {
+                                running -> "${lane.config.title} · 运行中"
+                                stage == WorkspaceStageStatus.QUEUED -> "${lane.config.title} · 等待中"
+                                else -> lane.config.title
+                            })
+                        },
+                        leadingIcon = {
+                            if (running) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            else Icon(
+                                if (lane.config.id == WorkspaceLaneId.ITERATION) Icons.Default.Build else Icons.Default.RocketLaunch,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                    )
+                }
+            }
+
+            LaneHeader(selected, refreshing[selected.config.id] == true)
+
+            if (messages.isEmpty()) {
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(32.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("这是独立的${selected.config.title}对话", fontWeight = FontWeight.Bold)
+                    Text(
+                        "消息会持续保存在当前通道，不会混入普通聊天或另一通道。",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(messages, key = { it.id }) { message -> WorkspaceMessageBubble(message) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LaneHeader(lane: WorkspaceLaneSnapshot, loading: Boolean) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                "${lane.config.forkRepository}:${lane.config.forkBaseBranch}",
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "→ ${lane.config.upstreamRepository}:${lane.config.upstreamBaseBranch}",
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            when {
+                loading -> Text("正在检查通道…", style = MaterialTheme.typography.labelSmall)
+                lane.error != null -> Text(lane.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                else -> Text(
+                    "${lane.status} · ahead ${lane.aheadBy} · behind ${lane.behindBy}",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelSmall,
                 )
             }
-            item {
-                val lane = state.lanes.first { it.config.id == state.selectedLane }
-                val laneKey = lane.config.id.name
-                val agent by runner.state(state.workspaceId).collectAsState()
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("GitHub Agent 任务", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("该任务只绑定当前通道的仓库、基准、目标和独立执行上下文，可调用完整 GitHub 工具。")
-                        if (lane.config.squashRequired) {
-                            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(12.dp)) {
-                                Text(
-                                    "发布通道强制 squash：禁止把实验提交历史普通合并到发布基线。",
-                                    modifier = Modifier.padding(12.dp),
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                            }
-                        }
-                        OutlinedTextField(
-                            value = requests[lane.config.id].orEmpty(),
-                            onValueChange = { requests[lane.config.id] = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 3,
-                            maxLines = 8,
-                            enabled = !agent.running,
-                            label = { Text("描述要在当前通道完成的任务") },
-                            placeholder = { Text("例如：检查最新 CI，读取失败日志，修复后在 workbench/* 提交并创建上游 PR") },
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (agent.running) {
-                                Button(onClick = { runner.stop(state.workspaceId) }) {
-                                    Icon(Icons.Default.Stop, contentDescription = null)
-                                    Text(" 停止")
-                                }
-                            } else {
-                                Button(
-                                    onClick = {
-                                        runner.runAll(
-                                            workspaceId = state.workspaceId,
-                                            lanes = state.lanes.map { it.config },
-                                            request = requests[lane.config.id].orEmpty(),
-                                        )
-                                    },
-                                    enabled = requests[lane.config.id].orEmpty().isNotBlank(),
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                    Text(" 顺序执行全部")
-                                }
-                                Button(
-                                    onClick = {
-                                        runner.testOne(
-                                            workspaceId = state.workspaceId,
-                                            lanes = state.lanes.map { it.config },
-                                            selectedLaneKey = laneKey,
-                                            request = requests[lane.config.id].orEmpty(),
-                                        )
-                                    },
-                                    enabled = requests[lane.config.id].orEmpty().isNotBlank(),
-                                ) { Text("只测试当前分支") }
-                            }
-                            Button(
-                                onClick = { refreshLane(lane.config.id) },
-                                enabled = refreshing[lane.config.id] != true && !agent.running,
-                            ) {
-                                Icon(Icons.Default.CloudSync, contentDescription = null)
-                                Text(" 检查通道")
-                            }
-                        }
-                        if (agent.request.isNotBlank()) {
-                            Text("最近任务", style = MaterialTheme.typography.labelLarge)
-                            Text(agent.request, style = MaterialTheme.typography.bodySmall)
-                        }
-                        if (agent.stages[laneKey]?.result.orEmpty().isNotBlank()) {
-                            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
-                                Text(agent.stages[laneKey]?.result.orEmpty(), modifier = Modifier.fillMaxWidth().padding(12.dp))
-                            }
-                        }
-                        agent.stages[laneKey]?.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    }
-                }
-            }
-            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 }
 
 @Composable
-private fun WorkspaceLaneCard(lane: WorkspaceLaneSnapshot, loading: Boolean, onRefresh: () -> Unit) {
-    Surface(
+private fun WorkspaceMessageBubble(message: WorkspaceChatMessage) {
+    val user = message.participant == Participant.USER
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        tonalElevation = 2.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        horizontalArrangement = if (user) Arrangement.End else Arrangement.Start,
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(lane.config.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(lane.config.description, style = MaterialTheme.typography.bodyMedium)
+        Surface(
+            modifier = Modifier.fillMaxWidth(if (user) 0.86f else 0.96f),
+            shape = RoundedCornerShape(16.dp),
+            color = if (user) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text(message.text.ifBlank { if (message.participant == Participant.ERROR) "执行失败" else "…" })
+                if (message.status != com.newoether.agora.model.MessageStatus.SUCCESS) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(message.status.name, style = MaterialTheme.typography.labelSmall)
                 }
-                if (loading) CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
-                else IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, contentDescription = "刷新") }
             }
-            WorkspaceRef("Fork", lane.config.forkRepository, lane.config.forkBaseBranch, lane.forkHeadSha)
-            WorkspaceRef("Upstream", lane.config.upstreamRepository, lane.config.upstreamBaseBranch, lane.upstreamHeadSha)
-            if (lane.error != null) Text(lane.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            else Text(
-                "状态 ${lane.status} · ahead ${lane.aheadBy} · behind ${lane.behindBy}",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-    }
-}
-
-@Composable
-private fun WorkspaceRef(label: String, repository: String, branch: String, sha: String) {
-    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium)
-            Text("$repository:$branch", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-            if (sha.isNotBlank()) Text(sha.take(12), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
