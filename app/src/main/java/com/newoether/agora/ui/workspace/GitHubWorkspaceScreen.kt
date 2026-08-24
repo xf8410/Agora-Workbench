@@ -109,7 +109,7 @@ fun GitHubWorkspaceScreen(
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     state.lanes.forEach { lane ->
-                        val agent by runner.state(state.workspaceId, lane.config.id.name).collectAsState()
+                        val agent by runner.state(state.workspaceId).collectAsState()
                         FilterChip(
                             selected = state.selectedLane == lane.config.id,
                             onClick = { selectLane(lane.config.id) },
@@ -137,7 +137,7 @@ fun GitHubWorkspaceScreen(
             item {
                 val lane = state.lanes.first { it.config.id == state.selectedLane }
                 val laneKey = lane.config.id.name
-                val agent by runner.state(state.workspaceId, laneKey).collectAsState()
+                val agent by runner.state(state.workspaceId).collectAsState()
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -167,25 +167,35 @@ fun GitHubWorkspaceScreen(
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (agent.running) {
-                                Button(onClick = { runner.stop(state.workspaceId, laneKey) }) {
+                                Button(onClick = { runner.stop(state.workspaceId) }) {
                                     Icon(Icons.Default.Stop, contentDescription = null)
                                     Text(" 停止")
                                 }
                             } else {
                                 Button(
                                     onClick = {
-                                        runner.run(
+                                        runner.runAll(
                                             workspaceId = state.workspaceId,
-                                            laneKey = laneKey,
-                                            config = lane.config,
+                                            lanes = state.lanes.map { it.config },
                                             request = requests[lane.config.id].orEmpty(),
                                         )
                                     },
                                     enabled = requests[lane.config.id].orEmpty().isNotBlank(),
                                 ) {
                                     Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                    Text(" 执行")
+                                    Text(" 顺序执行全部")
                                 }
+                                Button(
+                                    onClick = {
+                                        runner.testOne(
+                                            workspaceId = state.workspaceId,
+                                            lanes = state.lanes.map { it.config },
+                                            selectedLaneKey = laneKey,
+                                            request = requests[lane.config.id].orEmpty(),
+                                        )
+                                    },
+                                    enabled = requests[lane.config.id].orEmpty().isNotBlank(),
+                                ) { Text("只测试当前分支") }
                             }
                             Button(
                                 onClick = { refreshLane(lane.config.id) },
@@ -195,16 +205,16 @@ fun GitHubWorkspaceScreen(
                                 Text(" 检查通道")
                             }
                         }
-                        if (agent.lastRequest.isNotBlank()) {
+                        if (agent.request.isNotBlank()) {
                             Text("最近任务", style = MaterialTheme.typography.labelLarge)
-                            Text(agent.lastRequest, style = MaterialTheme.typography.bodySmall)
+                            Text(agent.request, style = MaterialTheme.typography.bodySmall)
                         }
-                        if (agent.lastResult.isNotBlank()) {
+                        if (agent.stages[laneKey]?.result.orEmpty().isNotBlank()) {
                             Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
-                                Text(agent.lastResult, modifier = Modifier.fillMaxWidth().padding(12.dp))
+                                Text(agent.stages[laneKey]?.result.orEmpty(), modifier = Modifier.fillMaxWidth().padding(12.dp))
                             }
                         }
-                        agent.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        agent.stages[laneKey]?.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     }
                 }
             }

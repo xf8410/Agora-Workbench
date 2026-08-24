@@ -112,6 +112,8 @@ class TaskExecutionEngine(
         systemPromptOverride: String? = null,
         foregroundServiceManagedExternally: Boolean = false,
         precondition: suspend () -> Boolean = { true },
+        githubWorkspaceMode: Boolean = false,
+        githubAllowedRepositories: Set<String> = emptySet(),
     ): Result = automationExecutionGate.withExecution {
         executionCoordinator.withAutomationConversationLock(conversationId) {
             runOnceLocked(
@@ -121,6 +123,8 @@ class TaskExecutionEngine(
                 systemPromptOverride = systemPromptOverride,
                 foregroundServiceManagedExternally = foregroundServiceManagedExternally,
                 precondition = precondition,
+                githubWorkspaceMode = githubWorkspaceMode,
+                githubAllowedRepositories = githubAllowedRepositories,
             )
         }
     }
@@ -145,6 +149,8 @@ class TaskExecutionEngine(
             systemPromptOverride = systemPromptOverride,
             foregroundServiceManagedExternally = foregroundServiceManagedExternally,
             precondition = precondition,
+            githubWorkspaceMode = false,
+            githubAllowedRepositories = emptySet(),
         )
     }
 
@@ -155,6 +161,8 @@ class TaskExecutionEngine(
         systemPromptOverride: String?,
         foregroundServiceManagedExternally: Boolean,
         precondition: suspend () -> Boolean,
+        githubWorkspaceMode: Boolean,
+        githubAllowedRepositories: Set<String>,
     ): Result {
         // A Worker may construct the process from an alarm while every StateFlow still exposes
         // its eager default. Wait for the real DataStore snapshot, then synchronously materialize
@@ -267,6 +275,8 @@ class TaskExecutionEngine(
                 // not recursively create more tasks/loops without a user in the loop.
                 automationToolsEnabled = false,
                 foregroundServiceManagedExternally = foregroundServiceManagedExternally,
+                githubWorkspaceMode = githubWorkspaceMode,
+                githubAllowedRepositories = githubAllowedRepositories,
             )
 
             // No global slot: local model work is serialized inside LocalProvider via

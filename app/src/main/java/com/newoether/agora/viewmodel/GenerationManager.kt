@@ -91,6 +91,10 @@ data class GenerationContext(
     val imageGenModel: String = "gpt-image-1",
     val imageGenSize: String = "1024x1024",
     val automationToolsEnabled: Boolean = false,
+    /** True only for the ordered workspace scheduler, never ordinary Task/Loop automation. */
+    val githubWorkspaceMode: Boolean = false,
+    /** Exact repositories available to this workspace stage. Empty outside workspace mode. */
+    val githubAllowedRepositories: Set<String> = emptySet(),
     /** Workers use WorkManager's foreground execution instead of starting our service. */
     val foregroundServiceManagedExternally: Boolean = false,
     val shellEnabled: Boolean = false,

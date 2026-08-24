@@ -59,6 +59,12 @@ class GitHubWorkspaceToolProvider(context: Context) : ToolProvider {
         fun s(key: String) = (args[key] as? JsonPrimitive)?.content.orEmpty()
         fun b(key: String) = s(key).toBooleanStrictOrNull() ?: false
         fun l(key: String) = s(key).toLongOrNull() ?: 0L
+        if (ctx.githubWorkspaceMode) {
+            listOf("repo", "fork_repo", "upstream_repo", "source_repo", "target_repo")
+                .map(::s).filter { it.isNotBlank() }.forEach { repo ->
+                    require(repo in ctx.githubAllowedRepositories) { "Repository is outside the active workspace stage" }
+                }
+        }
         return try {
             when (name) {
                 PERMISSIONS -> json.encodeToString(workspace.permissions(s("repo")))
