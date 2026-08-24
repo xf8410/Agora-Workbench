@@ -34,7 +34,7 @@ data class WorkspacePlanState(
 /**
  * One scheduler owns one workspace execution slot. Normal runs execute lanes in list order and
  * stop on the first failure. Test mode executes exactly one selected lane and marks all others
- * SKIPPED. Intermediate commits and CI must remain on workbench/* branches.
+ * SKIPPED. Intermediate commits and CI must remain on branches whose names start with workbench/.
  */
 class WorkspaceAgentRunner(
     private val conversations: ConversationRepository,

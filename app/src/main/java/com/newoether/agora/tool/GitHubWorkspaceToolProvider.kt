@@ -87,7 +87,11 @@ class GitHubWorkspaceToolProvider(context: Context) : ToolProvider {
     private fun runProperties() = mapOf("repo" to text("Repository owner/name."), "run_id" to ToolProperty("integer", "Positive Actions run ID."))
     private fun text(description: String) = ToolProperty("string", description)
     private fun tool(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String>) =
-        ToolDefinition(function = ToolFunction(name, description, ToolParameters(properties, required)))
+        ToolDefinition(function = ToolFunction(
+            name = name,
+            description = description,
+            parameters = ToolParameters(properties = properties, required = required),
+        ))
     private fun ok() = buildJsonObject { put("ok", true) }.toString()
     private fun error(message: String) = buildJsonObject { put("ok", false); put("error", message.take(500)) }.toString()
 
