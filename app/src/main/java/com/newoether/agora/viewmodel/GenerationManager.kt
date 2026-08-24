@@ -177,6 +177,7 @@ class GenerationManager(
         }
     }
     private val githubWatchToolProvider = com.newoether.agora.tool.GitHubWatchToolProvider(app)
+    private val githubActionsLogToolProvider = com.newoether.agora.tool.GitHubActionsLogToolProvider(app)
     private val githubPullRequestToolProvider = com.newoether.agora.tool.GitHubPullRequestToolProvider(app)
     private val githubRepositoryMutationToolProvider = com.newoether.agora.tool.GitHubRepositoryMutationToolProvider(app)
     private val githubCloneToolProvider = com.newoether.agora.tool.GitHubCloneToolProvider(app, sandboxFactory)
@@ -187,8 +188,9 @@ class GenerationManager(
     }
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
-        githubToolProvider, githubWatchToolProvider, githubPullRequestToolProvider,
-        githubRepositoryMutationToolProvider, githubCloneToolProvider, umaToolProvider, shellToolProvider
+        githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
+        githubPullRequestToolProvider, githubRepositoryMutationToolProvider,
+        githubCloneToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
