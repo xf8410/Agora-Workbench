@@ -43,13 +43,17 @@ data class GitHubWorkspaceState(
     val lanes: List<WorkspaceLaneSnapshot> = defaultWorkspaceLanes().map(::WorkspaceLaneSnapshot),
 )
 
+/**
+ * These are explicit lane bindings. They must not be inferred from branch names or remapped to
+ * master automatically: each lane intentionally has its own fork ref and upstream ref.
+ */
 fun defaultWorkspaceLanes(): List<WorkspaceLaneConfig> = listOf(
     WorkspaceLaneConfig(
         id = WorkspaceLaneId.ITERATION,
         title = "实验迭代",
-        description = "持续更新现有 ramen_workbench 实验线与 PR",
+        description = "在 Fork 的 master 上保留实验工作，同时读取上游 ramen_workbench",
         forkRepository = "xf8410/umaai-rs",
-        forkBaseBranch = "ramen_workbench",
+        forkBaseBranch = "master",
         upstreamRepository = "xulai1001/umaai-rs",
         upstreamBaseBranch = "ramen_workbench",
         squashRequired = false,
@@ -57,7 +61,7 @@ fun defaultWorkspaceLanes(): List<WorkspaceLaneConfig> = listOf(
     WorkspaceLaneConfig(
         id = WorkspaceLaneId.RELEASE,
         title = "正式发布",
-        description = "从发布基线向上游 master 提交精炼成果",
+        description = "在 Fork 的 upstream 上整理成果，并以 upstream master 为发布目标",
         forkRepository = "xf8410/umaai-rs",
         forkBaseBranch = "upstream",
         upstreamRepository = "xulai1001/umaai-rs",
