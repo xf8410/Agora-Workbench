@@ -8,9 +8,9 @@ import com.newoether.agora.api.ToolProperty
 import com.newoether.agora.github.GitHubApiClient
 import com.newoether.agora.viewmodel.GenerationContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -84,9 +84,9 @@ class PublicContributionTraceToolProvider(context: Context) : ToolProvider {
                 put("targetRepository", target)
                 put("relation", if (target == parent) "fork_parent" else "fork_source")
                 putJsonArray("verifiedFacts") {
-                    add("Target was reached through GitHub parent/source metadata, not repository-name guessing.")
-                    add("Commit author identity is taken from GitHub API author.login when available.")
-                    add("No write, branch creation, PR creation, dispatch, or merge operation is exposed by this tool.")
+                    add(JsonPrimitive("Target was reached through GitHub parent/source metadata, not repository-name guessing."))
+                    add(JsonPrimitive("Commit author identity is taken from GitHub API author.login when available."))
+                    add(JsonPrimitive("No write, branch creation, PR creation, dispatch, or merge operation is exposed by this tool."))
                 }
                 putJsonArray("sourceBranches") { sourceBranches.forEach { add(it) } }
                 putJsonArray("upstreamBranches") { targetBranches.forEach { add(it) } }
@@ -94,9 +94,9 @@ class PublicContributionTraceToolProvider(context: Context) : ToolProvider {
                 putJsonArray("upstreamCommits") { targetCommits.forEach { add(it) } }
                 putJsonArray("upstreamPullRequests") { prs.forEach { add(it) } }
                 putJsonArray("inferenceBoundaries") {
-                    add("A commit proves GitHub attribution, not the contributor's private intention.")
-                    add("A branch or pull request is not treated as merged unless GitHub reports it as merged.")
-                    add("Missing public evidence remains unknown; it is never filled by guessing.")
+                    add(JsonPrimitive("A commit proves GitHub attribution, not the contributor's private intention."))
+                    add(JsonPrimitive("A branch or pull request is not treated as merged unless GitHub reports it as merged."))
+                    add(JsonPrimitive("Missing public evidence remains unknown; it is never filled by guessing."))
                 }
             }.toString()
         }.getOrElse { error(it.message ?: "Unable to trace public contribution") }
@@ -105,8 +105,7 @@ class PublicContributionTraceToolProvider(context: Context) : ToolProvider {
     private suspend fun commitsByAuthor(repo: String, contributor: String, limit: Int): List<JsonElement> {
         val response = client.publicRequest("GET", "/repos/$repo/commits?author=${client.encodeSegment(contributor)}&per_page=$limit")
         requireSuccess(response)
-        val array = json.parseToJsonElement(response.body).jsonArray
-        return array.take(limit).map { item ->
+        return json.parseToJsonElement(response.body).jsonArray.take(limit).map { item ->
             val value = item.jsonObject
             buildJsonObject {
                 put("sha", value.string("sha"))
