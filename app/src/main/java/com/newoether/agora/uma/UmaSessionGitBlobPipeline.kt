@@ -36,7 +36,8 @@ data class UmaSessionGitBlobPipelineResult(
 /**
  * Downloads one complete SO session and uploads each unchanged local file through the Git Blob API.
  * The local downloader and the blob checkpoint are both resumable. No Git tree, commit or ref is
- * mutated by this stage.
+ * mutated by this stage. A live capture may append files between the download and the index
+ * refresh; the commit snapshot is whatever finished uploading, and growth alone is not an error.
  */
 class UmaSessionGitBlobPipeline(
     private val downloader: UmaSessionResumeDownloader,
@@ -54,10 +55,11 @@ class UmaSessionGitBlobPipeline(
 
         val download = downloader.download(sessionId, rootDirectory)
         val files = filesClient.listAll(sessionId)
-        require(files.size == download.fileCount) { "downloaded file count changed before upload" }
-        require(files.sumOf { it.byteLength } == download.totalBytes) {
-            "downloaded byte count changed before upload"
-        }
+        // Growth between the two calls means the capture appended files; they simply stay out of
+        // this snapshot (the next run picks them up). Shrinkage or a changed total is an error.
+        require(files.size >= download.fileCount) { "downloaded file count changed before upload" }
+        require(files.size >= 1) { "SO file index is empty" }
+        val indexedByPath = files.associateBy { validateUmaArchivePath(it.relativePath) }
 
         val checkpointFile = File(rootDirectory, CHECKPOINT_FILE_NAME)
         val previous = readCheckpoint(checkpointFile)
@@ -67,14 +69,15 @@ class UmaSessionGitBlobPipeline(
         require(previous == null || previous.repository == repository) {
             "Git blob checkpoint belongs to a different repository"
         }
-        val indexedPaths = files.map { validateUmaArchivePath(it.relativePath) }.toSet()
         val completed = previous?.blobs.orEmpty().associateBy { it.relativePath }.toMutableMap()
-        require(completed.keys.all { it in indexedPaths }) {
+        require(completed.keys.all { it in indexedByPath }) {
             "Git blob checkpoint contains a path absent from the SO index"
         }
 
-        files.forEach { indexed ->
-            val relativePath = validateUmaArchivePath(indexed.relativePath)
+        download.completedRelativePaths().forEach { relativePath ->
+            val indexed = requireNotNull(indexedByPath[relativePath]) {
+                "completed path missing from SO index: $relativePath"
+            }
             val localFile = resolveUmaSessionFile(rootDirectory, relativePath)
             require(localFile.isFile) { "downloaded file is missing: $relativePath" }
             require(localFile.length() == indexed.byteLength) {
@@ -116,11 +119,12 @@ class UmaSessionGitBlobPipeline(
             }
         }
 
-        val ordered = files.map { indexed ->
-            requireNotNull(completed[indexed.relativePath]) {
-                "missing uploaded blob for ${indexed.relativePath}"
+        val ordered = download.completedRelativePaths().map { relativePath ->
+            requireNotNull(completed[relativePath]) {
+                "missing uploaded blob for $relativePath"
             }
         }
+        require(ordered.isNotEmpty()) { "no raw blobs were published for session $sessionId" }
         UmaSessionGitBlobPipelineResult(
             sessionId = sessionId,
             repository = repository,
@@ -158,5 +162,19 @@ class UmaSessionGitBlobPipeline(
 
     companion object {
         const val CHECKPOINT_FILE_NAME = ".uma-session-git-blobs.json"
+
+        /** Files that finished downloading in this workspace; the snapshot actually committed. */
+        internal fun UmaSessionDownloadResult.completedRelativePaths(): List<String> =
+            File(rootDirectory, UmaSessionResumeDownloader.CHECKPOINT_FILE_NAME)
+                .takeIf(File::isFile)
+                ?.readText(Charsets.UTF_8)
+                ?.let { text ->
+                    runCatching {
+                        Json { ignoreUnknownKeys = true }
+                            .decodeFromString(UmaSessionDownloadCheckpoint.serializer(), text)
+                            .completedRelativePaths
+                    }.getOrNull()
+                }
+                .orEmpty()
     }
 }
