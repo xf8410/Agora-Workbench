@@ -15,7 +15,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-data class GitHubApiResponse(val code: Int, val body: String)
+data class GitHubApiResponse(val code: Int, val body: String, val linkHeader: String? = null)
 
 /** Controlled GitHub REST client. Public GETs may be anonymous; mutations always require auth. */
 class GitHubApiClient(context: Context) {
@@ -48,8 +48,14 @@ class GitHubApiClient(context: Context) {
                 connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             }
             val code = connection.responseCode
+            // Read before disconnect; getHeaderField is case-insensitive and null when absent.
+            val linkHeader = connection.getHeaderField("Link")
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            GitHubApiResponse(code, stream?.bufferedReader()?.use { it.readTextLimited(MAX_API_RESPONSE_CHARS) }.orEmpty())
+            GitHubApiResponse(
+                code,
+                stream?.bufferedReader()?.use { it.readTextLimited(MAX_API_RESPONSE_CHARS) }.orEmpty(),
+                linkHeader,
+            )
         } finally { connection.disconnect() }
     }
 

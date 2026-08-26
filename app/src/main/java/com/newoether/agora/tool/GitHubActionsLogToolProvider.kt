@@ -108,9 +108,20 @@ class GitHubActionsLogToolProvider(context: Context) : ToolProvider {
     }
 }
 
-/** Keeps compiler/test errors and the terminal tail, instead of returning megabytes of setup noise. */
+/** Fixed cost of the two section markers and their separating newlines. */
+internal const val ACTIONS_LOG_SECTION_OVERHEAD_CHARS = 64
+
+/**
+ * Keeps compiler/test errors and the terminal tail, instead of returning megabytes of setup noise.
+ *
+ * The diagnostic excerpt and the tail are each truncated to their own budget before being joined,
+ * so neither the `[diagnostic excerpts]` marker nor the start of the first excerpt can ever be cut
+ * by the size cap. Only when the caller requests an unusually tiny budget do we degrade to a plain
+ * tail slice.
+ */
 internal fun summarizeActionsLog(raw: String, maxChars: Int): String {
     if (raw.length <= maxChars) return raw
+    if (maxChars < 1_000) return raw.takeLast(maxChars)
     val diagnosticMarkers = listOf(
         " error:", "error:", "exception", "failed", "failure:", "unresolved reference",
         "type mismatch", "assertionerror", "caused by:", "##[error]", "process completed with exit code",
@@ -125,14 +136,16 @@ internal fun summarizeActionsLog(raw: String, maxChars: Int): String {
             }
         }
     }
-    val diagnostic = selected.joinToString("\n") { lines[it] }
-    val tailBudget = (maxChars / 2).coerceAtLeast(500)
+    val tailBudget = (maxChars / 2)
+        .coerceAtLeast(500)
+        .coerceAtMost(maxChars - 500 - ACTIONS_LOG_SECTION_OVERHEAD_CHARS)
+    val diagnosticBudget = maxChars - tailBudget - ACTIONS_LOG_SECTION_OVERHEAD_CHARS
     val tail = raw.takeLast(tailBudget)
-    val combined = buildString {
+    val diagnosticExcerpt = selected.joinToString("\n") { lines[it] }.take(diagnosticBudget)
+    return buildString {
         append("[diagnostic excerpts]\n")
-        append(diagnostic.take(maxChars - tailBudget).ifBlank { "No standard error marker found." })
+        append(diagnosticExcerpt.ifBlank { "No standard error marker found." })
         append("\n\n[terminal log tail]\n")
         append(tail)
     }
-    return combined.takeLast(maxChars)
 }
