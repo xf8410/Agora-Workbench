@@ -306,7 +306,9 @@ class DataImporter(
                                 modelId = c.modelId,
                                 taskId = c.taskId,
                                 origin = c.origin,
-                                graduated = c.graduated
+                                graduated = c.graduated,
+                                draftText = c.draftText,
+                                draftAttachments = c.draftAttachments
                             ), availableTaskIds)
                         }
                         val existingConversationIds = if (convDecision == ImportStrategy.MERGE) {
@@ -674,7 +676,11 @@ class DataImporter(
         val modelId: String? = null,
         val taskId: String? = null,
         val origin: String = "user",
-        val graduated: Boolean = false
+        val graduated: Boolean = false,
+        /** v3 archives carry the unsent composer text; older ones decode as empty. */
+        @SerialName("draft_text") val draftText: String = "",
+        /** v3 archives carry the serialized draft attachment list; nullable for old backups. */
+        @SerialName("draft_attachments") val draftAttachments: String? = null
     )
 
     @Serializable
