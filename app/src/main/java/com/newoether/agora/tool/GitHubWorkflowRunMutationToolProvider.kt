@@ -12,11 +12,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /** Destructive GitHub Actions history mutations, kept behind the normal confirmation gate. */
@@ -31,7 +28,7 @@ class GitHubWorkflowRunMutationToolProvider(context: Context) : ToolProvider {
         ToolDefinition(
             function = ToolFunction(
                 name = DELETE_WORKFLOW_RUN,
-                description = "Delete one completed GitHub Actions workflow run after explicit user confirmation. This permanently removes the run logs and cannot be undone.",
+                description = "Delete one completed GitHub Actions workflow run after explicit user confirmation. This permanently removes the run logs and cannot be undone. Requires write access on that repository — on an upstream repo (one you forked from) this can only be done by its owner.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "repo" to ToolProperty("string", "Repository in owner/name form."),
@@ -87,6 +84,12 @@ class GitHubWorkflowRunMutationToolProvider(context: Context) : ToolProvider {
         require(approved) { "GitHub action denied or confirmation unavailable" }
 
         val deleted = client.request("DELETE", "/repos/$repo/actions/runs/$runId")
+        if (deleted.code == 403) {
+            error(
+                "Permission boundary (HTTP 403): no write access on $repo. Workflow-run deletion/cancel/rerun can only be done by the repository owner or collaborators — " +
+                    "typical case is an upstream repository you only fork from; ask its owner instead. Body: ${deleted.body.take(200)}"
+            )
+        }
         requireSuccess(deleted.code, deleted.body)
         return buildJsonObject {
             put("ok", true)
