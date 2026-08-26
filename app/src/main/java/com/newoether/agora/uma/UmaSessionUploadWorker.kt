@@ -14,7 +14,13 @@ import com.newoether.agora.github.GitHubApiClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/** Runs one bounded stage, then appends another WorkRequest until the single commit is complete. */
+/**
+ * Runs one bounded stage, then appends another WorkRequest until the single commit is complete.
+ *
+ * WorkManager enforces a 10-minute hard stop per run; a large session can hit it mid-stage. The
+ * stop signal is converted into a clean pause so the persisted checkpoints survive and the next
+ * appended request resumes exactly where this attempt stopped.
+ */
 class UmaSessionUploadWorker(
     context: Context,
     params: WorkerParameters,
@@ -82,6 +88,20 @@ class UmaSessionUploadWorker(
                 appendNext(applicationContext, taskId)
             }
             Result.success()
+        } catch (stop: kotlinx.coroutines.CancellationException) {
+            // The system stopped this worker (10-minute limit or app constraints). Checkpoints on
+            // disk are durable, so pause cleanly and re-enqueue instead of surfacing an error.
+            runCatching {
+                store.update(taskId) { current ->
+                    if (current.progress.terminal || current.progress.phase == UmaSessionUploadPhase.PAUSED) current else
+                        current.copy(progress = current.progress.copy(
+                            lastError = null,
+                            checkpointUpdatedAtMs = System.currentTimeMillis(),
+                        ))
+                }
+            }
+            appendNext(applicationContext, taskId)
+            throw stop
         } catch (failure: Throwable) {
             val message = failure.message ?: failure::class.java.name
             runCatching {
@@ -92,6 +112,10 @@ class UmaSessionUploadWorker(
                             checkpointUpdatedAtMs = System.currentTimeMillis(),
                         ))
                 }
+            }
+            if (isStopped) {
+                appendNext(applicationContext, taskId)
+                throw kotlinx.coroutines.CancellationException(message)
             }
             Result.retry()
         }

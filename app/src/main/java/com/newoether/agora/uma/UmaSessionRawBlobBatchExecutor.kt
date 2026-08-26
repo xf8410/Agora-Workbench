@@ -7,7 +7,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** Uploads at most one bounded batch of unchanged raw session files and persists every Blob SHA. */
+/**
+ * Uploads at most one bounded batch of unchanged raw session files and persists every Blob SHA.
+ *
+ * A live capture keeps appending files to the session, so the SO index may grow between worker
+ * runs. Instead of failing on an exact count match, this executor uploads exactly the files that
+ * finished downloading; anything new stays pending for the next appended run, which re-syncs the
+ * incremental downloader first. Restarts therefore converge instead of looping forever.
+ */
 class UmaSessionRawBlobBatchExecutor(
     private val downloader: UmaSessionResumeDownloader,
     private val filesClient: UmaStorageFilesClient,
@@ -25,12 +32,10 @@ class UmaSessionRawBlobBatchExecutor(
             )) { "upload task is already terminal" }
 
             val task = record.task
-            val download = downloader.download(task.sessionId, rootDirectory)
+            // Incremental + resumable: completed files are verified locally, only new/partial
+            // files hit the SO again. A growing live session simply adds more work over runs.
+            downloader.download(task.sessionId, rootDirectory)
             val indexed = filesClient.listAll(task.sessionId)
-            require(indexed.size == download.fileCount) { "downloaded file count changed before upload" }
-            require(indexed.sumOf { it.byteLength } == download.totalBytes) {
-                "downloaded byte count changed before upload"
-            }
 
             val checkpointFile = File(rootDirectory, UmaSessionGitBlobPipeline.CHECKPOINT_FILE_NAME)
             val checkpoint = readBlobCheckpoint(checkpointFile)
@@ -43,13 +48,13 @@ class UmaSessionRawBlobBatchExecutor(
 
             val orderedPaths = indexed.map { validateUmaArchivePath(it.relativePath) }
             require(orderedPaths.toSet().size == orderedPaths.size) { "SO index contains duplicate paths" }
-            val indexedByPath = indexed.zip(orderedPaths).associate { (file, path) -> path to file }
+
             val completed = checkpoint?.blobs.orEmpty().associateBy { it.relativePath }.toMutableMap()
-            require(completed.keys.all { it in indexedByPath }) {
+            require(completed.keys.all { it in orderedPaths.toSet() }) {
                 "Git blob checkpoint contains a path absent from the SO index"
             }
             completed.forEach { (path, blob) ->
-                val source = requireNotNull(indexedByPath[path])
+                val source = requireNotNull(indexed.firstOrNull { validateUmaArchivePath(it.relativePath) == path })
                 require(blob.byteLength == source.byteLength) {
                     "Git blob checkpoint length mismatch: $path"
                 }
@@ -58,7 +63,18 @@ class UmaSessionRawBlobBatchExecutor(
                 }
             }
 
-            val pending = orderedPaths.filterNot(completed::containsKey)
+            // Defer anything not fully present on disk yet; a later appended run picks it up
+            // after the incremental downloader has fetched it.
+            fun localReady(path: String, expectedLength: Long): Boolean {
+                val file = resolveSessionFileOrNull(rootDirectory, path) ?: return false
+                return file.isFile && file.length() == expectedLength
+            }
+            val pending = orderedPaths
+                .filterNot(completed::containsKey)
+                .filter { path ->
+                    val source = requireNotNull(indexed.firstOrNull { validateUmaArchivePath(it.relativePath) == path })
+                    localReady(path, source.byteLength)
+                }
             val batch = nextUmaUploadBatch(
                 pending,
                 completedCount = 0,
@@ -66,7 +82,7 @@ class UmaSessionRawBlobBatchExecutor(
             )
             val reusedAtStart = completed.size
             batch.forEach { path ->
-                val source = requireNotNull(indexedByPath[path])
+                val source = requireNotNull(indexed.firstOrNull { validateUmaArchivePath(it.relativePath) == path })
                 val localFile = resolveSessionFile(rootDirectory, path)
                 require(localFile.isFile && localFile.length() == source.byteLength) {
                     "downloaded file is missing or changed: $path"
@@ -107,7 +123,8 @@ class UmaSessionRawBlobBatchExecutor(
         reusedAtStart: Int,
     ): UmaSessionUploadProgress {
         val completedBytes = completed.values.sumOf { it.byteLength }
-        val phase = if (completed.size == indexed.size) {
+        val totalBytes = indexed.sumOf { it.byteLength }
+        val phase = if (completed.size >= indexed.size) {
             UmaSessionUploadPhase.DERIVE
         } else {
             UmaSessionUploadPhase.RAW_BLOBS
@@ -117,9 +134,9 @@ class UmaSessionRawBlobBatchExecutor(
             current.copy(progress = current.progress.copy(
                 phase = phase,
                 rawTotalFiles = indexed.size,
-                rawCompletedFiles = completed.size,
-                rawTotalBytes = indexed.sumOf { it.byteLength },
-                rawCompletedBytes = completedBytes,
+                rawCompletedFiles = completed.size.coerceAtMost(indexed.size),
+                rawTotalBytes = totalBytes,
+                rawCompletedBytes = completedBytes.coerceAtMost(totalBytes),
                 reusedBlobCount = reusedAtStart,
                 nextCursor = completed.size,
                 checkpointUpdatedAtMs = clock(),
@@ -144,12 +161,15 @@ class UmaSessionRawBlobBatchExecutor(
         require(temporary.renameTo(file)) { "cannot commit Git blob checkpoint" }
     }
 
-    private fun resolveSessionFile(root: File, relativePath: String): File {
+    private fun resolveSessionFile(root: File, relativePath: String): File =
+        resolveSessionFileOrNull(root, relativePath)
+            ?: error("relative_path escapes session root")
+
+    private fun resolveSessionFileOrNull(root: File, relativePath: String): File? {
+        val safe = runCatching { validateUmaArchivePath(relativePath) }.getOrNull() ?: return null
         val canonicalRoot = root.canonicalFile
-        val target = File(canonicalRoot, validateUmaArchivePath(relativePath)).canonicalFile
-        require(target.path.startsWith(canonicalRoot.path + File.separator)) {
-            "relative_path escapes session root"
-        }
+        val target = File(canonicalRoot, safe).canonicalFile
+        if (!target.path.startsWith(canonicalRoot.path + File.separator)) return null
         return target
     }
 }

@@ -60,10 +60,10 @@ class UmaSessionGitHubPublisher(
         }
         val raw = blobPipeline.upload(sessionId, repository, rootDirectory)
         val indexed = filesClient.listAll(sessionId)
-        require(indexed.size == raw.fileCount) { "SO file index changed after raw blob upload" }
-        require(indexed.sumOf { it.byteLength } == raw.totalBytes) {
-            "SO byte total changed after raw blob upload"
-        }
+        // A live capture can append files between the two listAll calls; the snapshot used for
+        // the commit is the one the pipeline actually uploaded, so only shrinkage is an error.
+        require(indexed.size >= raw.fileCount) { "SO file index changed after raw blob upload" }
+        require(raw.fileCount > 0) { "SO file index is empty" }
 
         val derived = derivedGenerator.generate(sessionId, rootDirectory, indexed)
         val derivedBlobs = derived.files.map { (relativePath, file) ->

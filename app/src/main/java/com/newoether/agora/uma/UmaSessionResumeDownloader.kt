@@ -23,12 +23,30 @@ data class UmaSessionDownloadResult(
     val fileCount: Int,
     val totalBytes: Long,
     val rootDirectory: File,
-)
+) {
+    /** Files that finished downloading; the snapshot a publish may commit. */
+    val completedRelativePaths: List<String>
+        get() {
+            val checkpointFile = File(rootDirectory, UmaSessionResumeDownloader.CHECKPOINT_FILE_NAME)
+            if (!checkpointFile.isFile) return emptyList()
+            return runCatching {
+                json.decodeFromString<UmaSessionDownloadCheckpoint>(checkpointFile.readText(Charsets.UTF_8))
+            }.getOrNull()?.completedRelativePaths.orEmpty()
+        }
+
+    private companion object {
+        val json = Json { ignoreUnknownKeys = true }
+    }
+}
 
 /**
  * Downloads every indexed session file to a directory while preserving relative paths and raw
  * bytes. A partially downloaded file uses a sibling `.part` file; its verified length is the next
  * read_range offset after restart. The checkpoint is atomically replaced after every chunk.
+ *
+ * A live capture keeps appending files to the session, so [UmaStorageFilesClient.listAll] may
+ * return a larger list on each run. That is expected and safe here: every completed file is
+ * verified locally without re-download, only new or partial files are fetched incrementally.
  */
 class UmaSessionResumeDownloader(
     private val filesClient: UmaStorageFilesClient = UmaStorageFilesClient(),
@@ -62,18 +80,25 @@ class UmaSessionResumeDownloader(
                     "cannot create parent directory for $relativePath"
                 }
 
-                if (target.isFile) {
-                    require(target.length() == file.byteLength) {
-                        "completed file length mismatch for $relativePath"
-                    }
+                if (target.isFile && target.length() == file.byteLength) {
+                    // Already fully downloaded in an earlier run; verify hash only when the SO
+                    // index provides one.
                     verifyExpectedSha256(target, file.sha256, relativePath)
-                } else {
+                } else if (file.byteLength > 0L) {
+                    if (part.exists() && part.length() > file.byteLength) {
+                        // The index changed identity for this path; start over cleanly.
+                        require(part.delete()) { "cannot reset oversized partial $relativePath" }
+                    }
                     downloadOne(file, part, checkpointFile, completed)
                     require(part.length() == file.byteLength) {
                         "downloaded byte count does not match index for $relativePath"
                     }
                     verifyExpectedSha256(part, file.sha256, relativePath)
                     require(part.renameTo(target)) { "cannot finalize $relativePath" }
+                } else {
+                    // Zero-byte indexed files still become real entries.
+                    if (part.exists()) require(part.delete()) { "cannot reset partial $relativePath" }
+                    require(target.createNewFile() || target.isFile) { "cannot finalize $relativePath" }
                 }
 
                 completed += relativePath
@@ -93,7 +118,6 @@ class UmaSessionResumeDownloader(
         checkpointFile: File,
         completed: Set<String>,
     ) {
-        require(file.byteLength >= 0) { "negative byte_length" }
         require(!part.exists() || part.isFile) { "partial path is not a file" }
         var offset = if (part.exists()) part.length() else 0L
         require(offset <= file.byteLength) { "partial file exceeds indexed length" }

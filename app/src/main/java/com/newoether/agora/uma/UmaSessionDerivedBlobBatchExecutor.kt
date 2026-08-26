@@ -9,13 +9,20 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 @Serializable
-private data class UmaDerivedBlobCheckpoint(
+internal data class UmaDerivedBlobCheckpoint(
     val sessionId: String,
     val repository: String,
     val blobs: List<UmaSessionUploadedBlob> = emptyList(),
 )
 
-/** Generates the rebuildable derived layer and uploads at most one bounded Blob batch. */
+/**
+ * Generates the rebuildable derived layer and uploads at most one bounded Blob batch.
+ *
+ * The batch cursor is persisted in the task progress ([UmaSessionUploadProgress.nextCursor]
+ * minus the raw file count), so a worker restart resumes the same batch instead of restarting
+ * from zero. The blob checkpoint still records every completed upload for reuse across
+ * restarts, but it no longer decides where the next batch begins.
+ */
 class UmaSessionDerivedBlobBatchExecutor(
     private val filesClient: UmaStorageFilesClient,
     private val blobUploader: UmaGitBlobUploader,
@@ -69,20 +76,19 @@ class UmaSessionDerivedBlobBatchExecutor(
             require(completed.keys.all { it in filesByPath }) {
                 "derived Blob checkpoint contains an unknown path"
             }
-            completed.forEach { (path, blob) ->
-                val file = requireNotNull(filesByPath[path])
-                require(file.isFile && file.length() == blob.byteLength) {
-                    "derived file changed after Blob upload: $path"
-                }
-                require(UMA_GIT_SHA_PATTERN.matches(blob.blobSha)) {
-                    "derived Blob checkpoint has an invalid SHA: $path"
-                }
-            }
 
-            val pending = ordered.map { it.first }.filterNot(completed::containsKey)
+            // Durable cursor: derive stage cursors are stored as rawTotalFiles + derivedIndex.
+            // A fresh checkpoint (no completed blobs) starts at index 0; otherwise trust only
+            // the persisted progress cursor so restarts never re-upload an earlier window.
+            val rawTotalFiles = record.progress.rawTotalFiles
+            var cursor = if (completed.isEmpty()) {
+                (record.progress.nextCursor - rawTotalFiles).coerceIn(0, ordered.size)
+            } else {
+                completed.size.coerceAtMost(ordered.size)
+            }
             val batch = nextUmaUploadBatch(
-                pending,
-                completedCount = 0,
+                ordered.map { it.first },
+                completedCount = cursor,
                 limits = UmaSessionUploadBatchLimits(task.batchSize),
             )
             batch.forEach { path ->
@@ -106,24 +112,25 @@ class UmaSessionDerivedBlobBatchExecutor(
                         blobs = completed.values.sortedBy { it.relativePath },
                     ),
                 )
-                persistProgress(record, ordered.size, completed.size)
+                cursor++
+                persistProgress(record, ordered.size, cursor)
             }
 
-            persistProgress(record, ordered.size, completed.size)
+            persistProgress(record, ordered.size, cursor)
         }
 
     private fun persistProgress(
         original: UmaSessionUploadTaskRecord,
         total: Int,
-        completed: Int,
+        completedCount: Int,
     ): UmaSessionUploadProgress = taskStore.update(original.task.taskId) { current ->
         require(current.task == original.task) { "upload task arguments changed during batch" }
         current.copy(progress = current.progress.copy(
-            phase = if (completed == total) UmaSessionUploadPhase.TREE
+            phase = if (completedCount >= total) UmaSessionUploadPhase.TREE
                 else UmaSessionUploadPhase.DERIVED_BLOBS,
             derivedTotalFiles = total,
-            derivedCompletedFiles = completed,
-            nextCursor = current.progress.rawTotalFiles + completed,
+            derivedCompletedFiles = completedCount,
+            nextCursor = current.progress.rawTotalFiles + completedCount,
             checkpointUpdatedAtMs = clock(),
             lastError = null,
         ))

@@ -13,17 +13,29 @@ object AttachmentSourceReader {
         context.contentResolver.openInputStream(Uri.parse(uriSource))
     }
 
-    fun readText(context: Context, source: String, maxChars: Int): String? =
-        if (source.endsWith(".zip", ignoreCase = true)) null
-        else readText(source, maxChars) { uriSource ->
+    /** Reads plain text and converts supported spreadsheets to sheet-delimited TSV.
+     * Spreadsheet conversion keeps every parsed row, column and sheet; maxChars remains the
+     * legacy plain-text limit and is not applied while parsing a workbook. */
+    fun readText(context: Context, source: String, maxChars: Int): String? {
+        val uri = runCatching { Uri.parse(source) }.getOrNull()
+        val mimeType = uri?.let { runCatching { context.contentResolver.getType(it) }.getOrNull() }
+        val fileName = when {
+            source.startsWith("file:", ignoreCase = true) -> runCatching { File(URI(source)).name }.getOrNull()
+            File(source).isAbsolute -> File(source).name
+            uri != null -> FileValidator.resolveFileName(context, uri) ?: uri.lastPathSegment
+            else -> null
+        }
+        if (SpreadsheetReader.isSpreadsheet(fileName, mimeType)) {
+            return SpreadsheetReader.read(context, source, fileName, mimeType)
+        }
+        return readText(source, maxChars) { uriSource ->
             context.contentResolver.openInputStream(Uri.parse(uriSource))
         }
+    }
 
-    /** ZIP files are opaque simulator/workspace attachments. Do not expand their entries into
+    /** ZIP archives are opaque simulator/workspace attachments. Do not expand their entries into
      * attachmentMeta: that metadata is stored in a Room TEXT column and loading it can overflow
      * Android's CursorWindow. The original URI remains available for whole-file upload/open. */
-    private fun readZipText(context: Context, source: String): String? = null
-
     internal fun open(source: String, uriOpener: (String) -> InputStream?): InputStream? = try {
         when {
             source.startsWith("file:", ignoreCase = true) -> FileInputStream(File(URI(source)))
