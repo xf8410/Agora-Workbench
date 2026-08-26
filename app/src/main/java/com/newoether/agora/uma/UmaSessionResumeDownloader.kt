@@ -1,7 +1,11 @@
 package com.newoether.agora.uma
 
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.security.MessageDigest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -19,7 +23,21 @@ data class UmaSessionDownloadResult(
     val fileCount: Int,
     val totalBytes: Long,
     val rootDirectory: File,
-)
+) {
+    /** Files that finished downloading; the snapshot a publish may commit. */
+    val completedRelativePaths: List<String>
+        get() {
+            val checkpointFile = File(rootDirectory, UmaSessionResumeDownloader.CHECKPOINT_FILE_NAME)
+            if (!checkpointFile.isFile) return emptyList()
+            return runCatching {
+                json.decodeFromString<UmaSessionDownloadCheckpoint>(checkpointFile.readText(Charsets.UTF_8))
+            }.getOrNull()?.completedRelativePaths.orEmpty()
+        }
+
+    private companion object {
+        val json = Json { ignoreUnknownKeys = true }
+    }
+}
 
 /**
  * Downloads every indexed session file to a directory while preserving relative paths and raw
@@ -67,6 +85,10 @@ class UmaSessionResumeDownloader(
                     // index provides one.
                     verifyExpectedSha256(target, file.sha256, relativePath)
                 } else if (file.byteLength > 0L) {
+                    if (part.exists() && part.length() > file.byteLength) {
+                        // The index changed identity for this path; start over cleanly.
+                        require(part.delete()) { "cannot reset oversized partial $relativePath" }
+                    }
                     downloadOne(file, part, checkpointFile, completed)
                     require(part.length() == file.byteLength) {
                         "downloaded byte count does not match index for $relativePath"
@@ -75,7 +97,7 @@ class UmaSessionResumeDownloader(
                     require(part.renameTo(target)) { "cannot finalize $relativePath" }
                 } else {
                     // Zero-byte indexed files still become real entries.
-                    require(part.delete() || !part.exists()) { "cannot reset partial $relativePath" }
+                    if (part.exists()) require(part.delete()) { "cannot reset partial $relativePath" }
                     require(target.createNewFile() || target.isFile) { "cannot finalize $relativePath" }
                 }
 
@@ -98,11 +120,7 @@ class UmaSessionResumeDownloader(
     ) {
         require(!part.exists() || part.isFile) { "partial path is not a file" }
         var offset = if (part.exists()) part.length() else 0L
-        if (offset > file.byteLength) {
-            // The index shrank or changed identity for this path; start over cleanly.
-            require(part.delete()) { "cannot reset oversized partial $relativePathForLog(file)" }
-            offset = 0L
-        }
+        require(offset <= file.byteLength) { "partial file exceeds indexed length" }
 
         FileOutputStream(part, true).use { output ->
             while (offset < file.byteLength) {
@@ -128,8 +146,6 @@ class UmaSessionResumeDownloader(
             }
         }
     }
-
-    private fun relativePathForLog(file: UmaStorageFile): String = file.relativePath
 
     private fun readCheckpoint(file: File): UmaSessionDownloadCheckpoint? {
         if (!file.exists()) return null
