@@ -17,6 +17,7 @@ local.properties
 app/release/
 build_output.txt
 build_*.log
+ci-failure-summary.txt
 
 # Personal tooling
 /.gemini/
