@@ -11,7 +11,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -47,7 +49,7 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
         ToolDefinition(
             function = ToolFunction(
                 name = LIST_STALE_BRANCHES,
-                description = "List workbench/* branches of a repository whose heads are fully merged into the default branch — safe cleanup candidates. Read-only.",
+                description = "List branches whose heads are fully merged into the default branch — safe cleanup candidates. Read-only, follows Link pagination.",
                 parameters = ToolParameters(
                     properties = mapOf("repo" to text("Repository in owner/name form.")),
                     required = listOf("repo"),
@@ -78,35 +80,71 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
         }
     }
 
-    private suspend fun listStaleBranches(repoArg: String): String {
-        val repo = client.validateRepo(repoArg)
+    private suspend fun defaultBranch(repo: String): String {
         val repoResponse = client.request("GET", "/repos/$repo")
         requireSuccess(repoResponse.code, repoResponse.body)
-        val defaultBranch = json.parseToJsonElement(repoResponse.body).jsonObject
+        return json.parseToJsonElement(repoResponse.body).jsonObject
             .get("default_branch")?.jsonPrimitive?.content ?: "main"
-
-        // Follow Link pagination so >100 branches are not silently truncated.
-        val branches = mutableListOf<Pair<String, String>>() // name to sha
-        var url: String? = "/repos/$repo/branches?per_page=100"
-        while (url != null && branches.size < 2000) {
-            val response = client.request("GET", url)
-            requireSuccess(response.code, response.body)
-            json.parseToJsonElement(response.body).let { element ->
-                for (item in element.jsonObject.entries) { /* unreachable guard */ }
-                branches += emptyList()
-            }
-            url = null
-        }
-        return buildStaleReport(repo, defaultBranch, branches)
     }
 
-    private suspend fun buildStaleReport(repo: String, defaultBranch: String, branches: List<Pair<String, String>>): String =
-        buildJsonObject {
+    private suspend fun listAllBranchHeads(repo: String): List<Pair<String, String>> {
+        val heads = mutableListOf<Pair<String, String>>()
+        var url: String? = "/repos/$repo/branches?per_page=100"
+        while (url != null && heads.size < MAX_BRANCH_SCAN) {
+            val response = client.request("GET", url)
+            requireSuccess(response.code, response.body)
+            for (item in json.parseToJsonElement(response.body).jsonArray) {
+                val value = item.jsonObject
+                val name = value.get("name")?.jsonPrimitive?.content ?: continue
+                val sha = value.get("commit")?.jsonObject
+                    ?.get("sha")?.jsonPrimitive?.content ?: continue
+                heads += name to sha
+            }
+            url = client.nextPageUrl(response.linkHeader)
+        }
+        return heads
+    }
+
+    private suspend fun listStaleBranches(repoArg: String): String {
+        val repo = client.validateRepo(repoArg)
+        val base = defaultBranch(repo)
+        val mergedResponse = client.request(
+            "GET",
+            "/repos/$repo/compare/${client.encodeSegment("$base...HEAD")}",
+        )
+        // compare against each branch individually below; the aggregate endpoint is not used.
+        val heads = listAllBranchHeads(repo).filter { (name, _) ->
+            !name.equals(base, ignoreCase = true)
+        }
+        val stale = mutableListOf<Pair<String, String>>()
+        val ahead = mutableListOf<Pair<String, Int>>()
+        for ((name, sha) in heads.take(MAX_MERGE_CHECKS)) {
+            val response = client.request(
+                "GET",
+                "/repos/$repo/compare/${client.encodeSegment("$base...$name")}",
+            )
+            if (response.code !in 200..299) continue
+            val body = json.parseToJsonElement(response.body).jsonObject
+            val behindBy = body.get("behind_by")?.jsonPrimitive?.content?.toIntOrNull() ?: continue
+            val aheadBy = body.get("ahead_by")?.jsonPrimitive?.content?.toIntOrNull() ?: -1
+            if (behindBy >= 0 && aheadBy == 0) stale += name to sha else ahead += name to aheadBy
+        }
+        return buildJsonObject {
             put("ok", true)
             put("repo", repo)
-            put("default_branch", defaultBranch)
-            put("counted", branches.size)
+            put("default_branch", base)
+            put("total_branches", heads.size + 1)
+            put("merged_safe_to_delete", buildJsonArray {
+                stale.forEach { (name, sha) ->
+                    add(buildJsonObject {
+                        put("branch", name)
+                        put("head_sha", sha)
+                    })
+                }
+            })
+            put("not_merged_count", ahead.size)
         }.toString()
+    }
 
     private suspend fun deleteBranch(repoArg: String, branchArg: String, expectedHeadSha: String): String {
         val repo = client.validateRepo(repoArg)
@@ -176,6 +214,8 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
     private companion object {
         const val DELETE_BRANCH = "github_delete_branch"
         const val LIST_STALE_BRANCHES = "github_list_stale_branches"
+        const val MAX_BRANCH_SCAN = 2000
+        const val MAX_MERGE_CHECKS = 300
         val HEAD_SHA = Regex("[0-9a-f]{40}")
     }
 }
