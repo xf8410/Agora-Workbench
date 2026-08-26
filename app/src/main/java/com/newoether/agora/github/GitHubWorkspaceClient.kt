@@ -1,7 +1,6 @@
 package com.newoether.agora.github
 
 import com.newoether.agora.viewmodel.GitHubMutationConfirmation
-import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -76,7 +75,7 @@ class GitHubWorkspaceClient(private val client: GitHubApiClient) {
             }
             if (batch.isEmpty()) break
             all += batch
-            if (!hasNextPage(response.headers)) break
+            if (!hasNextPage(response.linkHeader)) break
             page++
         }
         return all
@@ -231,9 +230,8 @@ class GitHubWorkspaceClient(private val client: GitHubApiClient) {
      * Follows Link headers so list endpoints are never silently truncated at one page. A missing
      * or exhausted Link header ends iteration; a malformed value is treated as absent.
      */
-    private fun hasNextPage(headers: Map<String, List<String>>): Boolean =
-        headers.entries.firstOrNull { it.key.equals("Link", true) }?.value
-            ?.joinToString(",")?.contains("""rel="next"""") ?: false
+    private fun hasNextPage(linkHeader: String?): Boolean =
+        linkHeader?.contains("\"next\"") == true
 
     private suspend fun refSha(repo: String, branch: String): String {
         val value = getObject("/repos/$repo/git/ref/heads/${client.encodeSegment(branch)}")
