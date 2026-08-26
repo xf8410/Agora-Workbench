@@ -49,9 +49,19 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
             ),
             required = listOf("repo", "number", "expected_head_sha"),
         ),
+        tool(
+            name = CLOSE_PR,
+            description = "Close one open pull request without merging, after explicit user confirmation. This does not delete the source branch.",
+            properties = mapOf(
+                "repo" to stringProperty("Repository in owner/name form."),
+                "number" to ToolProperty("integer", "Positive PR number."),
+                "comment" to stringProperty("Optional closing comment explaining why the PR is being closed."),
+            ),
+            required = listOf("repo", "number"),
+        ),
     )
 
-    override fun handles(name: String): Boolean = name == CREATE_PR || name == MERGE_PR
+    override fun handles(name: String): Boolean = name == CREATE_PR || name == MERGE_PR || name == CLOSE_PR
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
         if (!client.isSignedIn()) return errorJson("GitHub is not signed in")
@@ -80,6 +90,11 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
                     expectedHeadSha = stringArg("expected_head_sha"),
                     method = stringArg("method", "squash"),
                     commitTitle = stringArg("commit_title"),
+                )
+                CLOSE_PR -> closePullRequest(
+                    repoArg = stringArg("repo"),
+                    number = intArg("number"),
+                    comment = stringArg("comment"),
                 )
                 else -> errorJson("Unknown tool")
             }
@@ -174,6 +189,73 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
         }.toString()
     }
 
+    /**
+     * Closes a PR (PATCH state=closed) and optionally posts one explanatory comment first.
+     * Read-only until confirmed, fail-closed if the confirmation dialog is unavailable.
+     */
+    private suspend fun closePullRequest(repoArg: String, number: Int, comment: String): String {
+        val repo = validRepo(repoArg)
+        require(number > 0) { "Pull request number must be positive" }
+        require(comment.length <= 10_000) { "Comment is too long" }
+
+        val pull = getObject("/repos/$repo/pulls/$number")
+        require(!pull.boolean("draft") || pull.string("state") != "merged") {
+            "Pull request was already merged"
+        }
+        val current = pull.string("state")
+        val headRef = (pull["head"] as? JsonObject)?.string("ref").orEmpty()
+        val baseRef = (pull["base"] as? JsonObject)?.string("ref").orEmpty()
+        val headSha = (pull["head"] as? JsonObject)?.string("sha").orEmpty()
+        val title = pull.string("title")
+
+        if (current == "closed") {
+            return buildJsonObject {
+                put("ok", true)
+                put("already_closed", true)
+                put("repo", repo)
+                put("number", number)
+                put("state", current)
+                put("html_url", pull.string("html_url"))
+            }.toString()
+        }
+
+        val summary = buildString {
+            append("CLOSE pull request $repo#$number “${title.take(80)}” ($headRef@${
+                headSha.take(12)
+            } → $baseRef) WITHOUT merging.")
+            if (comment.isNotBlank()) append(" Comment: ${comment.take(120)}")
+        }
+        requireConfirmed(summary)
+
+        if (comment.isNotBlank()) {
+            val commentResponse = client.request("POST", "/repos/$repo/issues/$number/comments", buildJsonObject {
+                put("body", comment)
+            })
+            // A failed comment must not block the close itself, but the caller should know.
+            if (commentResponse.code !in 200..299) {
+                errorJson("Closing comment failed (HTTP ${commentResponse.code}); PR left open")
+            }
+        }
+
+        val response = client.request("PATCH", "/repos/$repo/pulls/$number", buildJsonObject {
+            put("state", "closed")
+        })
+        requireSuccess(response.code, response.body)
+        val updated = json.parseToJsonElement(response.body).jsonObject
+        check(updated.string("state") == "closed") { "GitHub returned unexpected PR state after close" }
+        return buildJsonObject {
+            put("ok", true)
+            put("closed", true)
+            put("repo", repo)
+            put("number", number)
+            put("title", title)
+            put("head", headRef)
+            put("head_sha", headSha)
+            put("base", baseRef)
+            put("html_url", updated.string("html_url"))
+        }.toString()
+    }
+
     private suspend fun requireConfirmed(summary: String) {
         if (!GitHubMutationConfirmation.confirm(summary)) {
             error("GitHub mutation denied or confirmation unavailable")
@@ -227,13 +309,13 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
     private fun tool(
         name: String,
         description: String,
-        properties: Map<String, ToolProperty>,
+        properties: Map<ToolProperty_out>,
         required: List<String> = emptyList(),
     ) = ToolDefinition(
         function = ToolFunction(
             name = name,
             description = description,
-            parameters = ToolParameters(properties = properties, required = required),
+            parameters = ToolParameters(properties = properties.associate { it.first }, required = required),
         )
     )
 
@@ -243,5 +325,8 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
     private companion object {
         const val CREATE_PR = "github_create_pull_request"
         const val MERGE_PR = "github_merge_pull_request"
+        const val CLOSE_PR = "github_close_pull_request"
     }
 }
+
+private typealias ToolProperty_out = Pair<String, ToolProperty>
