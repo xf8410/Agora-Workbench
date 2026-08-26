@@ -23,6 +23,7 @@ import com.newoether.agora.service.AppForegroundTracker
 import com.newoether.agora.api.util.projectAssistantImagesToLatestUserMessage
 import com.newoether.agora.util.Constants
 import com.newoether.agora.util.SearchResultFormatter
+import com.newoether.agora.tool.GitHubBranchMutationToolProvider
 import com.newoether.agora.tool.ImageGenToolProvider
 import com.newoether.agora.tool.MemoryToolProvider
 import com.newoether.agora.tool.RagToolProvider
@@ -185,6 +186,11 @@ class GenerationManager(
     private val githubWorkspaceToolProvider = com.newoether.agora.tool.GitHubWorkspaceToolProvider(app)
     private val githubPullRequestToolProvider = com.newoether.agora.tool.GitHubPullRequestToolProvider(app)
     private val githubRepositoryMutationToolProvider = com.newoether.agora.tool.GitHubRepositoryMutationToolProvider(app)
+    private val githubBranchMutationToolProvider = GitHubBranchMutationToolProvider(app).also { provider ->
+        provider.confirm = { repository, summary ->
+            onConfirmGitHubAction?.invoke(repository, summary) ?: false
+        }
+    }
     private val githubCloneToolProvider = com.newoether.agora.tool.GitHubCloneToolProvider(app, sandboxFactory)
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
@@ -195,7 +201,7 @@ class GenerationManager(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
         githubWorkspaceToolProvider, githubPullRequestToolProvider, githubRepositoryMutationToolProvider,
-        githubCloneToolProvider, umaToolProvider, shellToolProvider
+        githubBranchMutationToolProvider, githubCloneToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
