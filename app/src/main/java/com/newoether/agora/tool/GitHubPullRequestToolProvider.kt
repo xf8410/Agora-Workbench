@@ -51,11 +51,11 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
         ),
         tool(
             name = CLOSE_PR,
-            description = "Close one open pull request without merging, after explicit user confirmation. This does not delete the source branch.",
+            description = "Close one open pull request without merging, after explicit user confirmation. Does not delete the source branch.",
             properties = mapOf(
                 "repo" to stringProperty("Repository in owner/name form."),
                 "number" to ToolProperty("integer", "Positive PR number."),
-                "comment" to stringProperty("Optional closing comment explaining why the PR is being closed."),
+                "comment" to stringProperty("Optional closing comment explaining why the PR is being closed (max 10,000 characters)."),
             ),
             required = listOf("repo", "number"),
         ),
@@ -190,8 +190,8 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
     }
 
     /**
-     * Closes a PR (PATCH state=closed) and optionally posts one explanatory comment first.
-     * Read-only until confirmed, fail-closed if the confirmation dialog is unavailable.
+     * Closes a PR (PATCH state=closed), optionally posting one explanatory comment first.
+     * Read-only until confirmed; fails closed when the confirmation dialog is unavailable.
      */
     private suspend fun closePullRequest(repoArg: String, number: Int, comment: String): String {
         val repo = validRepo(repoArg)
@@ -199,9 +199,7 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
         require(comment.length <= 10_000) { "Comment is too long" }
 
         val pull = getObject("/repos/$repo/pulls/$number")
-        require(!pull.boolean("draft") || pull.string("state") != "merged") {
-            "Pull request was already merged"
-        }
+        require(pull.string("state") != "merged") { "Pull request was already merged" }
         val current = pull.string("state")
         val headRef = (pull["head"] as? JsonObject)?.string("ref").orEmpty()
         val baseRef = (pull["base"] as? JsonObject)?.string("ref").orEmpty()
@@ -220,9 +218,7 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
         }
 
         val summary = buildString {
-            append("CLOSE pull request $repo#$number “${title.take(80)}” ($headRef@${
-                headSha.take(12)
-            } → $baseRef) WITHOUT merging.")
+            append("CLOSE pull request $repo#$number \"${title.take(80)}\" ($headRef@${headSha.take(12)} → $baseRef) WITHOUT merging.")
             if (comment.isNotBlank()) append(" Comment: ${comment.take(120)}")
         }
         requireConfirmed(summary)
@@ -309,13 +305,13 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
     private fun tool(
         name: String,
         description: String,
-        properties: Map<ToolProperty_out>,
+        properties: Map<String, ToolProperty>,
         required: List<String> = emptyList(),
     ) = ToolDefinition(
         function = ToolFunction(
             name = name,
             description = description,
-            parameters = ToolParameters(properties = properties.associate { it.first }, required = required),
+            parameters = ToolParameters(properties = properties, required = required),
         )
     )
 
@@ -328,5 +324,3 @@ class GitHubPullRequestToolProvider(context: Context) : ToolProvider {
         const val CLOSE_PR = "github_close_pull_request"
     }
 }
-
-private typealias ToolProperty_out = Pair<String, ToolProperty>
