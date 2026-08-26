@@ -108,7 +108,11 @@ class GitHubActionsLogToolProvider(context: Context) : ToolProvider {
     }
 }
 
-/** Keeps compiler/test errors and the terminal tail, instead of returning megabytes of setup noise. */
+/**
+ * Keeps compiler/test errors and the terminal tail, instead of returning megabytes of setup noise.
+ * The diagnostic excerpt and the tail are each truncated to their own budget before being joined,
+ * so the section markers and the start of the first excerpt can never be cut by the size cap.
+ */
 internal fun summarizeActionsLog(raw: String, maxChars: Int): String {
     if (raw.length <= maxChars) return raw
     val diagnosticMarkers = listOf(
@@ -125,14 +129,14 @@ internal fun summarizeActionsLog(raw: String, maxChars: Int): String {
             }
         }
     }
-    val diagnostic = selected.joinToString("\n") { lines[it] }
-    val tailBudget = (maxChars / 2).coerceAtLeast(500)
+    val tailBudget = (maxChars / 2).coerceAtLeast(500).coerceAtMost(maxChars - 1_000)
+    val diagnosticBudget = maxChars - tailBudget
     val tail = raw.takeLast(tailBudget)
-    val combined = buildString {
+    val diagnosticExcerpt = selected.joinToString("\n") { lines[it] }.take(diagnosticBudget)
+    return buildString {
         append("[diagnostic excerpts]\n")
-        append(diagnostic.take(maxChars - tailBudget).ifBlank { "No standard error marker found." })
+        append(diagnosticExcerpt.ifBlank { "No standard error marker found." })
         append("\n\n[terminal log tail]\n")
         append(tail)
-    }
-    return combined.takeLast(maxChars)
+    }.take(maxChars)
 }
