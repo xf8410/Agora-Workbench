@@ -27,6 +27,13 @@ class DataExporter(
 ) {
     private companion object {
         const val EXPORT_PAGE_SIZE = 100
+
+        /**
+         * Backup format version. 3 adds the draftText/draftAttachments columns on conversations.
+         * Version 2 readers ignore unknown JSON keys, so a v3 backup still imports into older
+         * builds; v3 readers accept both because every extra field has a default.
+         */
+        const val BACKUP_FORMAT_VERSION = 3
     }
 
     enum class ExportCategory(val manifestKey: String) {
@@ -69,7 +76,11 @@ class DataExporter(
         val modelId: String? = null,
         val taskId: String? = null,
         val origin: String = "user",
-        val graduated: Boolean = false
+        val graduated: Boolean = false,
+        /** Unsent composer text (v3). Older backups decode as empty. */
+        @SerialName("draft_text") val draftText: String = "",
+        /** JSON list of SelectedAttachment (v3). */
+        @SerialName("draft_attachments") val draftAttachments: String? = null
     )
 
     @Serializable
@@ -195,7 +206,7 @@ class DataExporter(
             .format(java.util.Date())
 
         val manifest = ExportManifest(
-            version = 2,
+            version = BACKUP_FORMAT_VERSION,
             appVersion = appVersion,
             exportedAt = exportedAt,
             categories = categories.map { it.manifestKey },
@@ -288,7 +299,9 @@ class DataExporter(
                         modelId = c.modelId,
                         taskId = c.taskId,
                         origin = c.origin,
-                        graduated = c.graduated
+                        graduated = c.graduated,
+                        draftText = c.draftText,
+                        draftAttachments = c.draftAttachments
                     )
                 }
                 val tasks = chatDao.getAllTasksList().map { task ->
