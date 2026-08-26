@@ -23,6 +23,8 @@ import kotlinx.serialization.json.put
  *
  * Deleting a branch refuses to touch main/master and requires the caller to pass the exact head
  * SHA it intends to delete, so a stale view of the branch cannot silently destroy new commits.
+ * The stale-branch report uses per-branch compare calls so a bounded scan stays correct even when
+ * Link pagination returns hundreds of refs.
  */
 class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
     private val client = GitHubApiClient(context.applicationContext)
@@ -49,7 +51,7 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
         ToolDefinition(
             function = ToolFunction(
                 name = LIST_STALE_BRANCHES,
-                description = "List branches whose heads are fully merged into the default branch — safe cleanup candidates. Read-only, follows Link pagination.",
+                description = "List branches whose heads are fully merged into the default branch — safe cleanup candidates. Read-only, follows Link pagination, bounded scan.",
                 parameters = ToolParameters(
                     properties = mapOf("repo" to text("Repository in owner/name form.")),
                     required = listOf("repo"),
@@ -87,53 +89,65 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
             .get("default_branch")?.jsonPrimitive?.content ?: "main"
     }
 
+    /** Follows GitHub's Link header so repositories with >100 branches are fully scanned. */
     private suspend fun listAllBranchHeads(repo: String): List<Pair<String, String>> {
         val heads = mutableListOf<Pair<String, String>>()
-        var url: String? = "/repos/$repo/branches?per_page=100"
-        while (url != null && heads.size < MAX_BRANCH_SCAN) {
-            val response = client.request("GET", url)
+        var path: String? = "/repos/$repo/branches?per_page=100"
+        while (path != null && heads.size < MAX_BRANCH_SCAN) {
+            val response = client.request("GET", path)
             requireSuccess(response.code, response.body)
             for (item in json.parseToJsonElement(response.body).jsonArray) {
                 val value = item.jsonObject
                 val name = value.get("name")?.jsonPrimitive?.content ?: continue
-                val sha = value.get("commit")?.jsonObject
-                    ?.get("sha")?.jsonPrimitive?.content ?: continue
+                val sha = value.get("commit")?.jsonObject?.get("sha")?.jsonPrimitive?.content ?: continue
                 heads += name to sha
             }
-            url = client.nextPageUrl(response.linkHeader)
+            path = response.linkHeader?.let(::nextPagePath)
         }
         return heads
+    }
+
+    private fun nextPagePath(linkHeader: String): String? {
+        // rel="next" is always the second <...>; parse conservatively by scanning pairs.
+        val segments = linkHeader.split(",")
+        for (segment in segments) {
+            if (!segment.contains("rel=\"next\"")) continue
+            val start = segment.indexOf('<')
+            val end = segment.indexOf('>')
+            if (start >= 0 && end > start) {
+                val url = segment.substring(start + 1, end)
+                val marker = "https://api.github.com"
+                return url.removePrefix(marker).ifEmpty { null }
+            }
+        }
+        return null
     }
 
     private suspend fun listStaleBranches(repoArg: String): String {
         val repo = client.validateRepo(repoArg)
         val base = defaultBranch(repo)
-        val mergedResponse = client.request(
-            "GET",
-            "/repos/$repo/compare/${client.encodeSegment("$base...HEAD")}",
-        )
-        // compare against each branch individually below; the aggregate endpoint is not used.
-        val heads = listAllBranchHeads(repo).filter { (name, _) ->
-            !name.equals(base, ignoreCase = true)
-        }
+        val heads = listAllBranchHeads(repo).filter { (name, _) -> !name.equals(base, true) }
         val stale = mutableListOf<Pair<String, String>>()
-        val ahead = mutableListOf<Pair<String, Int>>()
-        for ((name, sha) in heads.take(MAX_MERGE_CHECKS)) {
+        var checked = 0
+        for ((name, sha) in heads) {
+            if (checked >= MAX_MERGE_CHECKS) break
+            checked++
             val response = client.request(
                 "GET",
                 "/repos/$repo/compare/${client.encodeSegment("$base...$name")}",
             )
             if (response.code !in 200..299) continue
             val body = json.parseToJsonElement(response.body).jsonObject
-            val behindBy = body.get("behind_by")?.jsonPrimitive?.content?.toIntOrNull() ?: continue
             val aheadBy = body.get("ahead_by")?.jsonPrimitive?.content?.toIntOrNull() ?: -1
-            if (behindBy >= 0 && aheadBy == 0) stale += name to sha else ahead += name to aheadBy
+            if (aheadBy == 0) stale += name to sha
         }
         return buildJsonObject {
             put("ok", true)
             put("repo", repo)
             put("default_branch", base)
             put("total_branches", heads.size + 1)
+            put("checked_count", checked)
+            put("scan_truncated", heads.size > checked)
             put("merged_safe_to_delete", buildJsonArray {
                 stale.forEach { (name, sha) ->
                     add(buildJsonObject {
@@ -142,7 +156,6 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
                     })
                 }
             })
-            put("not_merged_count", ahead.size)
         }.toString()
     }
 
@@ -156,7 +169,7 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
         val normalizedSha = expectedHeadSha.trim().lowercase()
         require(HEAD_SHA.matches(normalizedSha)) { "expected_head_sha must be a 40-character SHA" }
 
-        // Verify the exact head immediately before confirmation and again before the delete.
+        // Verify the exact head immediately before confirmation and again after it.
         val read = client.request("GET", "/repos/$repo/branches/${client.encodeSegment(branch)}")
         requireSuccess(read.code, read.body)
         val head = json.parseToJsonElement(read.body).jsonObject
@@ -167,7 +180,7 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
 
         val approved = confirm?.invoke(
             repo,
-            "Delete branch $repo:$branch at ${head.take(12)}. This cannot be undone unless commits are reachable from another ref or PR.",
+            "Delete branch $repo:$branch at ${head.take(12)}. This cannot be undone unless commits remain reachable from another ref or PR.",
         ) ?: false
         require(approved) { "GitHub action denied or confirmation unavailable" }
 
