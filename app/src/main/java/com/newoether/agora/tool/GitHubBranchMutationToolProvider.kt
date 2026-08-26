@@ -108,16 +108,13 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
     }
 
     private fun nextPagePath(linkHeader: String): String? {
-        // rel="next" is always the second <...>; parse conservatively by scanning pairs.
         val segments = linkHeader.split(",")
         for (segment in segments) {
             if (!segment.contains("rel=\"next\"")) continue
             val start = segment.indexOf('<')
             val end = segment.indexOf('>')
             if (start >= 0 && end > start) {
-                val url = segment.substring(start + 1, end)
-                val marker = "https://api.github.com"
-                return url.removePrefix(marker).ifEmpty { null }
+                return segment.substring(start + 1, end).removePrefix(API_ROOT).ifEmpty { null }
             }
         }
         return null
@@ -127,7 +124,8 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
         val repo = client.validateRepo(repoArg)
         val base = defaultBranch(repo)
         val heads = listAllBranchHeads(repo).filter { (name, _) -> !name.equals(base, true) }
-        val stale = mutableListOf<Pair<String, String>>()
+        val merged = mutableListOf<Pair<String, String>>()
+        val notMerged = mutableListOf<Pair<String, Int>>()
         var checked = 0
         for ((name, sha) in heads) {
             if (checked >= MAX_MERGE_CHECKS) break
@@ -139,23 +137,24 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
             if (response.code !in 200..299) continue
             val body = json.parseToJsonElement(response.body).jsonObject
             val aheadBy = body.get("ahead_by")?.jsonPrimitive?.content?.toIntOrNull() ?: -1
-            if (aheadBy == 0) stale += name to sha
+            if (aheadBy == 0) merged += name to sha else notMerged += name to aheadBy
         }
         return buildJsonObject {
             put("ok", true)
             put("repo", repo)
             put("default_branch", base)
-            put("total_branches", heads.size + 1)
+            put("total_branches_excluding_base", heads.size)
             put("checked_count", checked)
             put("scan_truncated", heads.size > checked)
             put("merged_safe_to_delete", buildJsonArray {
-                stale.forEach { (name, sha) ->
+                merged.forEach { (name, sha) ->
                     add(buildJsonObject {
                         put("branch", name)
                         put("head_sha", sha)
                     })
                 }
             })
+            put("not_merged_count", notMerged.size)
         }.toString()
     }
 
@@ -229,6 +228,7 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
         const val LIST_STALE_BRANCHES = "github_list_stale_branches"
         const val MAX_BRANCH_SCAN = 2000
         const val MAX_MERGE_CHECKS = 300
+        const val API_ROOT = "https://api.github.com"
         val HEAD_SHA = Regex("[0-9a-f]{40}")
     }
 }
