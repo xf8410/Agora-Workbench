@@ -15,10 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.ui.theme.ChatType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
 private const val MAX_STRUCTURED_JSON_CHARS = 64 * 1024
@@ -43,14 +45,16 @@ private fun JsonNodeView(json: JsonElement, depth: Int = 0) {
         is kotlinx.serialization.json.JsonObject -> JsonObjectView(json, depth)
         is kotlinx.serialization.json.JsonArray -> JsonArrayView(json, depth)
         is JsonPrimitive -> JsonPrimitiveView(json)
-        is kotlinx.serialization.json.JsonNull -> JsonNullView()
+        is JsonNull -> JsonNullView()
     }
 }
 
-// A long or multi-line string value (e.g. a grep match's `content`, or a deep
-// file `path`) would, when squeezed to the right of its key chip through several
-// nested indents, wrap into a thin column hugging the screen's right edge. Such
-// values are instead rendered on their own full-width line below the key.
+/**
+ * A long or multi-line string value (e.g. a grep match's `content`, or a deep
+ * file `path`) would, when squeezed to the right of its key chip through several
+ * nested indents, wrap into a thin column hugging the screen's right edge. Such
+ * values are instead rendered on their own full-width line below the key.
+ */
 private fun isBlockString(value: JsonElement): Boolean =
     value is JsonPrimitive && value.isString &&
         (value.content.length > 40 || value.content.contains('\n'))
@@ -82,7 +86,7 @@ private fun JsonObjectView(obj: kotlinx.serialization.json.JsonObject, depth: In
                         Spacer(Modifier.width(8.dp))
                         when (value) {
                             is JsonPrimitive -> JsonPrimitiveView(value, modifier = Modifier.weight(1f))
-                            is kotlinx.serialization.json.JsonNull -> JsonNullView()
+                            is JsonNull -> JsonNullView()
                             is kotlinx.serialization.json.JsonObject -> Text(
                                 "{…}", style = ChatType.thoughtBody,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -120,14 +124,14 @@ private fun JsonObjectView(obj: kotlinx.serialization.json.JsonObject, depth: In
 
 @Composable
 private fun JsonArrayView(arr: kotlinx.serialization.json.JsonArray, depth: Int) {
-    val allPrimitive = arr.all { it is JsonPrimitive || it is kotlinx.serialization.json.JsonNull }
+    val allPrimitive = arr.all { it is JsonPrimitive || it is JsonNull }
     if (allPrimitive && arr.size <= 8) {
         Row(modifier = Modifier.padding(vertical = 1.dp)) {
             Text("[", style = ChatType.thoughtBody, color = MaterialTheme.colorScheme.onSurfaceVariant)
             arr.take(MAX_JSON_CHILDREN).forEachIndexed { i, item ->
                 when (item) {
                     is JsonPrimitive -> JsonPrimitiveView(item, inline = true)
-                    is kotlinx.serialization.json.JsonNull -> JsonNullView()
+                    is JsonNull -> JsonNullView()
                     else -> {}
                 }
                 if (i < arr.lastIndex) {
@@ -147,7 +151,7 @@ private fun JsonArrayView(arr: kotlinx.serialization.json.JsonArray, depth: Int)
                     Spacer(Modifier.width(8.dp))
                     when (item) {
                         is JsonPrimitive -> JsonPrimitiveView(item, modifier = Modifier.weight(1f))
-                        is kotlinx.serialization.json.JsonNull -> JsonNullView()
+                        is JsonNull -> JsonNullView()
                         is kotlinx.serialization.json.JsonObject ->
                             Box(Modifier.weight(1f)) { JsonObjectView(item, depth + 1) }
                         is kotlinx.serialization.json.JsonArray ->
@@ -178,6 +182,8 @@ private fun JsonPrimitiveView(
         text = primitive.content,
         style = style,
         color = color,
+        overflow = TextOverflow.Clip,
+        softWrap = true,
         modifier = modifier
     )
 }
@@ -210,7 +216,9 @@ internal fun JsonOrPlainView(text: String) {
                     )
                 }
                 Text(preview, style = ChatType.thoughtCodeLarge,
-                    color = MaterialTheme.colorScheme.onSurface)
+                    color = MaterialTheme.colorScheme.onSurface,
+                    softWrap = true,
+                    overflow = TextOverflow.Clip)
             }
         }
     }
