@@ -58,7 +58,17 @@ class GitHubToolProvider(context: Context) : ToolProvider {
             tool("github_list_workflow_artifacts", "List artifact metadata for one workflow run; does not download artifact bodies.", mapOf("repo" to string("Repository in owner/name form."), "run_id" to integer("Actions run ID."), "limit" to integer("Maximum 1-100.")), listOf("repo", "run_id")),
             tool("github_create_branch", "Create a workbench/* branch. Direct main/master mutations are rejected.", mapOf("repo" to string("Repository in owner/name form."), "branch" to string("New workbench/* branch."), "base" to string("Base branch; defaults to main.")), listOf("repo", "branch")),
             tool("github_write_file", "Create/update one UTF-8 file on an existing workbench/* branch.", mapOf("repo" to string("Repository in owner/name form."), "path" to string("Repository-relative file path."), "branch" to string("Target workbench/* branch."), "message" to string("Commit message."), "content" to string("Complete UTF-8 file content.")), listOf("repo", "path", "branch", "message", "content")),
-            tool("github_dispatch_workflow", "Trigger workflow_dispatch on an explicit ref. This is a remote mutation.", mapOf("repo" to string("Repository in owner/name form."), "workflow" to string("Workflow file name or ID."), "ref" to string("Git ref; defaults to main.")), listOf("repo", "workflow")),
+            tool(
+                name = "github_dispatch_workflow",
+                description = "Trigger workflow_dispatch on an explicit ref. Remote mutation with two hard guardrails: (1) BLOCKED while an active run of the same workflow+ref exists — overlapping dispatches stack matrix jobs and can burn hundreds of Actions minutes on someone else's repo; pass allow_overlap=true only after the user explicitly approves stacking, otherwise wait or cancel the old run first (canceling needs write access on that repo). (2) Matrix workflows are flagged before confirmation: total jobs = product of all matrix dimensions — compute and state the expected job count before dispatching anything big.",
+                properties = mapOf(
+                    "repo" to string("Repository in owner/name form."),
+                    "workflow" to string("Workflow file name or ID."),
+                    "ref" to string("Git ref; defaults to main."),
+                    "allow_overlap" to ToolProperty("boolean", "Defaults false. Set true only when an active run exists AND the user explicitly approves stacking runs."),
+                ),
+                required = listOf("repo", "workflow"),
+            ),
         )
     }
 
@@ -105,11 +115,34 @@ class GitHubToolProvider(context: Context) : ToolProvider {
                     buildJsonObject { put("commit_sha", client.writeFile(arg("repo"), arg("path"), arg("branch"), arg("message"), arg("content"))); put("ok", true) }.toString()
                 }
                 "github_dispatch_workflow" -> {
-                    if (ctx.githubWorkspaceMode) require(arg("ref", "main") !in setOf("main", "master")) {
+                    val ref = arg("ref", "main")
+                    if (ctx.githubWorkspaceMode) require(ref !in setOf("main", "master")) {
                         "Workspace development CI cannot run on main/master"
                     }
-                    confirmMutation(arg("repo"), "Dispatch ${arg("repo")} workflow ${arg("workflow")} on ${arg("ref", "main")}")
-                    dispatch(arg("repo"), arg("workflow"), arg("ref", "main"))
+                    // Guardrail 1: refuse to stack onto an active run unless explicitly allowed.
+                    val activeRuns = activeRunsFor(validRepo(arg("repo")), arg("workflow"), ref)
+                    val allowOverlap = boolArg("allow_overlap", false)
+                    require(activeRuns == null || allowOverlap || activeRuns.isEmpty()) {
+                        "Dispatch blocked: workflow ${arg("workflow")} already has active runs on $ref (${activeRuns!!.joinToString()})." +
+                            " Stacked dispatches multiply into matrix jobs and can burn hundreds of Actions minutes" +
+                            " (known incident: 202 stacked jobs had to be stopped by the upstream owner)." +
+                            " Wait for completion, cancel the old run first (needs write access on this repo)," +
+                            " or ask the user and pass allow_overlap=true."
+                    }
+                    // Guardrail 2: surface matrix scale in the confirmation itself.
+                    val usesMatrix = workflowUsesMatrix(arg("repo"), arg("workflow"), ref)
+                    val summary = buildString {
+                        append("Dispatch ${arg("repo")} workflow ${arg("workflow")} on $ref")
+                        if (usesMatrix == true) {
+                            append(" [MATRIX workflow: total jobs = product of all matrix dimensions × trigger count;" +
+                                " compute and state the expected job count BEFORE approving]")
+                        }
+                        if (!activeRuns.isNullOrEmpty()) {
+                            append(" [OVERLAP approved by user: ${activeRuns.joinToString()}]")
+                        }
+                    }
+                    confirmMutation(arg("repo"), summary)
+                    dispatchWithBoundary(arg("repo"), arg("workflow"), ref, usesMatrix, allowOverlap && !activeRuns.isNullOrEmpty())
                 }
                 else -> errorJson("Unknown GitHub tool")
             }
@@ -120,6 +153,36 @@ class GitHubToolProvider(context: Context) : ToolProvider {
         val approved = confirm?.invoke(repository, summary) ?: false
         requireGitHubMutationApproved(approved)
     }
+
+    /**
+     * Active (in_progress / queued / waiting) runs of one workflow filtered to the target ref.
+     * Returns null when the check itself could not run (transient API failure): never block
+     * dispatch on a failed read, but the caller surfaces the uncertainty.
+     */
+    private suspend fun activeRunsFor(repo: String, workflow: String, ref: String): List<String>? {
+        val out = linkedSetOf<String>()
+        for (status in listOf("in_progress", "queued", "waiting")) {
+            val page = runCatching {
+                getObject("/repos/$repo/actions/workflows/$workflow/runs?status=$status&per_page=10")
+            }.getOrElse { return null }
+            (page["workflow_runs"]?.jsonArray ?: JsonArray(emptyList())).forEach { e ->
+                val x = e.jsonObject
+                if (x.str("head_branch") == ref || x.str("head_sha") == ref) {
+                    out += "#${x.long("id")}(${x.str("status")})"
+                }
+            }
+        }
+        return out.toList()
+    }
+
+    /** True when the workflow file declares a `strategy:` block. Null when unreadable. */
+    private suspend fun workflowUsesMatrix(repo: String, workflow: String, ref: String): Boolean? = runCatching {
+        val payload = client.readContent(validRepo(repo), ".github/workflows/$workflow", ref)
+        (payload as? JsonObject)?.let { o ->
+            val bytes = Base64.decode(o["content"]?.jsonPrimitive?.content?.replace("\n", "").orEmpty(), Base64.DEFAULT)
+            String(bytes, Charsets.UTF_8).contains("strategy:")
+        }
+    }.getOrNull()
 
     private suspend fun createRepository(name: String, description: String, privateRepo: Boolean, autoInit: Boolean): String {
         require(name.matches(Regex("[A-Za-z0-9._-]{1,100}"))) { "Invalid repository name" }
@@ -143,7 +206,29 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     private suspend fun workflowRuns(repo:String,n:Int):String { val o=getObject("/repos/${validRepo(repo)}/actions/runs?per_page=${n.coerceIn(1,20)}");val a=o["workflow_runs"]?.jsonArray?:JsonArray(emptyList());return buildJsonObject{putJsonArray("runs"){a.forEach{e->add(runSummary(e.jsonObject))}}}.toString() }
     private suspend fun workflowRunDetails(repo:String,id:String):String { require(id.toLongOrNull()?.let{it>0}==true);val r=validRepo(repo);val run=getObject("/repos/$r/actions/runs/$id");val jobs=getObject("/repos/$r/actions/runs/$id/jobs?per_page=100")["jobs"]?.jsonArray?:JsonArray(emptyList());return buildJsonObject{put("run",runSummary(run));putJsonArray("jobs"){jobs.forEach{e->val j=e.jsonObject;add(buildJsonObject{put("id",j.long("id"));put("name",j.str("name"));put("status",j.str("status"));put("conclusion",j.str("conclusion"));put("html_url",j.str("html_url"))})}}}.toString() }
     private suspend fun workflowArtifacts(repo:String,id:String,n:Int):String { val o=getObject("/repos/${validRepo(repo)}/actions/runs/$id/artifacts?per_page=${n.coerceIn(1,100)}");val a=o["artifacts"]?.jsonArray?:JsonArray(emptyList());return buildJsonObject{put("total_count",o.long("total_count"));putJsonArray("artifacts"){a.forEach{e->val x=e.jsonObject;add(buildJsonObject{put("id",x.long("id"));put("name",x.str("name"));put("size_in_bytes",x.long("size_in_bytes"));put("expired",x.bool("expired"));put("created_at",x.str("created_at"));put("expires_at",x.str("expires_at"))})}}}.toString() }
-    private suspend fun dispatch(repo:String,workflow:String,ref:String):String { require(workflow.matches(Regex("[A-Za-z0-9._-]{1,160}")));val x=client.request("POST","/repos/${validRepo(repo)}/actions/workflows/$workflow/dispatches",buildJsonObject{put("ref",ref)});requireSuccess(x.code,x.body);return buildJsonObject{put("ok",true);put("workflow",workflow);put("ref",ref)}.toString() }
+
+    /** POST the dispatch, translating 403 into an explicit permission-boundary explanation. */
+    private suspend fun dispatchWithBoundary(repo: String, workflow: String, ref: String, usesMatrix: Boolean?, overlapApproved: Boolean): String {
+        require(workflow.matches(Regex("[A-Za-z0-9._-]{1,160}")))
+        val target = validRepo(repo)
+        val response = client.request("POST", "/repos/$target/actions/workflows/$workflow/dispatches", buildJsonObject { put("ref", ref) })
+        if (response.code == 403) {
+            error(
+                "Permission boundary (HTTP 403): this account has no Actions write access on $target — typical for upstream repositories you only fork from. " +
+                    "Dispatch/cancel/rerun there can only be done by the repository owner or collaborators; your own fork is unaffected. " +
+                    "Body: ${response.body.take(200)}"
+            )
+        }
+        requireSuccess(response.code, response.body)
+        return buildJsonObject {
+            put("ok", true)
+            put("workflow", workflow)
+            put("ref", ref)
+            put("matrix_workflow", usesMatrix)
+            put("overlap_approved", overlapApproved)
+        }.toString()
+    }
+
     private suspend fun getObject(path:String):JsonObject { val r=client.request("GET",path);requireSuccess(r.code,r.body);return json.parseToJsonElement(r.body).jsonObject }
     private suspend fun getArray(path:String):JsonArray { val r=client.request("GET",path);requireSuccess(r.code,r.body);return json.parseToJsonElement(r.body).jsonArray }
     private fun requireSuccess(code:Int,body:String){if(code !in 200..299)error("GitHub HTTP $code: ${body.take(300)}")}
@@ -156,7 +241,7 @@ class GitHubToolProvider(context: Context) : ToolProvider {
     private fun JsonObject.long(k:String,d:Long=0)=this[k]?.jsonPrimitive?.content?.toLongOrNull()?:d
     private fun JsonObject.bool(k:String,d:Boolean=false)=this[k]?.jsonPrimitive?.content?.toBooleanStrictOrNull()?:d
     private fun tool(n:String,d:String,p:Map<String,ToolProperty>,r:List<String> = emptyList())=ToolDefinition(function=ToolFunction(name=n,description=d,parameters=ToolParameters(properties=p,required=r)))
-    private fun errorJson(m:String)=buildJsonObject{put("ok",false);put("error",m.take(500))}.toString()
+    private fun errorJson(m:String)=buildJsonObject{put("ok",false);put("error",m.take(600))}.toString()
     override fun handles(name:String)=name in names
     private companion object{const val MAX_FILE_PREVIEW_CHARS=100_000;const val MAX_DIRECTORY_ENTRIES=500}
 }
