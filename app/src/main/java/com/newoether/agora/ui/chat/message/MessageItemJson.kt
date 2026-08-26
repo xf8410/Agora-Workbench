@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +32,21 @@ private fun parseJsonOrNull(text: String): JsonElement? {
     if (text.length > MAX_STRUCTURED_JSON_CHARS) return null
     // Deep nesting can throw StackOverflowError, which is not an Exception.
     return try { Json.parseToJsonElement(text) } catch (_: Throwable) { null }
+}
+
+@Composable
+private fun JsonNodeView(json: JsonElement, depth: Int = 0) {
+    if (depth >= MAX_JSON_DEPTH) {
+        Text("… nested JSON truncated", style = ChatType.meta,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    when (json) {
+        is kotlinx.serialization.json.JsonObject -> JsonObjectView(json, depth)
+        is kotlinx.serialization.json.JsonArray -> JsonArrayView(json, depth)
+        is JsonPrimitive -> JsonPrimitiveView(json)
+        is JsonNull -> JsonNullView()
+    }
 }
 
 /**
