@@ -14,54 +14,138 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
+/**
+ * Memory tools. Success results keep the historical plain-text contract
+ * ("Created …" / "Updated …" / raw file content / files JSON) so model prompts and
+ * existing tests stay stable; failures are structured JSON with a stable error_code
+ * so ToolExecutionErrors can surface an actionable reason instead of a generic error.
+ * Durable write verification lives in [MemoryManager] (atomic write + read-back check).
+ */
 class MemoryToolProvider(private val memoryManager: MemoryManager) : ToolProvider {
     private val json = Json { ignoreUnknownKeys = true }
-    private val toolNames = setOf("list_memory_files", "read_memory_file", "create_memory_file", "edit_memory_file", "delete_memory_file", "update_active_memory")
+    private val toolNames = setOf(
+        "list_memory_files", "read_memory_file", "create_memory_file",
+        "edit_memory_file", "delete_memory_file", "update_active_memory",
+    )
+
+    private fun boundedRead(name: String): String {
+        val value = memoryManager.readFile(name)
+        val maxChars = 32 * 1024
+        return if (value.length <= maxChars) value
+        else value.take(maxChars) + "\n…[memory file truncated; split it into smaller Markdown files]"
+    }
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
         if (!ctx.accessSavedMemories && !ctx.accessActiveMemory) return emptyList()
-        val out = mutableListOf<ToolDefinition>()
+        val tools = mutableListOf<ToolDefinition>()
         if (ctx.accessSavedMemories) {
-            out += def("list_memory_files", "List memory files.", emptyMap(), emptyList())
-            out += def("read_memory_file", "Read one memory file by name or several with names.", mapOf("name" to prop("string", "File name"), "names" to prop("array", "File names", prop("string", "File name"))), emptyList())
-            out += def("create_memory_file", "Create a new Markdown memory file.", mapOf("name" to prop("string", "File name"), "content" to prop("string", "Complete Markdown content"), "description" to prop("string", "Optional description")), listOf("name", "content"))
-            out += def("edit_memory_file", "Edit or rename a memory file. Use content OR old_string/new_string.", mapOf("name" to prop("string", "Current file name"), "content" to prop("string", "Replacement content"), "old_string" to prop("string", "Unique text to replace"), "new_string" to prop("string", "Replacement text"), "new_name" to prop("string", "New file name"), "description" to prop("string", "Description; empty removes it")), listOf("name"))
-            out += def("delete_memory_file", "Delete a memory file.", mapOf("name" to prop("string", "File name")), listOf("name"))
+            tools += def("list_memory_files", "List all files in the memory database with their names and descriptions.", emptyMap(), emptyList())
+            tools += def("read_memory_file", "Read the content of one file (name) or several files (names).", mapOf(
+                "name" to prop("string", "The file name to read."),
+                "names" to prop("array", "Multiple file names to read in one call.", prop("string", "A file name.")),
+            ), emptyList())
+            tools += def("create_memory_file", "Create a new Markdown memory file; fails if it already exists.", mapOf(
+                "name" to prop("string", "The file name to create (e.g., 'notes.md')."),
+                "content" to prop("string", "The Markdown content for the file."),
+                "description" to prop("string", "A short description of what this file contains (optional)."),
+            ), listOf("name", "content"))
+            tools += def("edit_memory_file", "Edit, rename, or update a file. Use 'content' for a full rewrite OR 'old_string'+'new_string' for one exact replacement.", mapOf(
+                "name" to prop("string", "The current file name to edit."),
+                "content" to prop("string", "New full content. Mutually exclusive with old_string."),
+                "old_string" to prop("string", "Exact string that must match exactly once."),
+                "new_string" to prop("string", "Replacement; empty string deletes the match. Required with old_string."),
+                "new_name" to prop("string", "Optional new file name."),
+                "description" to prop("string", "Optional description; empty removes it."),
+            ), listOf("name"))
+            tools += def("delete_memory_file", "Delete a file from the memory database.", mapOf(
+                "name" to prop("string", "The file name to delete.")), listOf("name"))
         }
-        if (ctx.accessActiveMemory) out += def("update_active_memory", "Update active memory: replace, append, prepend, or patch.", mapOf("content" to prop("string", "Content"), "mode" to prop("string", "replace/append/prepend/patch"), "old_string" to prop("string", "Required for patch"), "new_string" to prop("string", "Patch replacement")), listOf("content"))
-        return out
+        if (ctx.accessActiveMemory) {
+            tools += def("update_active_memory", "Update active memory. Modes: replace, append, prepend, patch (patch needs old_string).", mapOf(
+                "content" to prop("string", "The content to write."),
+                "mode" to prop("string", "One of: replace, append, prepend, patch. Default replace."),
+                "old_string" to prop("string", "Exact string for patch mode; must match exactly once."),
+                "new_string" to prop("string", "Replacement for patch; empty deletes the match."),
+            ), listOf("content"))
+        }
+        return tools
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
-        if (name !in toolNames) return fail(name, "unknown_memory_tool", "Unknown memory tool")
-        val args: Map<String, JsonElement> = try { json.decodeFromString(arguments.ifBlank { "{}" }) } catch (e: Exception) { return fail(name, "invalid_json_arguments", e.message ?: "Invalid JSON") }
-        fun text(k: String) = (args[k] as? JsonPrimitive)?.content ?: ""
-        fun has(k: String) = args.containsKey(k)
-        fun required(k: String) = text(k).takeIf { it.isNotBlank() }
+        if (name !in toolNames) return fail(name, "unknown_memory_tool", "Unknown tool: $name")
+        val args: Map<String, JsonElement> = try {
+            json.decodeFromString(arguments.ifBlank { "{}" })
+        } catch (e: Exception) {
+            return fail(name, "invalid_json_arguments", e.message ?: "Arguments are not valid JSON")
+        }
+        fun text(key: String) = (args[key] as? JsonPrimitive)?.content ?: ""
+        fun present(key: String) = args.containsKey(key)
+        fun required(key: String) = text(key).takeIf { it.isNotBlank() }
         return try {
             when (name) {
-                "list_memory_files" -> buildJsonObject { put("ok", true); put("tool", name); putJsonArray("files") { memoryManager.listFiles().forEach { f -> add(buildJsonObject { put("name", f.name); put("description", f.description) }) } } }.toString()
+                "list_memory_files" -> buildJsonObject {
+                    put("ok", true); put("type", "list_memory_files")
+                    putJsonArray("files") {
+                        memoryManager.listFiles().forEach { f ->
+                            add(buildJsonObject { put("name", f.name); put("description", f.description) })
+                        }
+                    }
+                }.toString()
                 "read_memory_file" -> {
-                    val many = (args["names"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.takeIf(String::isNotBlank) }.orEmpty()
-                    val one = required("name")
-                    when { many.isNotEmpty() -> many.joinToString("\n\n") { "--- $it ---\n${memoryManager.readFile(it).take(32768)}" }; one != null -> memoryManager.readFile(one).take(32768); else -> fail(name, "missing_name", "Provide name or names") }
+                    val many = (args["names"] as? JsonArray)
+                        ?.mapNotNull { (it as? JsonPrimitive)?.content?.takeIf(String::isNotBlank) }
+                        .orEmpty()
+                    val single = required("name")
+                    when {
+                        many.isNotEmpty() -> many.joinToString("\n\n") { n -> "--- $n ---\n${boundedRead(n)}" }
+                        single != null -> boundedRead(single)
+                        else -> fail(name, "missing_name", "No file name provided. Use 'name' for one file or 'names' for several.")
+                    }
                 }
-                "create_memory_file" -> { val file = required("name") ?: return fail(name, "missing_name", "name is required"); if (!has("content")) return fail(name, "missing_content", "content is required"); val result = memoryManager.createFile(file, text("content"), text("description")); if (memoryManager.readFile(file) != text("content")) fail(name, "write_verification_failed", "Read-back differs") else success(name, result, file) }
+                "create_memory_file" -> {
+                    val file = required("name") ?: return fail(name, "missing_name", "name is required")
+                    if (!present("content")) return fail(name, "missing_content", "content is required (an empty string is allowed)")
+                    memoryManager.createFile(file, text("content"), text("description"))
+                }
                 "edit_memory_file" -> {
                     val file = required("name") ?: return fail(name, "missing_name", "name is required")
-                    val content = text("content").takeIf { has("content") }; val old = text("old_string").takeIf { has("old_string") }; val replacement = text("new_string"); val newName = text("new_name").takeIf { has("new_name") && it.isNotBlank() }; val desc = text("description").takeIf { has("description") }
-                    when { content != null && old != null -> fail(name, "mutually_exclusive", "content and old_string cannot both be used"); old != null && !has("new_string") -> fail(name, "missing_new_string", "new_string is required"); content == null && old == null && newName == null && desc == null -> fail(name, "no_change", "No edit was requested"); else -> success(name, memoryManager.editFile(file, content, newName, desc, old, replacement), newName ?: file) }
+                    val content = text("content").takeIf { present("content") }
+                    val oldString = text("old_string").takeIf { present("old_string") }
+                    val newString = text("new_string")
+                    val newName = text("new_name").takeIf { present("new_name") && it.isNotBlank() }
+                    val description = text("description").takeIf { present("description") }
+                    when {
+                        content != null && oldString != null -> fail(name, "mutually_exclusive", "'content' and 'old_string' are mutually exclusive; use one or the other.")
+                        oldString != null && !present("new_string") -> fail(name, "missing_new_string", "'old_string' requires 'new_string' (pass an empty string to delete).")
+                        content == null && oldString == null && newName == null && description == null ->
+                            fail(name, "no_change", "Provide at least one of: content, old_string+new_string, new_name, description.")
+                        else -> memoryManager.editFile(file, content, newName, description, oldString, newString)
+                    }
                 }
-                "delete_memory_file" -> { val file = required("name") ?: return fail(name, "missing_name", "name is required"); success(name, memoryManager.deleteFile(file), file) }
-                "update_active_memory" -> { val mode = text("mode").ifBlank { "replace" }; val old = text("old_string").takeIf { has("old_string") }; if (mode == "patch" && old == null) fail(name, "missing_old_string", "old_string is required for patch") else success(name, memoryManager.updateActiveMemory(text("content"), mode, old, text("new_string").takeIf { has("new_string") }), "active_memory") }
-                else -> fail(name, "unknown_memory_tool", "Unknown memory tool")
+                "delete_memory_file" -> {
+                    val file = required("name") ?: return fail(name, "missing_name", "name is required")
+                    memoryManager.deleteFile(file)
+                }
+                "update_active_memory" -> {
+                    val mode = text("mode").ifBlank { "replace" }
+                    val oldString = text("old_string").takeIf { present("old_string") }
+                    val newString = text("new_string").takeIf { present("new_string") }
+                    if (mode == "patch" && oldString == null) fail(name, "missing_old_string", "'old_string' is required for patch mode.")
+                    else memoryManager.updateActiveMemory(text("content"), mode, oldString, newString)
+                }
+                else -> fail(name, "unknown_memory_tool", "Unknown tool: $name")
             }
-        } catch (e: Exception) { fail(name, "memory_operation_failed", e.message ?: e::class.java.simpleName) }
+        } catch (e: Exception) {
+            fail(name, "memory_operation_failed", e.message ?: (e::class.java.simpleName))
+        }
     }
 
-    private fun success(tool: String, message: String, target: String) = buildJsonObject { put("ok", true); put("tool", tool); put("message", message); put("target", target); put("verified", true) }.toString()
-    private fun fail(tool: String, code: String, detail: String) = buildJsonObject { put("ok", false); put("tool", tool); put("error_code", code); put("detail", detail.take(1000)) }.toString()
+    private fun fail(tool: String, code: String, detail: String) = buildJsonObject {
+        put("ok", false); put("tool", tool); put("error_code", code); put("detail", detail.take(1000))
+    }.toString()
+
     private fun prop(type: String, description: String, items: ToolProperty? = null) = ToolProperty(type, description, items = items)
-    private fun def(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String>) = ToolDefinition(function = ToolFunction(name = name, description = description, parameters = ToolParameters(properties = properties, required = required)))
-    override fun handles(name: String) = name in toolNames
+    private fun def(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String>) =
+        ToolDefinition(function = ToolFunction(name = name, description = description, parameters = ToolParameters(properties = properties, required = required)))
+    override fun handles(name: String): Boolean = name in toolNames
 }
