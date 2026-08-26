@@ -127,7 +127,9 @@ fun ChatBottomBar(
 
     val composer = composerState
 
-    // Persist draft on text / attachment changes with 300ms debounce.
+    // Persist draft on text / attachment changes with 300ms debounce. The debounce window also
+    // flushes immediately when generation stops or a send clears the field, so an interrupt can
+    // never silently drop text that was typed within the last 300ms.
     if (onDraftChanged != null) {
         @OptIn(FlowPreview::class)
         LaunchedEffect(Unit) {
@@ -137,6 +139,13 @@ fun ChatBottomBar(
                 .collect { (text, attachments) ->
                     onDraftChanged(text, attachments)
                 }
+        }
+        // Interrupt safety net: whenever loading flips back to false (stop pressed or generation
+        // finished), persist whatever is in the composer right now — no debounce delay.
+        LaunchedEffect(isLoading) {
+            if (!isLoading) {
+                onDraftChanged(textFieldState.text.toString(), composer.selectedAttachments)
+            }
         }
     }
 
