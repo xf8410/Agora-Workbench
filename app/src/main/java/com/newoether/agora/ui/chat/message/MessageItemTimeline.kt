@@ -156,51 +156,7 @@ import org.intellij.markdown.parser.MarkdownParser
 // ── Timeline / segment rendering (extracted from MessageItem.kt) ──────────────
 // Pure code-motion. Entry points used by MessageItem.kt are `internal`; the rest
 // stay file-private. Behavior unchanged.
-
-@Composable
-internal fun ToolDetailContent(seg: MessageSegment) {
-    val args = seg.toolArgs
-    if (!args.isNullOrBlank() && args != "{}") {
-        Text(
-            stringResource(R.string.arguments_label),
-            style = ChatType.meta,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        JsonOrPlainView(args)
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-
-    Text(
-        stringResource(R.string.result_label),
-        style = ChatType.meta,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(modifier = Modifier.height(4.dp))
-    val result = seg.toolResult
-    if (result != null && result.isNotEmpty()) {
-        JsonOrPlainView(result)
-    } else {
-        Text(
-            text = stringResource(R.string.tool_calling_ellipsis),
-            style = ChatType.meta,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-internal fun segmentDetailTitle(
-    seg: MessageSegment,
-    detailSegments: List<MessageSegment>,
-    detailIndex: Int
-): String {
-    return when (seg.type) {
-        "tool" -> toolDisplayName(seg.toolName)
-        "transcription" -> transcriptionLabel(detailSegments, detailIndex)
-        else -> stringResource(R.string.tool_thinking)
-    }
-}
+// ToolDetailContent / segmentDetailTitle now live in ToolDetailContent.kt.
 
 @Composable
 internal fun thoughtDurationTitle(thoughtMs: Long, toolCount: Int): String {
@@ -419,7 +375,9 @@ private fun CompactSegmentBlock(
                                 Text(
                                     text = toolSummary(seg),
                                     style = ChatType.metaNormal,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 ToolExecutionMetaLine(seg, message.status)
                             }
@@ -640,4 +598,3 @@ private fun TimelineInfoSegmentCard(
         }
     }
 }
-
