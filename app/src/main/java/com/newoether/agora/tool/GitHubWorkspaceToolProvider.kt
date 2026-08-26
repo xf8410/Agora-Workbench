@@ -14,11 +14,13 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /**
  * GitHub workspace tools: fork/baseline/PR operations plus read-only experiment
@@ -132,7 +134,7 @@ class GitHubWorkspaceToolProvider(context: Context) : ToolProvider {
             put("experiment_id", "$safe:$branch@$sha")
             put("repository", safe); put("branch", branch); put("source_sha", sha)
             put("workflow", workflow)
-            putJsonList("patches_declared", patchList)
+            putJsonArray("patches_declared") { patchList.forEach { add(JsonPrimitive(it)) } }
             put("patches_allowed", patchList.isEmpty())
             put("instruction", "All A/B/C tests must run this exact source_sha. A moved branch or a different observed SHA invalidates every previous result.")
         }.toString()
@@ -243,9 +245,6 @@ class GitHubWorkspaceToolProvider(context: Context) : ToolProvider {
     private fun fullSha(value: String) { require(value.matches(Regex("[0-9a-fA-F]{40}"))) { "Expected an exact 40-character SHA" } }
     private fun JsonObject.string(key: String, default: String = "") = this[key]?.jsonPrimitive?.content ?: default
     private fun JsonObject.number(key: String) = this[key]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-    private fun kotlinx.serialization.json.JsonObjectBuilder.putJsonList(key: String, values: List<String>) {
-        kotlinx.serialization.json.putJsonArray(key) { values.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } }
-    }
     private fun runProperties() = mapOf("repo" to text("Repository owner/name."), "run_id" to ToolProperty("integer", "Positive Actions run ID."))
     private fun text(description: String) = ToolProperty("string", description)
     private fun tool(name: String, description: String, properties: Map<String, ToolProperty>, required: List<String>) = ToolDefinition(function = ToolFunction(name = name, description = description, parameters = ToolParameters(properties = properties, required = required)))
