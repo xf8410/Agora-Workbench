@@ -1,6 +1,7 @@
 package com.newoether.agora.github
 
 import com.newoether.agora.viewmodel.GitHubMutationConfirmation
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -61,15 +62,24 @@ class GitHubWorkspaceClient(private val client: GitHubApiClient) {
 
     suspend fun branches(repository: String): List<RepositoryBranchRef> {
         val repo = client.validateRepo(repository)
-        val response = client.request("GET", "/repos/$repo/branches?per_page=100")
-        success(response)
-        return json.parseToJsonElement(response.body).jsonArray.map { item ->
-            val branch = item.jsonObject
-            RepositoryBranchRef(
-                branch.string("name"),
-                (branch["commit"] as? JsonObject)?.string("sha").orEmpty(),
-            )
+        val all = mutableListOf<RepositoryBranchRef>()
+        var page = 1
+        while (true) {
+            val response = client.request("GET", "/repos/$repo/branches?per_page=100&page=$page")
+            success(response)
+            val batch = json.parseToJsonElement(response.body).jsonArray.map { item ->
+                val branch = item.jsonObject
+                RepositoryBranchRef(
+                    branch.string("name"),
+                    (branch["commit"] as? JsonObject)?.string("sha").orEmpty(),
+                )
+            }
+            if (batch.isEmpty()) break
+            all += batch
+            if (!hasNextPage(response.headers)) break
+            page++
         }
+        return all
     }
 
     suspend fun createFork(upstreamRepository: String, organization: String? = null): String {
@@ -216,6 +226,14 @@ class GitHubWorkspaceClient(private val client: GitHubApiClient) {
         require(upstream in roots || permissions(upstream).sourceRepository in roots) { "$fork and $upstream are not in the same fork network" }
         require(info.canPush) { "Signed-in account cannot write $fork" }
     }
+
+    /**
+     * Follows Link headers so list endpoints are never silently truncated at one page. A missing
+     * or exhausted Link header ends iteration; a malformed value is treated as absent.
+     */
+    private fun hasNextPage(headers: Map<String, List<String>>): Boolean =
+        headers.entries.firstOrNull { it.key.equals("Link", true) }?.value
+            ?.joinToString(",")?.contains("""rel="next"""") ?: false
 
     private suspend fun refSha(repo: String, branch: String): String {
         val value = getObject("/repos/$repo/git/ref/heads/${client.encodeSegment(branch)}")
