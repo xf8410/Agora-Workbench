@@ -32,6 +32,21 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
 
+      - name: Ensure stable v3 signing key (bootstrap once, then reused forever)
+        run: |
+          if [ ! -f signing/agora-v3.keystore.p12 ]; then
+            mkdir -p signing
+            keytool -genkeypair -v -keystore signing/agora-v3.keystore.p12 -storetype PKCS12 \
+              -alias agora-v3 -keyalg RSA -keysize 2048 -validity 10950 \
+              -storepass agora-v3-workbench -keypass agora-v3-workbench \
+              -dname "CN=Agora Workbench v3, OU=Personal, O=xf8410, C=CN"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add signing/agora-v3.keystore.p12
+            git commit -m "chore: bootstrap stable v3 signing key"
+            git push origin HEAD:"${GITHUB_REF_NAME}"
+          fi
+
       - name: Record CI metadata
         run: |
           mkdir -p ci-logs
@@ -109,7 +124,7 @@ jobs:
         if: steps.unit_tests.outcome == 'success' && steps.build_apk.outcome == 'success' && steps.verify_apk.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: agora-workbench-debug-${{ github.sha }}
+          name: agora-workbench-v3-${{ github.sha }}
           path: app/build/outputs/apk/fdroid/debug/*.apk
           if-no-files-found: error
           retention-days: 90
