@@ -1,6 +1,9 @@
 name: Apply sandbox download and storage fix
 
 on:
+  push:
+    branches:
+      - workbench/fix-uma-read-endpoint
   workflow_dispatch:
 
 permissions:
@@ -22,8 +25,6 @@ jobs:
           p = Path('app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt')
           s = p.read_text()
 
-          # Failed package downloads must never be treated as a valid cache entry.
-          # Always download through a .part file and atomically replace the target.
           anchor = '    /** Download [url] to [dest], streaming SHA-256 + progress, then verify against [rootfsSha256]. */\n'
           helper = r'''    /**
      * Downloads a package/index to a temporary file and atomically publishes it.
@@ -73,6 +74,7 @@ jobs:
             } catch (failure: Throwable) {
                 lastFailure = failure
                 part.delete()
+                dest.delete()
                 if (attempt + 1 < attempts) Thread.sleep((500L shl attempt).coerceAtMost(4_000L))
             }
         }
@@ -86,7 +88,6 @@ jobs:
                   raise SystemExit('downloadRootfs anchor not found')
               s = s.replace(anchor, helper + anchor, 1)
 
-          # Replace both package download implementations (install and upgrade).
           old = '''                    val conn = URL("$alpineMirror/aarch64/$fn").openConnection() as HttpURLConnection
                     if (conn.responseCode != 200) { onProgress("HTTP ${conn.responseCode}"); lastError = "HTTP ${conn.responseCode}: $fn"; tmpDir.listFiles()?.forEach { it.delete() }; return@withContext false }
                     conn.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
@@ -120,7 +121,6 @@ jobs:
               raise SystemExit(f'upgrade package block count was {s.count(old2)}, expected 1')
           s = s.replace(old2, new2, 1)
 
-          # APKINDEX had the same missing timeout/retry problem; use the same safe publisher.
           old3 = '''            val conn = URL(indexUrl).openConnection() as HttpURLConnection
             onProgress("Connecting to ${conn.url.host}...")
             val code = conn.responseCode
@@ -153,8 +153,6 @@ jobs:
           s = s.replace(old4, new4, 1)
           p.write_text(s)
 
-          # The 2 GiB denominator was only a visual cap, not real storage. Make the
-          # dashboard indeterminate so it no longer falsely advertises a hard limit.
           q = Path('app/src/main/java/com/newoether/agora/ui/settings/SettingsSandboxPage.kt')
           t = q.read_text()
           old5 = '''                                            LinearProgressIndicator(
@@ -163,9 +161,8 @@ jobs:
                                                 trackColor = MaterialTheme.colorScheme.surfaceVariant
                                             )
 '''
-          new5 = '''                                            // Storage is not capped at 2 GiB. This is an
-                                            // indeterminate usage indicator; the text below
-                                            // reports actual bytes consumed by the sandbox.
+          new5 = '''                                            // Storage is not capped at 2 GiB. This indicator is
+                                            // indeterminate; text reports actual sandbox usage.
                                             LinearProgressIndicator(
                                                 modifier = Modifier.weight(0.3f).height(6.dp),
                                                 trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -180,5 +177,5 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt app/src/main/java/com/newoether/agora/ui/settings/SettingsSandboxPage.kt
-          git diff --cached --quiet || git commit -m 'fix(sandbox): retry package downloads and remove quota illusion'
+          git diff --cached --quiet || git commit -m 'fix(sandbox): reliable package downloads and unlimited workspace'
           git push origin HEAD:${GITHUB_REF_NAME}
