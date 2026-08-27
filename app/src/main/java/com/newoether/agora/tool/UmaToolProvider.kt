@@ -15,6 +15,7 @@ import java.net.SocketTimeoutException
 import java.net.URLEncoder
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -31,6 +32,27 @@ internal fun umaSoReadTimeoutMs(path: String, maxBytes: Int): Int {
         Constants.UMA_SO_LARGE_READ_TIMEOUT_MS
     } else {
         Constants.UMA_SO_SMALL_READ_TIMEOUT_MS
+    }
+}
+
+/** Characters that java.net.URL treats as illegal in a path/query; the model emits them verbatim inside SQL. */
+private fun needsSoUrlEncoding(c: Char): Boolean = c > '¥' || c in " \"<>{}|\\^`"
+
+/**
+ * Percent-encode only the illegal characters, preserving ?, &, =, / and existing %XX sequences,
+ * so half-encoded model output (e.g. raw SQL in ?sql=) no longer produces malformed request
+ * lines that the SO reports as T003 "missing parameter".
+ */
+internal fun normalizeSoUrl(raw: String): String {
+    if (raw.none { needsSoUrlEncoding(it) }) return raw
+    return buildString(raw.length + 16) {
+        for (c in raw) {
+            if (needsSoUrlEncoding(c)) {
+                append(URLEncoder.encode(c.toString(), "UTF-8").replace("+", "%20"))
+            } else {
+                append(c)
+            }
+        }
     }
 }
 
@@ -117,11 +139,11 @@ class UmaToolProvider : ToolProvider {
                 "uma_read_endpoint" -> {
                     val path = validateReadPath(text("path"))
                     val maxKiB = text("max_kib").toIntOrNull()?.coerceIn(1, 16_384) ?: 2_048
-                    get(path, maxKiB * 1024)
+                    getWithRetry(path, maxKiB * 1024)
                 }
                 "uma_list_classes" -> {
                     val maxKiB = text("max_kib").toIntOrNull()?.coerceIn(1, 16_384) ?: 8_192
-                    get("/il2cpp/classes", maxKiB * 1024)
+                    getWithRetry("/il2cpp/classes", maxKiB * 1024)
                 }
                 else -> {
                     val path = when (name) {
@@ -139,7 +161,7 @@ class UmaToolProvider : ToolProvider {
                         "uma_find_method" -> "/find_method/${safeSegment(text("method"), "method")}"
                         else -> throw IllegalArgumentException("Unknown Uma tool")
                     }
-                    get(path, if (name == "uma_summary") 2 * 1024 * 1024 else 8 * 1024 * 1024)
+                    getWithRetry(path, if (name == "uma_summary") 2 * 1024 * 1024 else 8 * 1024 * 1024)
                 }
             }
         }.getOrElse { toolError(it.message ?: "Local SO request failed") }
@@ -153,9 +175,27 @@ class UmaToolProvider : ToolProvider {
         return input
     }
 
+    /**
+     * Retry transient hlpatch failures (timeouts / connection resets / malformed-once requests)
+     * with linear backoff. Oversized-response errors fail fast: retrying cannot shrink the body.
+     */
+    private suspend fun getWithRetry(path: String, maxChars: Int, attempts: Int = 3): String {
+        var lastError: Exception? = null
+        repeat(attempts) { attempt ->
+            try {
+                return get(path, maxChars)
+            } catch (e: Exception) {
+                if (e.message?.contains("exceeded the") == true) throw e
+                lastError = e
+                if (attempt < attempts - 1) delay(250L * (attempt + 1))
+            }
+        }
+        throw lastError ?: IllegalStateException("hlpatch request failed: $path")
+    }
+
     private suspend fun get(path: String, maxChars: Int): String = withContext(Dispatchers.IO) {
         val timeoutMs = umaSoReadTimeoutMs(path, maxChars)
-        val connection = URL(base + path).openConnection() as HttpURLConnection
+        val connection = URL(base + normalizeSoUrl(path)).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 5_000
