@@ -32,6 +32,9 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
 
+      - name: Apply sandbox download fix
+        run: python3 .github/scripts/patch_sandbox.py
+
       - name: Record CI metadata
         run: |
           mkdir -p ci-logs
@@ -56,9 +59,7 @@ jobs:
         run: |
           set -o pipefail
           chmod +x gradlew
-          timeout --signal=TERM --kill-after=60s 18m \
-            ./gradlew --no-daemon --stacktrace --info testFdroidDebugUnitTest \
-            2>&1 | tee ci-logs/unit-test-console.log
+          timeout --signal=TERM --kill-after=60s 18m ./gradlew --no-daemon --stacktrace --info testFdroidDebugUnitTest 2>&1 | tee ci-logs/unit-test-console.log
 
       - name: Build APK
         id: build_apk
@@ -66,8 +67,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          ./gradlew --no-daemon --stacktrace assembleFdroidDebug \
-            2>&1 | tee ci-logs/apk-build-console.log
+          ./gradlew --no-daemon --stacktrace assembleFdroidDebug 2>&1 | tee ci-logs/apk-build-console.log
 
       - name: Verify APK output
         id: verify_apk
