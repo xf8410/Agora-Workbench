@@ -68,7 +68,7 @@ class GitHubCloneToolProvider(
             )),
             ToolDefinition(function = ToolFunction(
                 name = TOOL_MERGE,
-                description = "Merge one fetched ref into the current branch with git merge --no-edit. Refuses a dirty worktree. On conflict returns exact paths and preserves merge state for resolution; abort=true rolls it back.",
+                description = "Merge one fetched ref into the current branch with git merge --no-edit. Refuses a dirty worktree. On conflict returns exact paths and preserves merge state for resolution; abort=true rolls it back. ref is required unless abort=true.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "repo" to string("Local clone in owner/name form."),
@@ -156,7 +156,7 @@ class GitHubCloneToolProvider(
                 "git -C ${quote(target)} rev-parse --is-shallow-repository"
             val result = manager.executeCommand(command, "/workspace", 120_000)
             if (result.exitCode != 0) return@withAskPass commandError("clone", repo, result)
-            val lines = result.stdout.lines().map(String::trim).filter(String::isNotEmpty)
+            val lines = result.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() }
             val head = lines.firstOrNull { SHA.matches(it) }.orEmpty()
             val shallow = lines.lastOrNull { it == "true" || it == "false" }
                 ?.toBooleanStrictOrNull() ?: true
@@ -207,7 +207,7 @@ class GitHubCloneToolProvider(
             val result = manager.executeCommand(command, "/workspace", 600_000)
             if (result.exitCode != 0) return@withAskPass commandError("fetch", repo, result)
             val values = keyValues(result.stdout)
-            val counts = values["AHEAD_BEHIND"].orEmpty().split(Regex("\\s+")).filter(String::isNotBlank)
+            val counts = values["AHEAD_BEHIND"].orEmpty().split(Regex("\\s+")).filter { it.isNotBlank() }
             buildJsonObject {
                 put("ok", true)
                 put("operation", "fetch")
@@ -263,7 +263,7 @@ class GitHubCloneToolProvider(
                 "/workspace",
                 30_000,
             )
-            val conflicts = conflictResult.stdout.lines().map(String::trim).filter(String::isNotEmpty)
+            val conflicts = conflictResult.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() }
             return buildJsonObject {
                 put("ok", false)
                 put("operation", "merge")
@@ -371,7 +371,7 @@ class GitHubCloneToolProvider(
         if (split <= 0) null else line.substring(0, split).trim() to line.substring(split + 1).trim()
     }.toMap()
 
-    private fun commandError(operation: String, repo: String, result: SandboxManager.CommandResult) =
+    private fun commandError(operation: String, repo: String, result: SandboxManager.SandboxResult) =
         buildJsonObject {
             put("ok", false)
             put("operation", operation)
