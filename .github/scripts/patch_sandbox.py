@@ -1,0 +1,123 @@
+from pathlib import Path
+
+p = Path("app/src/fdroid/java/com/newoether/agora/sandbox/ProotSandboxManager.kt")
+s = p.read_text()
+anchor = "    /** Download [url] to [dest], streaming SHA-256 + progress, then verify against [rootfsSha256]. */\n"
+helper = '''    /** Download through a temporary file with retries; never reuse partial files. */
+    private fun downloadHttpFile(url: String, dest: File, attempts: Int = 3): Boolean {
+        var failure: Throwable? = null
+        repeat(attempts.coerceAtLeast(1)) { attempt ->
+            val part = File(dest.absolutePath + ".part")
+            try {
+                part.delete()
+                val conn = URL(url).openConnection() as HttpURLConnection
+                try {
+                    conn.connectTimeout = 30_000
+                    conn.readTimeout = 120_000
+                    conn.instanceFollowRedirects = true
+                    conn.connect()
+                    val code = conn.responseCode
+                    if (code !in 200..299) error("HTTP $code from $url")
+                    val expected = conn.contentLengthLong
+                    var copied = 0L
+                    conn.inputStream.use { input -> part.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            if (n > 0) { output.write(buffer, 0, n); copied += n }
+                        }
+                    } }
+                    if (copied == 0L || (expected > 0L && copied != expected)) error("incomplete download ($copied/$expected bytes)")
+                } finally { conn.disconnect() }
+                if (!part.renameTo(dest)) { dest.delete(); if (!part.renameTo(dest)) error("cannot publish download") }
+                return true
+            } catch (e: Throwable) {
+                failure = e
+                part.delete(); dest.delete()
+                if (attempt + 1 < attempts) Thread.sleep((500L shl attempt).coerceAtMost(4_000L))
+            }
+        }
+        lastError = "Download failed after $attempts attempts: ${failure?.message ?: url}"
+        return false
+    }
+
+'''
+if "private fun downloadHttpFile(" not in s:
+    if anchor not in s:
+        raise SystemExit("download anchor missing")
+    s = s.replace(anchor, helper + anchor, 1)
+
+old = '''                    val conn = URL("$alpineMirror/aarch64/$fn").openConnection() as HttpURLConnection
+                    if (conn.responseCode != 200) { onProgress("HTTP ${conn.responseCode}"); lastError = "HTTP ${conn.responseCode}: $fn"; tmpDir.listFiles()?.forEach { it.delete() }; return@withContext false }
+                    conn.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+'''
+new = '''                    if (!downloadHttpFile("$alpineMirror/aarch64/$fn", f)) {
+                        onProgress("FAIL: ${lastError ?: "download failed"}")
+                        tmpDir.listFiles()?.forEach { it.delete() }
+                        return@withContext false
+                    }
+'''
+s = s.replace(old, new, 1)
+
+old = '''                    val conn = URL("$alpineMirror/aarch64/$fn").openConnection() as HttpURLConnection
+                    if (conn.responseCode != 200) {
+                        onProgress("HTTP ${conn.responseCode}")
+                        lastError = "HTTP ${conn.responseCode}: $fn"
+                        tmpDir.listFiles()?.forEach { it.delete() }
+                        return@withContext 0
+                    }
+                    conn.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+'''
+new = '''                    if (!downloadHttpFile("$alpineMirror/aarch64/$fn", f)) {
+                        onProgress("FAIL: ${lastError ?: "download failed"}")
+                        tmpDir.listFiles()?.forEach { it.delete() }
+                        return@withContext 0
+                    }
+'''
+s = s.replace(old, new, 1)
+
+old = '''            val conn = URL(indexUrl).openConnection() as HttpURLConnection
+            onProgress("Connecting to ${conn.url.host}...")
+            val code = conn.responseCode
+            onProgress("HTTP $code (${conn.contentLength} bytes)")
+            if (code != 200) { onProgress("FAIL: HTTP $code"); lastError = "HTTP $code from $indexUrl"; return@withContext false }
+            conn.inputStream.use { i -> indexFile.outputStream().use { o -> i.copyTo(o) } }
+'''
+new = '''            onProgress("Connecting to ${URL(indexUrl).host}...")
+            if (!downloadHttpFile(indexUrl, indexFile)) {
+                onProgress("FAIL: ${lastError ?: "package index download failed"}")
+                return@withContext false
+            }
+            onProgress("Package index downloaded (${indexFile.length()} bytes)")
+'''
+s = s.replace(old, new, 1)
+
+old = '''            val conn = URL(indexUrl).openConnection() as HttpURLConnection
+            if (conn.responseCode != 200) { onProgress("HTTP ${conn.responseCode}"); lastError = "HTTP ${conn.responseCode} from $indexUrl"; return@withContext 0 }
+            conn.inputStream.use { i -> indexFile.outputStream().use { o -> i.copyTo(o) } }
+'''
+new = '''            if (!downloadHttpFile(indexUrl, indexFile)) {
+                onProgress("FAIL: ${lastError ?: "package index download failed"}")
+                return@withContext 0
+            }
+'''
+s = s.replace(old, new, 1)
+p.write_text(s)
+
+q = Path("app/src/main/java/com/newoether/agora/ui/settings/SettingsSandboxPage.kt")
+t = q.read_text()
+old = '''                                            LinearProgressIndicator(
+                                                progress = { (diskUsageMB.toFloat() / 2048f).coerceIn(0f, 1f) },
+                                                modifier = Modifier.weight(0.3f).height(6.dp),
+                                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                            )
+'''
+new = '''                                            // No artificial 2 GiB quota; storage uses available phone space.
+                                            LinearProgressIndicator(
+                                                modifier = Modifier.weight(0.3f).height(6.dp),
+                                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                            )
+'''
+if old in t:
+    q.write_text(t.replace(old, new, 1))
