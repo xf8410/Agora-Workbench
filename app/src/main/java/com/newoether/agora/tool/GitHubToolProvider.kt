@@ -61,16 +61,16 @@ class GitHubToolProvider(context: Context) : ToolProvider {
             tool("github_create_branch", "Create a workbench/* branch. Direct main/master mutations are rejected.", mapOf("repo" to string("Repository in owner/name form."), "branch" to string("New workbench/* branch."), "base" to string("Base branch; defaults to main.")), listOf("repo", "branch")),
             tool("github_write_file", "Create/update one UTF-8 file on an existing workbench/* branch.", mapOf("repo" to string("Repository in owner/name form."), "path" to string("Repository-relative file path."), "branch" to string("Target workbench/* branch."), "message" to string("Commit message."), "content" to string("Complete UTF-8 file content.")), listOf("repo", "path", "branch", "message", "content")),
             tool(
-                name = "github_dispatch_workflow",
-                description = "Trigger workflow_dispatch on an explicit ref. HARD RULES: (1) FORK-ONLY by default — dispatching into another account's repository is rejected outright unless allow_foreign_repo=true is set AND the user approves a warning stating the target is outside your account where you cannot cancel runs yourself; experiments must always run in your own fork so every run stays cancellable. (2) OVERLAP BLOCKED while an active run of the same workflow+ref exists — stacked dispatches multiply matrix jobs (known incident: ~202 stacked jobs burned minutes in an upstream repo and could only be stopped by its owner); pass allow_overlap=true only after explicit user approval. (3) Matrix scale must be stated before approval: total jobs = product of all matrix dimensions.",
-                properties = mapOf(
+                "github_dispatch_workflow",
+                "Trigger workflow_dispatch on an explicit ref. HARD RULES: (1) FORK-ONLY by default — dispatching into another account's repository is rejected outright unless allow_foreign_repo=true AND the user approves a warning that runs there cannot be canceled by them; experiments must always run in your own fork so every run stays cancellable. (2) OVERLAP BLOCKED while an active run of the same workflow+ref exists — stacked dispatches multiply matrix jobs (known incident: ~202 stacked jobs burned minutes in an upstream repo and could only be stopped by its owner); pass allow_overlap=true only after explicit user approval. (3) Matrix scale must be stated before approval: total jobs = product of all matrix dimensions.",
+                mapOf(
                     "repo" to string("Repository in owner/name form."),
                     "workflow" to string("Workflow file name or ID."),
                     "ref" to string("Git ref; defaults to main."),
-                    "allow_foreign_repo" to ToolProperty("boolean", "Defaults false. Set true ONLY when the target repo belongs to someone else AND the user explicitly accepts that runs there can neither be started nor canceled by them."),
+                    "allow_foreign_repo" to ToolProperty("boolean", "Defaults false. Set true ONLY when the target repo belongs to someone else AND the user explicitly accepts that they can neither start nor cancel those runs."),
                     "allow_overlap" to ToolProperty("boolean", "Defaults false. Set true only when an active run exists AND the user explicitly approves stacking runs."),
                 ),
-                required = listOf("repo", "workflow"),
+                listOf("repo", "workflow"),
             ),
         )
     }
