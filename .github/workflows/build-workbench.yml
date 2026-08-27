@@ -7,8 +7,10 @@ on:
   push:
     branches: [main, 'workbench/**']
 
+# contents:write is required ONLY by the one-time keystore bootstrap step,
+# which commits signing/agora-v3.keystore.p12 back to the branch.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-workbench-${{ github.ref }}
@@ -45,6 +47,8 @@ jobs:
             git add signing/agora-v3.keystore.p12
             git commit -m "chore: bootstrap stable v3 signing key"
             git push origin HEAD:"${GITHUB_REF_NAME}"
+          else
+            echo "Stable v3 keystore already present — nothing to do."
           fi
 
       - name: Record CI metadata
