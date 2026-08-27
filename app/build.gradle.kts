@@ -16,11 +16,12 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "com.newoether.agora.workbench.v2"
+        // v3 line: parallel-installable beside workbench.v2 (different applicationId).
+        applicationId = "com.newoether.agora.workbench.v3"
         minSdk = 24
         targetSdk = 36
-        versionCode = 34
-        versionName = "1.4.6-workbench"
+        versionCode = 100
+        versionName = "1.5.0-v3"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -39,15 +40,30 @@ android {
         arg("room.schemaLocation", "$projectDir/schemas")
     }
 
+    signingConfigs {
+        create("workbenchV3") {
+            // Stable key committed by CI bootstrap (signing/agora-v3.keystore.p12).
+            // Same key for every build => updates install over each other without uninstalling.
+            storeFile = rootProject.file("signing/agora-v3.keystore.p12")
+            storePassword = "agora-v3-workbench"
+            keyAlias = "agora-v3"
+            keyPassword = "agora-v3-workbench"
+        }
+    }
+
     buildTypes {
+        debug {
+            // Fixed key instead of the runner-ephemeral debug keystore,
+            // which previously forced an uninstall before every update.
+            signingConfig = signingConfigs.getByName("workbenchV3")
+        }
         release {
-            // Intentionally unsigned. CI builds fdroidDebug, for which the Android
-            // Gradle Plugin creates and uses its standard runner-local debug key.
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("workbenchV3")
         }
     }
 
@@ -115,8 +131,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.compose.markdown)
-    implementation(libs.jetbrains.markdown)
     implementation(libs.coil.compose)
     implementation(libs.jlatexmath.android)
     implementation(libs.media3.exoplayer)
