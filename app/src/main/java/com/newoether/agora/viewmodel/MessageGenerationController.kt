@@ -7,12 +7,14 @@ import com.newoether.agora.api.ProviderConfig
 import com.newoether.agora.api.StreamEvent
 import com.newoether.agora.api.local.LocalProvider
 import com.newoether.agora.automation.ConversationExecutionCoordinator
+import com.newoether.agora.data.AgentRepository
 import com.newoether.agora.data.BuiltInPrompts
 import com.newoether.agora.data.ConversationSettings
 import com.newoether.agora.data.local.ChatEntity
 import com.newoether.agora.data.local.MessageEntity
 import com.newoether.agora.data.repository.ConversationRepository
 import com.newoether.agora.data.repository.SettingsRepository
+import com.newoether.agora.model.Agent
 import com.newoether.agora.model.ChatMessage
 import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.model.ModelId
@@ -86,6 +88,9 @@ class MessageGenerationController(
     private val onConversationGraduated: (String) -> Unit = {},
 ) {
     private val generationManager: GenerationManager get() = generationManagerProvider()
+
+    /** File-backed agent/team store; a relay only activates when a team is configured. */
+    private val agentRepo by lazy { AgentRepository(appContext) }
 
     /**
      * Run [block] only if the currently-open conversation is [genId]. Guards synchronous
@@ -599,12 +604,23 @@ class MessageGenerationController(
             ifOpenOn(genId) { selectedChildren.value = newChildren }
             ifOpenOn(genId) { onScrollToMessage(userMessageId) }
 
-            launchGeneration(
-                currentId, modelMessageId, startTime,
-                isRegenerate = false, replaceMessageId = null,
-                providerName, modelId, activeKey, myUiToken, myPersistId,
-                state, callerTag = "sendMessage"
-            )
+            // Multi-agent relay: when the conversation has a configured agent team, hand the turn
+            // to the team (sequential relay) instead of the single-model pipeline.
+            val team = agentRepo.teamFor(currentId).filter { it.enabled }
+            if (team.size >= 2) {
+                runAgentRelay(
+                    currentId, modelMessageId, userMessageId, startTime,
+                    team, text, AgentRelayRunner.historyText(path),
+                    modelId, state, myUiToken
+                )
+            } else {
+                launchGeneration(
+                    currentId, modelMessageId, startTime,
+                    isRegenerate = false, replaceMessageId = null,
+                    providerName, modelId, activeKey, myUiToken, myPersistId,
+                    state, callerTag = "sendMessage"
+                )
+            }
 
             // Check the persisted status from the DB — allMessages.value reflects the OPEN
             // conversation, which may not be this one for a background send.
@@ -621,6 +637,69 @@ class MessageGenerationController(
         }
         } // end launch
         return true
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // runAgentRelay (multi-agent sequential handoff)
+    // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Drives the sequential multi-agent relay for [modelMessageId] via [AgentRelayRunner].
+     * Streams each teammate's contribution into the placeholder; persists the final stitched
+     * text (SUCCESS) or the partial text plus failure reason (ERROR). Kept here (not in
+     * GenerationManager) so the relay never interacts with the per-message finalizer.
+     */
+    private suspend fun runAgentRelay(
+        currentId: String,
+        modelMessageId: String,
+        parentId: String,
+        startTime: Long,
+        team: List<Agent>,
+        userText: String,
+        historyText: String,
+        fallbackModelId: String,
+        state: ConversationGenerationState,
+        uiToken: Long,
+    ) {
+        val teamLabel = "接力:" + team.joinToString("+") { it.name }
+        fun update(updated: ChatMessage) {
+            state.streamUpdate(uiToken, updated)
+            ifOpenOn(currentId) {
+                allMessages.update { list -> list.map { m -> if (m.id == modelMessageId) updated else m } }
+            }
+        }
+        val basePlaceholder = ChatMessage(
+            id = modelMessageId, parentId = parentId, text = "", participant = Participant.MODEL,
+            status = MessageStatus.SENDING, timestamp = startTime, modelName = teamLabel
+        )
+        val outcome = AgentRelayRunner(settings, requestBuilder, providerRegistry).run(
+            team = team,
+            userText = userText,
+            historyText = historyText,
+            fallbackModelId = fallbackModelId,
+        ) { partial ->
+            update(basePlaceholder.copy(text = partial))
+        }
+        if (outcome.success) {
+            val done = basePlaceholder.copy(text = outcome.text, status = MessageStatus.SUCCESS)
+            update(done)
+            convRepo.upsertMessage(MessageEntity(
+                id = modelMessageId, conversationId = currentId, parentId = parentId,
+                text = outcome.text, thoughts = null, status = MessageStatus.SUCCESS,
+                participant = Participant.MODEL, timestamp = startTime, modelName = teamLabel
+            ))
+        } else {
+            val shown = if (outcome.text.isBlank()) "[接力失败] ${outcome.error ?: "未知错误"}"
+            else outcome.text + "\n\n[接力失败] " + (outcome.error ?: "未知错误")
+            val failed = basePlaceholder.copy(text = shown, status = MessageStatus.ERROR)
+            update(failed)
+            convRepo.upsertMessage(MessageEntity(
+                id = modelMessageId, conversationId = currentId, parentId = parentId,
+                text = shown, thoughts = null, status = MessageStatus.ERROR,
+                participant = Participant.MODEL, timestamp = startTime, modelName = teamLabel
+            ))
+            onSnackbar("多智能体接力失败：${outcome.error ?: "未知错误"}") // TODO(i18n): move to strings.xml
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════

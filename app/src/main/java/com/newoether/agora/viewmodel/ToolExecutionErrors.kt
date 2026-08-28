@@ -50,10 +50,14 @@ internal object ToolExecutionErrors {
             else -> message(
                 "T099",
                 "工具执行失败",
-                "工具“${safeName(name)}”未能完成操作。请检查工具设置和输入参数后重试。",
+                "工具“${safeName(name)}”未能完成操作。请检查工具设置和输入参数后重试。（原始错误：${compact(raw)}）",
             )
         }
     }
+
+    /** Collapses whitespace and truncates so the fallback code keeps the root cause visible. */
+    private fun compact(raw: String): String =
+        raw.replace(Regex("\\s+"), " ").trim().take(200).ifEmpty { "无详细信息" }
 
     private fun message(code: String, title: String, detail: String): String =
         "[工具错误 $code] $title\n$detail"
