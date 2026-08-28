@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import com.newoether.agora.R
 import com.newoether.agora.util.noOpBringIntoView
 import com.newoether.agora.model.ChatMessage
+import com.newoether.agora.model.RelaySections
 import com.newoether.agora.model.MessageStatus
 import com.newoether.agora.model.Participant
 import com.newoether.agora.model.ToolCallDisplayModes
@@ -240,6 +241,14 @@ internal fun AssistantMessageContent(
 
             Column {
                 val isError = message.status == MessageStatus.ERROR || message.participant == Participant.ERROR
+
+                // Multi-agent relay replies (modelName "接力:…") render as per-agent sub-bubbles
+                // instead of one flat markdown blob; see [RelaySections] / [RelayMessageContent].
+                val relayParsed = remember(message.modelName, debouncedText) {
+                    if (RelaySections.isRelayModelName(message.modelName)) RelaySections.parse(debouncedText)
+                    else RelaySections.Parsed(emptyList(), null)
+                }
+                val useRelayBubbles = relayParsed.hasRenderableContent
 
                 // Only zero out thought height when legacy thought block is not shown
                 if (message.segments != null || message.thoughts.isNullOrBlank()) {
@@ -521,6 +530,12 @@ internal fun AssistantMessageContent(
                                 }
                             }
                         }
+                    } else if (useRelayBubbles) {
+                        RelayMessageContent(
+                            parsed = relayParsed,
+                            isStreaming = isStreaming,
+                            renderContext = renderContext,
+                        )
                     } else if (debouncedText.isNotEmpty() && !useTimelineSegments) {
                         var keepBlockRenderer by remember(message.id) { mutableStateOf(false) }
                         val useBlockRenderer = isStreaming || keepBlockRenderer
