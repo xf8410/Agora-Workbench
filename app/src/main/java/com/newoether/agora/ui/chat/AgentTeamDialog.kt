@@ -1,5 +1,6 @@
 package com.newoether.agora.ui.chat
 
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,13 +38,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,32 +53,88 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.newoether.agora.R
+import com.newoether.agora.data.AgentRepository
 import com.newoether.agora.model.Agent
 import com.newoether.agora.ui.components.clearFocusOnTap
-import com.newoether.agora.viewmodel.ChatViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Self-contained UI state for [AgentTeamDialog]: wraps the file-backed
+ * [AgentRepository] (the same store [com.newoether.agora.viewmodel.MessageGenerationController]'s
+ * relay trigger reads at send time) and mirrors it into Compose state. Deliberately does NOT
+ * touch ChatViewModel — the repository is context-scoped and cheap, and the relay always
+ * re-reads from disk when a message is sent, so UI writes take effect immediately.
+ */
+private class AgentTeamStore(context: Context) {
+    private val repo = AgentRepository(context.applicationContext)
+
+    var agents by mutableStateOf<List<Agent>>(emptyList())
+        private set
+    var teamIds by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    /** Re-read agents + the conversation's team from disk into Compose state. */
+    fun reload(conversationId: String?) {
+        runCatching {
+            agents = repo.loadAgents()
+            teamIds = conversationId
+                ?.let { id -> repo.loadTeams()[id] }
+                .orEmpty()
+                .filter { id -> agents.any { it.id == id } }
+        }
+    }
+
+    fun saveAgent(agent: Agent) {
+        runCatching { repo.saveAgents(repo.loadAgents().filterNot { it.id == agent.id } + agent) }
+    }
+
+    fun deleteAgent(agentId: String) {
+        runCatching {
+            repo.saveAgents(repo.loadAgents().filterNot { it.id == agentId })
+            // Drop the agent from every team that referenced it.
+            val teams = repo.loadTeams()
+            val pruned = teams.mapValues { (_, ids) -> ids.filterNot { it == agentId } }
+                .filterValues { it.isNotEmpty() }
+            if (pruned != teams) repo.saveTeams(pruned)
+        }
+    }
+
+    fun setTeam(conversationId: String, agentIds: List<String>) {
+        runCatching { repo.setTeamFor(conversationId, agentIds) }
+    }
+}
 
 /**
  * Multi-agent team manager: pick which agents form the OPEN conversation's relay team,
- * and create / edit / delete agents (name, role prompt, model, enabled). Data lives in
- * the file-backed [com.newoether.agora.data.AgentRepository] exposed through [ChatViewModel];
- * the relay itself triggers automatically from [com.newoether.agora.viewmodel.MessageGenerationController]
- * once the conversation's enabled team has 2+ members.
+ * and create / edit / delete agents (name, role prompt, model, enabled). The relay itself
+ * triggers automatically once the conversation's enabled team has 2+ members.
+ *
+ * Hosted from [ChatTopBar] (which already knows the open conversation id), so it needs no
+ * ViewModel access.
  */
 @Composable
 internal fun AgentTeamDialog(
-    viewModel: ChatViewModel,
+    conversationId: String?,
+    isNewChatMode: Boolean,
     onDismiss: () -> Unit,
 ) {
-    val agents by viewModel.agents.collectAsState()
-    val teamIds by viewModel.currentTeamIds.collectAsState()
-    val isNewChatMode by viewModel.isNewChatMode.collectAsState()
-    val enabledModels by viewModel.settings.enabledModels.collectAsState()
-    val modelAliases by viewModel.settings.modelAliases.collectAsState()
+    val store = remember { AgentTeamStore(LocalContext.current) }
+    val scope = rememberCoroutineScope()
+    val enabledModels by com.newoether.agora.di.AppContainerEnabledModels
+    val modelAliases by com.newoether.agora.di.AppContainerModelAliases
 
-    LaunchedEffect(Unit) { viewModel.reloadAgentTeam() }
+    LaunchedEffect(conversationId) {
+        withContext(Dispatchers.IO) { store.reload(conversationId) }
+    }
 
     var editing by remember { mutableStateOf<Agent?>(null) }
     var deleting by remember { mutableStateOf<Agent?>(null) }
+
+    fun reloadAfterMutation() {
+        scope.launch(Dispatchers.IO) { store.reload(conversationId) }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -122,7 +180,7 @@ internal fun AgentTeamDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                if (isNewChatMode) {
+                if (isNewChatMode || conversationId == null) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -138,51 +196,45 @@ internal fun AgentTeamDialog(
                         )
                     }
                 } else {
-                    if (teamIds.size < 2) {
+                    if (store.teamIds.size < 2) {
                         Text(
-                            text = stringResource(R.string.agent_team_need_more, 2 - teamIds.size),
+                            text = stringResource(R.string.agent_team_need_more, 2 - store.teamIds.size),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
-                    agents.forEach { agent ->
-                        val checked = agent.id in teamIds
+                    store.agents.forEach { agent ->
+                        val checked = agent.id in store.teamIds
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    viewModel.setConversationTeam(if (checked) teamIds - agent.id else teamIds + agent.id)
+                                    val next = if (checked) store.teamIds - agent.id else store.teamIds + agent.id
+                                    store.setTeam(conversationId, next)
+                                    reloadAfterMutation()
                                 }
                                 .padding(vertical = 2.dp)
                         ) {
                             Checkbox(
                                 checked = checked,
                                 onCheckedChange = { isChecked ->
-                                    viewModel.setConversationTeam(if (isChecked) teamIds + agent.id else teamIds - agent.id)
+                                    val next = if (isChecked) store.teamIds + agent.id else store.teamIds - agent.id
+                                    store.setTeam(conversationId, next)
+                                    reloadAfterMutation()
                                 }
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = agent.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    if (!agent.enabled) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = stringResource(R.string.agent_team_disabled_tag),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                }
                                 Text(
-                                    text = agentModelLabel(agent, modelAliases),
+                                    text = agentNameLabel(agent),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = agentModelLabel(agent),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -218,14 +270,14 @@ internal fun AgentTeamDialog(
                     }
                 }
 
-                if (agents.isEmpty()) {
+                if (store.agents.isEmpty()) {
                     Text(
                         text = stringResource(R.string.agent_team_empty),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    agents.forEach { agent ->
+                    store.agents.forEach { agent ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -233,25 +285,15 @@ internal fun AgentTeamDialog(
                                 .padding(vertical = 2.dp)
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = agent.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    if (!agent.enabled) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = stringResource(R.string.agent_team_disabled_tag),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                }
                                 Text(
-                                    text = agentModelLabel(agent, modelAliases),
+                                    text = agentNameLabel(agent),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = agentModelLabel(agent),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -287,7 +329,10 @@ internal fun AgentTeamDialog(
             models = enabledModels.toList().sorted(),
             aliases = modelAliases,
             onSave = { updated ->
-                viewModel.saveAgent(updated)
+                scope.launch(Dispatchers.IO) {
+                    store.saveAgent(updated)
+                    store.reload(conversationId)
+                }
                 editing = null
             },
             onDismiss = { editing = null }
@@ -303,7 +348,10 @@ internal fun AgentTeamDialog(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteAgent(agent.id)
+                        scope.launch(Dispatchers.IO) {
+                            store.deleteAgent(agent.id)
+                            store.reload(conversationId)
+                        }
                         deleting = null
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
@@ -320,8 +368,10 @@ internal fun AgentTeamDialog(
     }
 }
 
-private fun agentModelLabel(agent: Agent, aliases: Map<String, String>): String =
-    aliases[agent.providerKey] ?: agent.providerKey
+private fun agentNameLabel(agent: Agent): String =
+    if (agent.enabled) agent.name else "${agent.name}  ·  disabled"
+
+private fun agentModelLabel(agent: Agent): String = agent.providerKey.ifBlank { "—" }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
