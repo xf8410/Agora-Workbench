@@ -37,7 +37,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,9 +56,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.newoether.agora.R
 import com.newoether.agora.data.AgentRepository
+import com.newoether.agora.data.SettingsManager
+import com.newoether.agora.data.repository.SettingsRepository
 import com.newoether.agora.model.Agent
 import com.newoether.agora.ui.components.clearFocusOnTap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -112,7 +119,9 @@ private class AgentTeamStore(context: Context) {
  * triggers automatically once the conversation's enabled team has 2+ members.
  *
  * Hosted from [ChatTopBar] (which already knows the open conversation id), so it needs no
- * ViewModel access.
+ * ViewModel access. The enabled-model list for the editor's picker comes from a dialog-scoped
+ * [SettingsRepository] — [SettingsManager]'s DataStore is a top-level singleton, so the extra
+ * instance observes exactly the same settings the rest of the app sees.
  */
 @Composable
 internal fun AgentTeamDialog(
@@ -120,10 +129,17 @@ internal fun AgentTeamDialog(
     isNewChatMode: Boolean,
     onDismiss: () -> Unit,
 ) {
-    val store = remember { AgentTeamStore(LocalContext.current) }
-    val scope = rememberCoroutineScope()
-    val enabledModels by com.newoether.agora.di.AppContainerEnabledModels
-    val modelAliases by com.newoether.agora.di.AppContainerModelAliases
+    val appContext = LocalContext.current.applicationContext
+    val store = remember { AgentTeamStore(appContext) }
+    val ioScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.IO) }
+    DisposableEffect(Unit) {
+        onDispose { ioScope.cancel() }
+    }
+    val settingsRepo = remember {
+        SettingsRepository(SettingsManager(appContext), ioScope)
+    }
+    val enabledModels by settingsRepo.enabledModels.collectAsState()
+    val modelAliases by settingsRepo.modelAliases.collectAsState()
 
     LaunchedEffect(conversationId) {
         withContext(Dispatchers.IO) { store.reload(conversationId) }
@@ -133,7 +149,7 @@ internal fun AgentTeamDialog(
     var deleting by remember { mutableStateOf<Agent?>(null) }
 
     fun reloadAfterMutation() {
-        scope.launch(Dispatchers.IO) { store.reload(conversationId) }
+        ioScope.launch { store.reload(conversationId) }
     }
 
     Dialog(
@@ -234,7 +250,7 @@ internal fun AgentTeamDialog(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = agentModelLabel(agent),
+                                    text = agentModelLabel(agent, modelAliases),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -293,7 +309,7 @@ internal fun AgentTeamDialog(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = agentModelLabel(agent),
+                                    text = agentModelLabel(agent, modelAliases),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -329,7 +345,7 @@ internal fun AgentTeamDialog(
             models = enabledModels.toList().sorted(),
             aliases = modelAliases,
             onSave = { updated ->
-                scope.launch(Dispatchers.IO) {
+                ioScope.launch {
                     store.saveAgent(updated)
                     store.reload(conversationId)
                 }
@@ -348,7 +364,7 @@ internal fun AgentTeamDialog(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        scope.launch(Dispatchers.IO) {
+                        ioScope.launch {
                             store.deleteAgent(agent.id)
                             store.reload(conversationId)
                         }
@@ -368,10 +384,13 @@ internal fun AgentTeamDialog(
     }
 }
 
+@Composable
 private fun agentNameLabel(agent: Agent): String =
-    if (agent.enabled) agent.name else "${agent.name}  ·  disabled"
+    if (agent.enabled) agent.name
+    else agent.name + "  ·  " + stringResource(R.string.agent_team_disabled_tag)
 
-private fun agentModelLabel(agent: Agent): String = agent.providerKey.ifBlank { "—" }
+private fun agentModelLabel(agent: Agent, aliases: Map<String, String>): String =
+    aliases[agent.providerKey] ?: agent.providerKey.ifBlank { "—" }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
