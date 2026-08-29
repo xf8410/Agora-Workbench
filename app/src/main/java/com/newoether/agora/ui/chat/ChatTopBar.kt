@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.Icon
@@ -13,6 +14,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -26,8 +31,10 @@ import com.newoether.agora.ui.theme.ChatType
 
 /**
  * The chat screen's top bar: a title capsule (drawer menu + brand/conversation
- * title with optional token subtitle) and an actions capsule (system prompt +
- * new chat). Extracted from [ChatApp]; all behavior is routed through callbacks.
+ * title with optional token subtitle) and an actions capsule (AI team + system
+ * prompt + new chat). Extracted from [ChatApp]; all behavior is routed through
+ * callbacks. The AI-team entry owns its own [AgentTeamDialog] host state because
+ * it needs no ViewModel access (see [AgentTeamDialog]).
  */
 @Composable
 internal fun ChatTopBar(
@@ -40,6 +47,8 @@ internal fun ChatTopBar(
     onSystemPromptClick: () -> Unit,
     onNewChat: () -> Unit,
 ) {
+    var showAgentTeamDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -124,7 +133,7 @@ internal fun ChatTopBar(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Actions capsule: system prompt + new chat
+                // Actions capsule: AI team + system prompt + new chat
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = MaterialTheme.colorScheme.surface,
@@ -137,6 +146,9 @@ internal fun ChatTopBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Spacer(modifier = Modifier.width(5.dp))
+                        IconButton(onClick = { showAgentTeamDialog = true }, modifier = Modifier.size(44.dp)) {
+                            Icon(Icons.Default.Groups, contentDescription = stringResource(R.string.agent_team_title), modifier = Modifier.size(26.dp))
+                        }
                         IconButton(onClick = onSystemPromptClick, modifier = Modifier.size(44.dp)) {
                             Icon(Icons.Default.Psychology, contentDescription = stringResource(R.string.system_prompt), modifier = Modifier.size(26.dp))
                         }
@@ -147,5 +159,13 @@ internal fun ChatTopBar(
                     }
                 }
             }
+    }
+
+    if (showAgentTeamDialog) {
+        AgentTeamDialog(
+            conversationId = currentConversationId,
+            isNewChatMode = isNewChatMode,
+            onDismiss = { showAgentTeamDialog = false }
+        )
     }
 }
