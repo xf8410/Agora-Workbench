@@ -31,8 +31,22 @@ data class RelayOutcome(
  *
  * Deliberately uses the bare-provider pattern (mirrors title generation in
  * [MessageGenerationController]) instead of [GenerationManager]: the relay drives ONE model
- * message end-to-end and must not fight the per-message finalizer. A teammate failure ends
- * the relay; accumulated text is preserved so nothing already generated is lost.
+ * message end-to-end and must not fight the per-message finalizer. A teammate failure SKIPS
+ * that teammate and continues the relay; accumulated text is preserved so nothing already
+ * generated is lost.
+ *
+ * ## Why text-first-then-thoughts (the "sometimes no reply" fix)
+ *
+ * Reasoning models (glm / mimo / deepseek-r1 style endpoints) frequently put ALL of their
+ * output in `reasoning_content` and stream little or no `content`. The old collector read only
+ * TextChunk and disabled thinking (`thinkingEnabled = false`), so the provider dropped the
+ * reasoning events entirely — the agent "succeeded" with an empty contribution and the relay
+ * silently produced nothing. Now:
+ *  1. `thinkingEnabled = true` — purely client-side event routing; it adds NO field to the
+ *     outgoing request (OpenAiChatRequest has no thinking parameter), so gateway behavior is
+ *     untouched, but `reasoning_content` now arrives as StreamEvent.ThoughtChunk.
+ *  2. Text is preferred; if an agent produced thoughts but no text, the thought text becomes
+ *     its contribution instead of an empty section.
  */
 class AgentRelayRunner(
     private val settings: SettingsRepository,
@@ -48,14 +62,25 @@ class AgentRelayRunner(
         onSection: suspend (accumulated: String) -> Unit,
     ): RelayOutcome {
         val sections = StringBuilder()
+        val failures = mutableListOf<String>()
         team.forEach { agent ->
             val modelIdWithPrefix = agent.providerKey.ifBlank { fallbackModelId }
-            val (providerName, activeKey) = requestBuilder.resolveProviderKey(modelIdWithPrefix)
-                ?: return RelayOutcome(false, sections.toString().trim(), "未找到「${agent.name}」的模型提供方")
+            val resolved = requestBuilder.resolveProviderKey(modelIdWithPrefix)
+            if (resolved == null) {
+                // Skip-and-continue: one broken teammate must not erase the work of the others.
+                failures.add("「${agent.name}」未找到模型提供方")
+                DebugLog.w("AgentRelay", "Skip ${agent.name}: no provider for $modelIdWithPrefix")
+                return@forEach
+            }
+            val (providerName, activeKey) = resolved
             // Re-resolve against on-disk settings (same DataStore race guard as launchGeneration).
             val freshKey = settings.awaitActiveKey(providerName)?.takeIf { it.isNotBlank() } ?: activeKey
             val provider = providerRegistry.getInstance(providerName)
-                ?: return RelayOutcome(false, sections.toString().trim(), "未找到「${agent.name}」的提供方实例")
+            if (provider == null) {
+                failures.add("「${agent.name}」未找到提供方实例")
+                DebugLog.w("AgentRelay", "Skip ${agent.name}: provider instance $providerName missing")
+                return@forEach
+            }
 
             val prior = sections.toString().trim()
             val prompt = buildString {
@@ -77,11 +102,15 @@ class AgentRelayRunner(
                 modelId = ModelId.parse(modelIdWithPrefix).modelName,
                 systemPrompt = agent.rolePrompt,
                 maxContextWindow = 1,
-                thinkingEnabled = false,
+                // Client-side event routing only — adds nothing to the wire request. Required so
+                // reasoning models surface their reasoning_content instead of streaming nothing.
+                thinkingEnabled = true,
                 baseUrl = providerRegistry.getEffectiveBaseUrl(providerName)
             )
 
             val output = StringBuilder()
+            val thoughts = StringBuilder()
+            var streamError: String? = null
             try {
                 val messages = listOf(
                     ChatMessage(text = prompt, participant = Participant.USER, status = MessageStatus.SUCCESS)
@@ -93,7 +122,8 @@ class AgentRelayRunner(
                             provider.generateResponse(messages, config).collect { event ->
                                 when (event) {
                                     is StreamEvent.TextChunk -> output.append(event.text)
-                                    is StreamEvent.Error -> throw IllegalStateException(event.message)
+                                    is StreamEvent.ThoughtChunk -> thoughts.append(event.thought)
+                                    is StreamEvent.Error -> streamError = event.message
                                     else -> Unit
                                 }
                             }
@@ -103,7 +133,8 @@ class AgentRelayRunner(
                     provider.generateResponse(messages, config).collect { event ->
                         when (event) {
                             is StreamEvent.TextChunk -> output.append(event.text)
-                            is StreamEvent.Error -> throw IllegalStateException(event.message)
+                            is StreamEvent.ThoughtChunk -> thoughts.append(event.thought)
+                            is StreamEvent.Error -> streamError = event.message
                             else -> Unit
                         }
                     }
@@ -112,16 +143,36 @@ class AgentRelayRunner(
                 throw e
             } catch (e: Exception) {
                 DebugLog.e("AgentRelay", "Agent ${agent.name} failed", e)
-                return RelayOutcome(false, sections.toString().trim(), "「${agent.name}」执行失败：${e.message ?: "未知错误"}")
+                failures.add("「${agent.name}」执行失败：${e.message ?: "未知错误"}")
+                onSection(sections.toString().trim())
+                return@forEach
             }
 
-            val contribution = output.toString().trim()
+            // Text-first, thoughts-fallback: a reasoning model that answered entirely inside
+            // reasoning_content still contributes its thinking text instead of nothing.
+            val contribution = output.toString().trim().ifEmpty { thoughts.toString().trim() }
             if (contribution.isNotEmpty()) {
                 sections.append("【").append(agent.name).append("】\n").append(contribution).append("\n\n")
                 onSection(sections.toString().trim())
+            } else {
+                val reason = streamError?.let { "流错误：$it" } ?: "模型返回为空"
+                failures.add("「${agent.name}」$reason")
+                DebugLog.w("AgentRelay", "Skip ${agent.name}: empty contribution (${streamError ?: "no text"})")
             }
         }
-        return RelayOutcome(true, sections.toString().trim())
+
+        // Preserve partial results: if at least one teammate contributed, the relay succeeded
+        // and the failures are annotated in the text instead of discarding everything.
+        return if (sections.isNotBlank() || failures.isEmpty()) {
+            val annotated = if (failures.isNotEmpty()) {
+                sections.toString().trim() + "\n\n" + failures.joinToString("\n") { "⚠️ $it" }
+            } else {
+                sections.toString().trim()
+            }
+            RelayOutcome(true, annotated)
+        } else {
+            RelayOutcome(false, sections.toString().trim(), failures.joinToString("；"))
+        }
     }
 
     companion object {
