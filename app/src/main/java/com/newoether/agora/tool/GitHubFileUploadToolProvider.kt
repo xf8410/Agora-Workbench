@@ -27,7 +27,7 @@ import java.io.File
  * football-game-kotlin 的 app/src/main/assets/。
  *
  * 安全边界（与 GitHubApiClient 守卫一致）：
- * - 必须已 GitHub 登录（复用 GitHubAuthManager 的加密凭据，无明文入库）
+ * - 必须已 GitHub 登录（复用 GitHubAuthManager 的加密凭据）
  * - 分支强制 workbench/* 前缀；缺失分支按仓库默认分支自动创建
  * - 体积 ≤900KB；图片自动压缩（最长边 ≤2048px，JPEG 质量自适应）
  * - 仅提交目标路径一个文件，不触碰仓库其他内容
@@ -40,12 +40,7 @@ class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
         ToolDefinition(
             function = ToolFunction(
                 name = UPLOAD_FILE,
-                description = (
-                    "Upload a local binary file (image poster, asset, bundle) from this device into the user's GitHub " +
-                        "repository as a real Git commit. Only workbench/* target branches are allowed; a missing branch is " +
-                        "created from the repository default branch. Use the absolute local file path of a chat attachment or " +
-                        "workspace artifact. Images are auto-compressed (max side 2048px, JPEG) to fit the 900 KB limit."
-                    ),
+                description = "Upload a local binary file (image poster, asset, bundle) from this device into the user's GitHub repository as a real Git commit. Only workbench/* target branches are allowed; a missing branch is created from the repository default branch. Use the absolute local file path of a chat attachment or workspace artifact. Images are auto-compressed (max side 2048px, JPEG) to fit the 900 KB limit.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "repo" to ToolProperty("string", "Repository in owner/name form, e.g. xf8410/football-game-kotlin."),
@@ -87,15 +82,10 @@ class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
         if (raw.isEmpty()) return errorJson("Local file is empty")
 
         val fileName = source.name.lowercase()
-        val payload: ByteArray = if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") ||
-            fileName.endsWith(".png") || fileName.endsWith(".webp")
-        ) {
-            compressForUpload(raw)
-                ?: return errorJson("Image could not be decoded; attach a valid JPG/PNG/WEBP or upload a non-image file")
+        val payload: ByteArray = if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png") || fileName.endsWith(".webp")) {
+            compressForUpload(raw) ?: return errorJson("Image could not be decoded; attach a valid JPG/PNG/WEBP or upload a non-image file")
         } else {
-            if (raw.size > MAX_UPLOAD_BYTES) {
-                return errorJson("File too large (${raw.size / 1000} KB, max ${MAX_UPLOAD_BYTES / 1000} KB)")
-            }
+            if (raw.size > MAX_UPLOAD_BYTES) return errorJson("File too large (${raw.size / 1000} KB, max ${MAX_UPLOAD_BYTES / 1000} KB)")
             raw
         }
 
@@ -124,7 +114,7 @@ class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
         }
     }
 
-    /** workbench/* 分支不存在时按仓库默认分支创建 */
+    /** workbench 分支不存在时按仓库默认分支创建 */
     private suspend fun ensureBranch(repo: String, branch: String) {
         require(branch.startsWith("workbench/")) { "Branch must start with workbench/" }
         val defaultBranch = runCatching {
@@ -133,19 +123,14 @@ class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
         runCatching { client.createBranch(repo, branch, defaultBranch) }
     }
 
-    /** 客户端压缩：最长边 ≤2048，JPEG 质量自适应降到 ≤900KB */
+    /** 客户端压缩：最长边不超过 2048，JPEG 质量自适应降到 900KB 以内 */
     private fun compressForUpload(bytes: ByteArray): ByteArray? {
         val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
         val maxSide = 2048
         val longest = maxOf(src.width, src.height)
         val scaled = if (longest > maxSide) {
             val ratio = maxSide.toFloat() / longest
-            Bitmap.createScaledBitmap(
-                src,
-                (src.width * ratio).toInt().coerceAtLeast(1),
-                (src.height * ratio).toInt().coerceAtLeast(1),
-                true,
-            )
+            Bitmap.createScaledBitmap(src, (src.width * ratio).toInt().coerceAtLeast(1), (src.height * ratio).toInt().coerceAtLeast(1), true)
         } else {
             src
         }
