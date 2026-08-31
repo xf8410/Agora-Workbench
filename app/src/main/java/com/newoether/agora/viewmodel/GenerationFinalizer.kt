@@ -44,6 +44,17 @@ class GenerationFinalizer(
             try {
                 if (convRepo.getConversation(conversationId) == null) return@launch
                 for (message in distinct) {
+                    // Terminal-state guard: GenerationManager's NonCancellable terminal write may
+                    // already have landed with fresher content than this overlay snapshot. Only a
+                    // still-non-terminal row (SENDING/THINKING/TOOL_CALLING/TRANSCRIBING) needs the
+                    // STOPPED commit — never overwrite a terminal row with older overlay data.
+                    val existing = convRepo.getMessagesByIds(listOf(message.id)).firstOrNull()
+                    val alreadyTerminal = existing != null &&
+                        existing.status != MessageStatus.SENDING &&
+                        existing.status != MessageStatus.THINKING &&
+                        existing.status != MessageStatus.TOOL_CALLING &&
+                        existing.status != MessageStatus.TRANSCRIBING
+                    if (alreadyTerminal) continue
                     convRepo.upsertMessage(message.toStoppedEntity(conversationId))
                     if (message.text.isNotBlank() && settings.autoCacheEnabled.value &&
                         (settings.modelSearchMethod.value == Constants.SEARCH_METHOD_RAG ||
