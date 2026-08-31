@@ -188,7 +188,9 @@ class GenerationManager(
     private val githubWatchToolProvider = com.newoether.agora.tool.GitHubWatchToolProvider(app)
     private val githubActionsLogToolProvider = com.newoether.agora.tool.GitHubActionsLogToolProvider(app)
     private val githubWorkspaceToolProvider = com.newoether.agora.tool.GitHubWorkspaceToolProvider(app)
-    private val githubPullRequestToolProvider = com.newoether.agora.tool.GitHubPullRequestToolProvider(app)
+    // NOTE: GitHub PR tools (create/merge) are owned by GitHubWatchToolProvider's internal
+    // delegation — do NOT also register a standalone GitHubPullRequestToolProvider here, or the
+    // same tool names get advertised twice (ToolProviderRegistrationTest fails on duplicates).
     private val githubRepositoryMutationToolProvider = com.newoether.agora.tool.GitHubRepositoryMutationToolProvider(app)
     private val githubBranchMutationToolProvider = GitHubBranchMutationToolProvider(app).also { provider ->
         provider.confirm = { repository, summary ->
@@ -204,7 +206,7 @@ class GenerationManager(
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
-        githubWorkspaceToolProvider, githubPullRequestToolProvider, githubRepositoryMutationToolProvider,
+        githubWorkspaceToolProvider, githubRepositoryMutationToolProvider,
         githubBranchMutationToolProvider, githubCloneToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
