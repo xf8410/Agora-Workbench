@@ -48,14 +48,19 @@ class GitHubApiClient(context: Context) {
                 connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             }
             val code = connection.responseCode
-            // Read before disconnect; getHeaderField is case-insensitive and null when absent.
             val linkHeader = connection.getHeaderField("Link")
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            GitHubApiResponse(
-                code,
-                stream?.bufferedReader()?.use { it.readTextLimited(MAX_API_RESPONSE_CHARS) }.orEmpty(),
-                linkHeader,
-            )
+            val text = stream?.bufferedReader()?.use { reader ->
+                val out = StringBuilder(minOf(MAX_API_RESPONSE_CHARS, 8192))
+                val buffer = CharArray(8192)
+                while (out.length < MAX_API_RESPONSE_CHARS) {
+                    val count = reader.read(buffer, 0, minOf(buffer.size, MAX_API_RESPONSE_CHARS - out.length))
+                    if (count < 0) break
+                    out.append(buffer, 0, count)
+                }
+                out.toString()
+            }.orEmpty()
+            GitHubApiResponse(code, text, linkHeader)
         } finally { connection.disconnect() }
     }
 
@@ -141,13 +146,9 @@ class GitHubApiClient(context: Context) {
         }
     }
 
-    private fun java.io.BufferedReader.readTextLimited(limit: Int): String {
-        val out = StringBuilder(minOf(limit, 8192)); val buffer = CharArray(8192)
-        while (out.length < limit) { val count = read(buffer, 0, minOf(buffer.size, limit - out.length)); if (count < 0) break; out.append(buffer, 0, count) }
-        return out.toString()
-    }
     fun encodeSegment(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
     private fun encodePath(value: String) = value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { encodeSegment(it) }
+
     private companion object {
         val REPO_PATTERN = Regex("[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}")
         const val MAX_API_RESPONSE_CHARS = 2_000_000
