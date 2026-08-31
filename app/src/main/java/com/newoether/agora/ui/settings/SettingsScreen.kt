@@ -150,9 +150,13 @@ fun SettingsItem(
 
 private data class SettingsCategory(
     val key: String,
-    @StringRes val titleRes: Int,
-    @StringRes val descriptionRes: Int,
-    val icon: ImageVector
+    @StringRes val titleRes: Int = 0,
+    @StringRes val descriptionRes: Int = 0,
+    val icon: ImageVector,
+    // Literal title/description for pages whose labels are not in strings.xml yet
+    // (TODO(i18n) pages like the multi-agent relay). Null = fall back to the resources.
+    val title: String? = null,
+    val description: String? = null
 )
 
 private data class SettingsGroupData(
@@ -179,6 +183,7 @@ private val settingsGroups = listOf(
         SettingsCategory("search", R.string.search_title, R.string.search_desc, Icons.Default.Search),
         SettingsCategory("shell", R.string.shell_title, R.string.shell_desc, Icons.Default.Terminal),
         SettingsCategory("github", R.string.settings_github, R.string.settings_github_desc, Icons.Default.Code),
+        SettingsCategory("agents", icon = Icons.Default.Groups, title = "多智能体接力", description = "为对话配置多个 AI，按顺序接力生成一条回复"),
         SettingsCategory("uma", R.string.settings_uma, R.string.settings_uma_desc, Icons.Default.Sports),
         SettingsCategory("automation", R.string.settings_automation, R.string.settings_automation_desc, Icons.Default.Repeat),
     )),
@@ -234,6 +239,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 "imagegen" -> SettingsImageGenPage(viewModel, onBack = { selectedCategory = null })
                 "shell" -> SettingsShellPage(viewModel, onBack = { selectedCategory = null })
                 "github" -> SettingsGitHubPage(onBack = { selectedCategory = null })
+                "agents" -> SettingsAgentsPage(viewModel, onBack = { selectedCategory = null })
                 "uma" -> SettingsUmaPage(viewModel, onBack = { selectedCategory = null })
                 "automation" -> SettingsAutomationPage(viewModel, onBack = { selectedCategory = null })
                 "proxy" -> SettingsProxyPage(viewModel, onBack = { selectedCategory = null })
@@ -300,12 +306,12 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                                             Spacer(modifier = Modifier.width(16.dp))
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = stringResource(cat.titleRes),
+                                                    text = cat.title ?: stringResource(cat.titleRes),
                                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
                                                 )
                                                 Spacer(modifier = Modifier.height(3.dp))
                                                 Text(
-                                                    text = stringResource(cat.descriptionRes),
+                                                    text = cat.description ?: stringResource(cat.descriptionRes),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )

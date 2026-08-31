@@ -34,6 +34,7 @@ import com.newoether.agora.viewmodel.ChatViewModel
 fun SettingsMemoryPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val accessSavedMemories by viewModel.settings.accessSavedMemories.collectAsState()
     val accessActiveMemory by viewModel.settings.accessActiveMemory.collectAsState()
+    val autoSessionHandoff by viewModel.settings.autoSessionHandoff.collectAsState()
     var activeMemoryContent by remember { mutableStateOf("") }
     var memoryFiles by remember { mutableStateOf<List<com.newoether.agora.data.MemoryManager.MemoryFileInfo>>(emptyList()) }
     var showFileEditor by remember { mutableStateOf<String?>(null) }
@@ -80,6 +81,22 @@ fun SettingsMemoryPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                     Switch(checked = accessActiveMemory, onCheckedChange = { viewModel.settings.setAccessActiveMemory(it) })
                                 },
                                 modifier = Modifier.clickable { viewModel.settings.setAccessActiveMemory(!accessActiveMemory) }
+                            )
+                        },
+                        {
+                            SettingsItem(
+                                headlineContent = { Text("自动记录最近会话") },
+                                supportingContent = {
+                                    Text(
+                                        "App 在每次回复结束后把「时间＋对话＋回复摘要」自动写进活跃记忆顶部" +
+                                            "（含被打断的回复），下次对话自带最近上下文。关闭后只保留手动维护的记忆。"
+                                    )
+                                },
+                                leadingContent = { Icon(Icons.Default.Star, null, tint = MaterialTheme.colorScheme.primary) },
+                                trailingContent = {
+                                    Switch(checked = autoSessionHandoff, onCheckedChange = { viewModel.settings.setAutoSessionHandoff(it) })
+                                },
+                                modifier = Modifier.clickable { viewModel.settings.setAutoSessionHandoff(!autoSessionHandoff) }
                             )
                         }
                     )
@@ -277,9 +294,12 @@ fun SettingsMemoryPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                         viewModel.memoryManager.updateActiveMemory(editContent)
                         activeMemoryContent = viewModel.memoryManager.getActiveMemory()
                     } else {
+                        // Rename must be atomic: the old delete→create flow destroyed the file
+                        // when createFile failed (e.g. target name already exists). editFile
+                        // does content+rename+description under one lock and keeps the old
+                        // file intact on failure.
                         if (editFileName.isNotBlank() && editFileName != fileName.removeSuffix(".md")) {
-                            viewModel.memoryManager.deleteFile(fileName)
-                            viewModel.memoryManager.createFile(editFileName, editContent, editDesc)
+                            viewModel.memoryManager.editFile(fileName, editContent, newName = editFileName, description = editDesc)
                         } else {
                             viewModel.memoryManager.editFile(fileName, editContent, description = editDesc)
                         }

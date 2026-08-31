@@ -277,6 +277,8 @@ class TaskExecutionEngine(
                 foregroundServiceManagedExternally = foregroundServiceManagedExternally,
                 githubWorkspaceMode = githubWorkspaceMode,
                 githubAllowedRepositories = githubAllowedRepositories,
+                // Scheduled-run chatter must never pollute the user's recent-session memory.
+                autoSessionHandoff = false,
             )
 
             // No global slot: local model work is serialized inside LocalProvider via
@@ -305,17 +307,28 @@ class TaskExecutionEngine(
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
                 if (convRepo.getConversation(conversationId) != null) {
+                    // Preserve partial output from checkpoints instead of overwriting it with a
+                    // bare "Execution cancelled" (same rule as GenerationManager's error path).
+                    // Also carry over the payload columns — a bare upsert would wipe toolCallJson.
+                    val existing = convRepo.getMessagesByIds(listOf(modelMessageId)).firstOrNull()
+                    val partial = existing?.text.orEmpty()
                     convRepo.upsertMessage(
                         MessageEntity(
                             id = modelMessageId,
                             conversationId = conversationId,
                             parentId = userMessageId,
-                            text = "Execution cancelled",
-                            thoughts = null,
+                            text = if (partial.isBlank()) "Execution cancelled"
+                            else partial + "\n\n[Cancelled] Execution cancelled",
+                            images = existing?.images ?: emptyList(),
+                            thoughts = existing?.thoughts,
+                            thoughtTitle = existing?.thoughtTitle,
+                            tokenCount = existing?.tokenCount ?: 0,
                             status = MessageStatus.STOPPED,
                             participant = Participant.MODEL,
                             timestamp = startTime,
+                            thoughtTimeMs = existing?.thoughtTimeMs,
                             modelName = effectiveModelId.takeIf { it.isNotBlank() },
+                            toolCallJson = existing?.toolCallJson,
                         )
                     )
                 }
@@ -324,17 +337,25 @@ class TaskExecutionEngine(
         } catch (e: Exception) {
             DebugLog.e("TaskExecutionEngine", "runOnce failed for conversation=$conversationId", e)
             val reason = e.localizedMessage ?: "Unexpected error"
+            // Same preservation rule: never clobber checkpointed partial output or payloads.
+            val existing = convRepo.getMessagesByIds(listOf(modelMessageId)).firstOrNull()
+            val partial = existing?.text.orEmpty()
             convRepo.upsertMessage(
                 MessageEntity(
                     id = modelMessageId,
                     conversationId = conversationId,
                     parentId = userMessageId,
-                    text = reason,
-                    thoughts = null,
+                    text = if (partial.isBlank()) reason else partial + "\n\n[生成中断] " + reason,
+                    images = existing?.images ?: emptyList(),
+                    thoughts = existing?.thoughts,
+                    thoughtTitle = existing?.thoughtTitle,
+                    tokenCount = existing?.tokenCount ?: 0,
                     status = MessageStatus.ERROR,
                     participant = Participant.MODEL,
                     timestamp = startTime,
+                    thoughtTimeMs = existing?.thoughtTimeMs,
                     modelName = effectiveModelId.takeIf { it.isNotBlank() },
+                    toolCallJson = existing?.toolCallJson,
                 )
             )
             Result.Failure(reason)

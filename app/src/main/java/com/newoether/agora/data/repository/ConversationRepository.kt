@@ -45,7 +45,7 @@ class ConversationRepository(
         chatDao.observeExecutionMessagesForTask(taskId)
 
     /** Promotes a task/loop execution into the main list once the user takes it over.
-     *  Returns true only for the transition that made the conversation searchable. */
+     *  Returns true only for the transition that made it searchable. */
     suspend fun graduateConversation(id: String): Boolean {
         val conv = chatDao.getConversation(id) ?: return false
         if (conv.origin != "user" && !conv.graduated) {
@@ -144,6 +144,13 @@ class ConversationRepository(
         chatDao.stopStuckMessages(conversationId)
     }
 
+    /** Cold-start sweep across ALL conversations: no generation survives process death, so any
+     *  non-terminal row older than [cutoff] is an orphan. Cures zombie SENDING rows in
+     *  background conversations that never get re-opened (the per-conversation
+     *  fixStuckMessages only runs on open). */
+    suspend fun stopAllStuckMessages(cutoff: Long): Int =
+        chatDao.stopStuckMessagesBefore(cutoff)
+
     // ── Embeddings ────────────────────────────────────────────
 
     suspend fun deleteEmbeddingsByConversation(conversationId: String) =
@@ -184,8 +191,29 @@ class ConversationRepository(
 
     // ── Search ────────────────────────────────────────────────
 
-    suspend fun searchMessages(query: String, limit: Int = 10): List<MessageEntity> =
-        chatDao.searchMessages(query, limit)
+    /**
+     * Keyword search that tolerates multi-word queries. The DAO's LIKE search matches the
+     * whole query as ONE phrase, so a natural multi-word query like "记忆 上下文" matched
+     * nothing. Split into tokens: prefer messages matching ALL tokens; when none does,
+     * fall back to best-effort ranking by how many tokens matched (newest first).
+     */
+    suspend fun searchMessages(query: String, limit: Int = 10): List<MessageEntity> {
+        val trimmed = query.trim()
+        val tokens = trimmed.split(Regex("\\s+")).filter { it.length >= 2 }.distinct().take(6)
+        if (tokens.size <= 1) return chatDao.searchMessages(trimmed, limit)
+        val matchCounts = mutableMapOf<String, Pair<Int, MessageEntity>>()
+        for (token in tokens) {
+            for (entity in chatDao.searchMessages(token, 200)) {
+                val prev = matchCounts[entity.id]
+                matchCounts[entity.id] = ((prev?.first ?: 0) + 1) to entity
+            }
+        }
+        val ranked = matchCounts.values
+            .sortedWith(compareByDescending<Pair<Int, MessageEntity>> { it.first }.thenByDescending { it.second.timestamp })
+            .map { it.second }
+        val allMatch = ranked.filter { entity -> tokens.all { token -> entity.text.contains(token) } }
+        return (allMatch.ifEmpty { ranked }).take(limit)
+    }
 
     suspend fun getAllConversationsList(): List<ChatEntity> =
         chatDao.getAllConversationsList()

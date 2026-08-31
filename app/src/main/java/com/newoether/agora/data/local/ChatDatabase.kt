@@ -132,7 +132,7 @@ data class EmbeddingEntity(
         result = 31 * result + modelId.hashCode()
         result = 31 * result + embedding.contentHashCode()
         result = 31 * result + chunkText.hashCode()
-        result = 31 * result + dimension
+        result = 31 * result + dimension.hashCode()
         return result
     }
 }
@@ -264,6 +264,16 @@ interface ChatDao {
           AND status IN ('SENDING', 'THINKING', 'TOOL_CALLING', 'TRANSCRIBING')
     """)
     suspend fun stopStuckMessages(conversationId: String)
+
+    /** Cold-start sweep: no generation survives process death, so every non-terminal row older
+     *  than the cutoff is an orphan (its conversation may never be re-opened to run the
+     *  per-conversation fixStuckMessages). Returns the number of rows committed as STOPPED. */
+    @Query("""
+        UPDATE messages SET status = 'STOPPED'
+        WHERE timestamp < :cutoff
+          AND status IN ('SENDING', 'THINKING', 'TOOL_CALLING', 'TRANSCRIBING')
+    """)
+    suspend fun stopStuckMessagesBefore(cutoff: Long): Int
 
     @Upsert
     suspend fun upsertConversation(conversation: ChatEntity)

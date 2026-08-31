@@ -129,6 +129,7 @@ class SettingsManager(private val context: Context) {
         val ACCESS_PAST_CONVERSATIONS = booleanPreferencesKey("access_past_conversations")
         val ACCESS_SAVED_MEMORIES = booleanPreferencesKey("access_saved_memories")
         val ACCESS_ACTIVE_MEMORY = booleanPreferencesKey("access_active_memory")
+        val AUTO_SESSION_HANDOFF = booleanPreferencesKey("auto_session_handoff")
         val RAG_SEARCH_ENABLED = booleanPreferencesKey("rag_search_enabled")
         val MODEL_SEARCH_METHOD = stringPreferencesKey("model_search_method")
         val MANUAL_SEARCH_METHOD = stringPreferencesKey("manual_search_method")
@@ -265,6 +266,7 @@ class SettingsManager(private val context: Context) {
     val accessPastConversations: Flow<Boolean> = context.dataStore.data.map { it[ACCESS_PAST_CONVERSATIONS] ?: true }
     val accessSavedMemories: Flow<Boolean> = context.dataStore.data.map { it[ACCESS_SAVED_MEMORIES] ?: true }
     val accessActiveMemory: Flow<Boolean> = context.dataStore.data.map { it[ACCESS_ACTIVE_MEMORY] ?: true }
+    val autoSessionHandoff: Flow<Boolean> = context.dataStore.data.map { it[AUTO_SESSION_HANDOFF] ?: true }
     val ragSearchEnabled: Flow<Boolean> = context.dataStore.data.map { it[RAG_SEARCH_ENABLED] ?: false }
     val modelSearchMethod: Flow<String> = context.dataStore.data.map { it[MODEL_SEARCH_METHOD] ?: "keyword" }
     val manualSearchMethod: Flow<String> = context.dataStore.data.map { it[MANUAL_SEARCH_METHOD] ?: "keyword" }
@@ -529,6 +531,9 @@ class SettingsManager(private val context: Context) {
     }
     suspend fun saveAccessActiveMemory(enabled: Boolean) {
         context.dataStore.edit { it[ACCESS_ACTIVE_MEMORY] = enabled }
+    }
+    suspend fun saveAutoSessionHandoff(enabled: Boolean) {
+        context.dataStore.edit { it[AUTO_SESSION_HANDOFF] = enabled }
     }
     suspend fun saveRagSearchEnabled(enabled: Boolean) {
         context.dataStore.edit { it[RAG_SEARCH_ENABLED] = enabled }
