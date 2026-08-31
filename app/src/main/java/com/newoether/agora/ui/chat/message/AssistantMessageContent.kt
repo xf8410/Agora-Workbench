@@ -508,17 +508,31 @@ internal fun AssistantMessageContent(
                         .noOpBringIntoView()
                 ) {
                     if (isError) {
+                        // Keep what was generated before the failure visible: render the
+                        // partial reply as normal markdown above a compact error banner.
+                        if (debouncedText.isNotEmpty() && !useTimelineSegments) {
+                            SelectionContainer {
+                                RecomposeSafeMarkdown(
+                                    content = debouncedText,
+                                    isStreaming = false,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { text ->
+                                    MarkdownTextContent(
+                                        text = text,
+                                        renderContext = renderContext
+                                    )
+                                }
+                            }
+                        }
                         Surface(color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f), contentColor = MaterialTheme.colorScheme.onErrorContainer, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
                                 Icon(Icons.Default.Info, null, modifier = Modifier.size(16.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.error)
                                 Spacer(modifier = Modifier.width(12.dp))
-                                SelectionContainer {
-                                    Text(
-                                        debouncedText.ifEmpty { stringResource(R.string.failed_to_generate) },
-                                        style = ChatType.errorBody,
-                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                                    )
-                                }
+                                Text(
+                                    stringResource(R.string.failed_to_generate),
+                                    style = ChatType.errorBody,
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                )
                             }
                         }
                     } else if (debouncedText.isNotEmpty() && !useTimelineSegments) {
