@@ -678,10 +678,14 @@ class GenerationManager(
                         onStreamUpdate(modelMessage())
                     }
                     is StreamEvent.Error -> {
+                        flushAnswerSegment()
                         flushThoughtSegment()
                         retryText = null
                         if (toolCallData == null && toolCallDataList.isEmpty()) {
-                            totalText = event.message
+                            // Preserve everything already streamed before the failure:
+                            // append the failure reason, never overwrite the partial answer.
+                            totalText = if (totalText.isBlank()) event.message
+                            else totalText + "\n\n[生成中断] " + event.message
                             currentStatus = MessageStatus.ERROR
                         }
                     }
@@ -912,7 +916,11 @@ class GenerationManager(
             )
             currentStatus = if (isCancelled) MessageStatus.STOPPED else MessageStatus.ERROR
             if (!isCancelled) {
-                totalText = com.newoether.agora.api.GenerationError.Unknown(e).userMessage()
+                // Keep partial output: append the failure reason instead of overwriting
+                // totalText, so an interrupted reply is never lost from the message row.
+                val errorMsg = com.newoether.agora.api.GenerationError.Unknown(e).userMessage()
+                totalText = if (totalText.isBlank()) errorMsg
+                else totalText + "\n\n[生成中断] " + errorMsg
             }
         } finally {
             // Critical non-cancellable section: only the terminal DB upsert (and the
@@ -973,6 +981,31 @@ class GenerationManager(
                                     "Terminal message was not durably verified for $conversationId/$modelMessageId",
                                     lastFailure,
                                 )
+                            }
+                            // Auto session handoff: record what was just discussed into the
+                            // active memory so the next conversation starts with fresh context,
+                            // including when this generation failed or was interrupted.
+                            try {
+                                if (ctx.accessActiveMemory) {
+                                    val handoffUserText = parentId?.let { pid ->
+                                        conversations.getMessagesByIds(listOf(pid)).firstOrNull()?.text
+                                    }
+                                    val handoffTitle = conversations.getConversation(conversationId)?.title
+                                    val statusTag = when (currentStatus) {
+                                        MessageStatus.SUCCESS -> "[OK]"
+                                        MessageStatus.ERROR -> "[INTERRUPTED]"
+                                        else -> "[STOPPED]"
+                                    }
+                                    memoryManager.appendSessionHandoff(
+                                        conversationId = conversationId,
+                                        title = handoffTitle,
+                                        userText = handoffUserText,
+                                        replyExcerpt = totalText,
+                                        statusTag = statusTag
+                                    )
+                                }
+                            } catch (handoffError: Exception) {
+                                DebugLog.e("AgoraVM", "Session handoff append failed", handoffError)
                             }
                         }
                     }
