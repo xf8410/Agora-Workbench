@@ -23,6 +23,8 @@ import com.newoether.agora.service.TaskWorker
 import com.newoether.agora.viewmodel.ChatViewModel
 import com.newoether.agora.viewmodel.ChatViewModelFactory
 import com.newoether.agora.viewmodel.ProviderRegistry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
 /**
@@ -196,4 +198,22 @@ class AppContainer(private val appContext: Context) {
             taskManager, loopManager, automationToolProvider, conversationExecutionCoordinator,
             automationExecutionGate
         )
+
+    init {
+        // One-shot cold-start sweep for orphaned generation rows. No generation can survive
+        // process death, so any non-terminal row (SENDING/THINKING/TOOL_CALLING/TRANSCRIBING)
+        // older than this process start is an orphan. The per-conversation fixStuckMessages()
+        // only runs when a conversation is OPENED, leaving background conversations with
+        // zombie SENDING rows until then — this sweep removes the whole class at the root.
+        // A worker-spawned generation that started moments ago is spared by the 15s buffer;
+        // any row swept while genuinely active self-heals at its next ≤2s streaming checkpoint
+        // (checkpoints rewrite the full row, status included).
+        appScope.launch(Dispatchers.IO) {
+            try {
+                conversationRepository.stopAllStuckMessages(System.currentTimeMillis() - 15_000L)
+            } catch (e: Exception) {
+                com.newoether.agora.util.DebugLog.e("AppContainer", "Startup stuck-message sweep failed", e)
+            }
+        }
+    }
 }
