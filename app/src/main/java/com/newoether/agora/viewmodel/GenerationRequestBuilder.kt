@@ -73,8 +73,8 @@ class GenerationRequestBuilder(
         return settings.resolveActiveKey(providerName) ?: ""
     }
 
-    private fun resolveImageGenBaseUrl(): String {
-        val model = settings.imageGenModel.value ?: return ""
+    private fun resolveImageGenBaseUrl(): String? {
+        val model = settings.imageGenModel.value ?: return null
         return providerRegistry.getEffectiveBaseUrl(providerRegistry.providerForModel(model)) ?: ""
     }
 
@@ -186,13 +186,30 @@ class GenerationRequestBuilder(
         val dateSdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
         val now = java.util.Date()
 
+        // Memory files index: injected next to the active memory so the model can see WHAT
+        // persistent memory exists without spending a tool call on list_memory_files first.
+        // Without the index the model guesses or invents — a direct hallucination source.
+        val memoryIndex = if (settings.accessSavedMemories.value) {
+            val files = memoryManager.listFiles()
+            if (files.isEmpty()) "" else buildString {
+                append("\n\n<memory_files_index>\n")
+                files.take(100).forEach { f ->
+                    append("- ").append(f.name)
+                    if (f.description.isNotBlank()) append("：").append(f.description)
+                    append("\n")
+                }
+                append("</memory_files_index>")
+            }
+        } else ""
+        val activeMemoryValue = if (includeActiveMemory && activeMemory.isNotBlank()) activeMemory else ""
+
         val runtimeValues = mapOf(
             PredefinedVariables.TIME to sdf.format(now),
             PredefinedVariables.DATE to dateSdf.format(now),
             PredefinedVariables.SENT_TIME to sdf.format(now),
             PredefinedVariables.SENT_DATE to dateSdf.format(now),
             PredefinedVariables.MODEL_ID to modelId,
-            PredefinedVariables.ACTIVE_MEMORY to if (includeActiveMemory && activeMemory.isNotBlank()) activeMemory else ""
+            PredefinedVariables.ACTIVE_MEMORY to (activeMemoryValue + memoryIndex).trim()
         )
 
         if (entry != null) {
