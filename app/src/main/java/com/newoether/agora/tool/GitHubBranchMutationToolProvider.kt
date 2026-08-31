@@ -25,9 +25,14 @@ import kotlinx.serialization.json.put
  * SHA it intends to delete, so a stale view of the branch cannot silently destroy new commits.
  * The stale-branch report uses per-branch compare calls so a bounded scan stays correct even when
  * Link pagination returns hundreds of refs.
+ *
+ * Also exposes github_upload_file (binary/image upload onto workbench/* branches) by delegating
+ * to GitHubFileUploadToolProvider, so the AI can commit chat attachments or workspace artifacts
+ * into the user's repositories without leaving the app.
  */
 class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
     private val client = GitHubApiClient(context.applicationContext)
+    private val uploadDelegate = GitHubFileUploadToolProvider(context)
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Null fails closed. The UI must show and approve the exact deletion summary. */
@@ -58,11 +63,13 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
                 ),
             ),
         ),
-    )
+    ) + uploadDelegate.definitions(ctx)
 
-    override fun handles(name: String): Boolean = name == DELETE_BRANCH || name == LIST_STALE_BRANCHES
+    override fun handles(name: String): Boolean =
+        name == DELETE_BRANCH || name == LIST_STALE_BRANCHES || uploadDelegate.handles(name)
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
+        if (uploadDelegate.handles(name)) return uploadDelegate.execute(name, arguments, ctx)
         if (!client.isSignedIn()) return errorJson("GitHub is not signed in")
         val args = runCatching {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
