@@ -15,6 +15,10 @@ class MemoryManager(context: Context) {
     private val metaFile: File =
         File(memoryDir, "memory_meta.json")
 
+    /** Absent file = enabled (default). Only an explicit "false" disables the auto handoff. */
+    private val sessionHandoffFlagFile: File =
+        File(context.filesDir, "session_handoff_enabled")
+
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
     data class MemoryFileInfo(
@@ -199,6 +203,19 @@ class MemoryManager(context: Context) {
         return "Deleted ${file.name}"
     }
 
+    // ── Auto session handoff switch ───────────────────────────
+    // The app (not the model) records a rolling snapshot of recent exchanges at the top of the
+    // active memory. Default ON; the settings page exposes the toggle.
+
+    @Synchronized
+    fun isSessionHandoffEnabled(): Boolean =
+        if (sessionHandoffFlagFile.exists()) sessionHandoffFlagFile.readText().trim() != "false" else true
+
+    @Synchronized
+    fun setSessionHandoffEnabled(enabled: Boolean) {
+        if (enabled) sessionHandoffFlagFile.delete() else sessionHandoffFlagFile.writeText("false")
+    }
+
     /**
      * Auto session handoff: the app (not the model) records a rolling snapshot of recent
      * exchanges at the TOP of the active memory, so "what was just said" survives even
@@ -213,6 +230,7 @@ class MemoryManager(context: Context) {
         replyExcerpt: String?,
         statusTag: String
     ) {
+        if (!isSessionHandoffEnabled()) return
         fun sanitize(value: String?, max: Int): String =
             value?.replace(Regex("\\s+"), " ")?.trim()?.take(max).orEmpty()
         val user = sanitize(userText, 160)
