@@ -2,6 +2,9 @@ package com.newoether.agora.data
 
 import android.content.Context
 import com.newoether.agora.model.Agent
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -32,37 +35,93 @@ object AgentCodec {
         }
 }
 
+/**
+ * File-backed agent/team store WITH observable state.
+ *
+ * History note: this repository was built as a fire-and-forget JSON store — the data layer and
+ * the send-path relay (MessageGenerationController.runAgentRelay) were wired, but no UI was
+ * ever connected, so "multi-agent" was invisible dead weight. This version adds StateFlows so
+ * the settings UI can list/edit agents and pick a per-conversation team. Write methods update
+ * the flows synchronously under the same lock that writes the files, so UI and send-path reads
+ * always agree with the persisted JSON.
+ */
 class AgentRepository(context: Context) {
 
     private val agentsFile = File(context.filesDir, "agora_agents.json")
     private val teamsFile = File(context.filesDir, "agora_agent_teams.json")
 
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private val _agents = MutableStateFlow<List<Agent>>(emptyList())
+    val agents: StateFlow<List<Agent>> = _agents.asStateFlow()
+
+    private val _teams = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val teams: StateFlow<Map<String, List<String>>> = _teams.asStateFlow()
+
+    init {
+        _agents.value = AgentCodec.decodeAgents(agentsFile.readTextSafe())
+        _teams.value = AgentCodec.decodeTeams(teamsFile.readTextSafe())
+    }
+
     @Synchronized
-    fun loadAgents(): List<Agent> = AgentCodec.decodeAgents(agentsFile.readTextSafe())
+    fun loadAgents(): List<Agent> {
+        val decoded = AgentCodec.decodeAgents(agentsFile.readTextSafe())
+        if (decoded != _agents.value) _agents.value = decoded
+        return decoded
+    }
 
     @Synchronized
     fun saveAgents(agents: List<Agent>) {
         agentsFile.writeText(AgentCodec.encodeAgents(agents))
+        _agents.value = agents.toList()
     }
 
     @Synchronized
-    fun loadTeams(): Map<String, List<String>> = AgentCodec.decodeTeams(teamsFile.readTextSafe())
+    fun loadTeams(): Map<String, List<String>> {
+        val decoded = AgentCodec.decodeTeams(teamsFile.readTextSafe())
+        if (decoded != _teams.value) _teams.value = decoded
+        return decoded
+    }
 
     @Synchronized
     fun saveTeams(teams: Map<String, List<String>>) {
         teamsFile.writeText(AgentCodec.encodeTeams(teams))
+        _teams.value = teams.toMap()
     }
 
+    @Synchronized
     fun teamFor(conversationId: String): List<Agent> {
-        val ids = loadTeams()[conversationId] ?: return emptyList()
-        val byId = loadAgents().associateBy { it.id }
+        val ids = _teams.value[conversationId] ?: return emptyList()
+        val byId = _agents.value.associateBy { it.id }
         return ids.mapNotNull { byId[it] }.filter { it.enabled }
     }
 
+    @Synchronized
     fun setTeamFor(conversationId: String, agentIds: List<String>) {
-        val teams = loadTeams().toMutableMap()
+        val teams = _teams.value.toMutableMap()
         if (agentIds.isEmpty()) teams.remove(conversationId) else teams[conversationId] = agentIds
         saveTeams(teams)
+    }
+
+    /** Replace one agent (update) or append it (id not present). Emits a new list. */
+    @Synchronized
+    fun upsertAgent(agent: Agent) {
+        val current = _agents.value
+        val next = if (current.any { it.id == agent.id }) {
+            current.map { if (it.id == agent.id) agent else it }
+        } else {
+            current + agent
+        }
+        saveAgents(next)
+    }
+
+    @Synchronized
+    fun deleteAgent(agentId: String) {
+        saveAgents(_agents.value.filterNot { it.id == agentId })
+        // Drop the id from every team so a deleted agent cannot linger in a roster.
+        val teams = _teams.value.mapValues { (_, ids) -> ids.filterNot { it == agentId } }
+            .filterValues { it.isNotEmpty() }
+        if (teams != _teams.value) saveTeams(teams)
     }
 
     fun isMultiAgent(conversationId: String): Boolean = teamFor(conversationId).isNotEmpty()
