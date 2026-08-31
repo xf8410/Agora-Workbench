@@ -93,20 +93,38 @@ class GitHubApiClient(context: Context) {
     suspend fun readFile(repo: String, path: String, ref: String): JsonObject =
         readContent(repo, path, ref) as? JsonObject ?: error("Expected a GitHub file response, but path is a directory")
 
-    suspend fun writeFile(repo: String, path: String, branch: String, message: String, content: String): String {
+    suspend fun writeFile(repo: String, path: String, branch: String, message: String, content: String): String =
+        writeBinaryFile(repo, path, branch, message, content.toByteArray(Charsets.UTF_8))
+
+    /**
+     * Binary upload (images, assets, bundles) through the same Contents API.
+     * Shares the workbench/* guard with writeFile and is size-capped below
+     * GitHub's 1 MB contents limit so client-side downscaled JPEGs always pass.
+     */
+    suspend fun writeBinaryFile(repo: String, path: String, branch: String, message: String, bytes: ByteArray): String {
         val safeRepo = validateRepo(repo)
         require(branch.startsWith("workbench/") && branch.length in 11..200 && !branch.contains("..")) { "Writes require a valid workbench/* branch" }
         require(path.isNotBlank() && !path.split('/').contains("..")) { "Invalid file path" }
-        require(content.toByteArray(Charsets.UTF_8).size <= MAX_WRITE_BYTES) { "File is too large to write" }
+        require(bytes.isNotEmpty()) { "Nothing to upload" }
+        require(bytes.size <= MAX_BINARY_BYTES) { "File is too large to upload (${bytes.size / 1000} KB raw, max ${MAX_BINARY_BYTES / 1000} KB)" }
         val encodedPath = encodePath(path)
         val existing = request("GET", "/repos/$safeRepo/contents/$encodedPath?ref=${encodeSegment(branch)}")
         val sha = if (existing.code in 200..299) (json.parseToJsonElement(existing.body) as? JsonObject)?.get("sha")?.jsonPrimitive?.content else null
-        val encoded = Base64.encodeToString(content.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
         val response = request("PUT", "/repos/$safeRepo/contents/$encodedPath", buildJsonObject {
-            put("message", message.ifBlank { "Update $path" }); put("content", encoded); put("branch", branch); if (sha != null) put("sha", sha)
+            put("message", message.ifBlank { "Upload $path" }); put("content", encoded); put("branch", branch); if (sha != null) put("sha", sha)
         })
         requireSuccess(response)
         return json.parseToJsonElement(response.body).jsonObject.getValue("commit").jsonObject.getValue("sha").jsonPrimitive.content
+    }
+
+    /** Triggers a repository workflow_dispatch by workflow file name (e.g. build.yml). */
+    suspend fun dispatchWorkflowFile(repo: String, workflowFile: String, ref: String) {
+        val safeRepo = validateRepo(repo)
+        require(workflowFile.isNotBlank() && !workflowFile.contains("..")) { "Invalid workflow file" }
+        require(ref.isNotBlank() && !ref.contains("..")) { "Invalid dispatch ref" }
+        val response = request("POST", "/repos/$safeRepo/actions/workflows/${encodeSegment(workflowFile)}/dispatches", buildJsonObject { put("ref", ref) })
+        requireSuccess(response)
     }
 
     fun validateRepo(value: String): String {
@@ -134,5 +152,6 @@ class GitHubApiClient(context: Context) {
         val REPO_PATTERN = Regex("[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}")
         const val MAX_API_RESPONSE_CHARS = 2_000_000
         const val MAX_WRITE_BYTES = 750_000
+        const val MAX_BINARY_BYTES = 900_000
     }
 }
