@@ -32,8 +32,11 @@ import org.junit.Test
  *  1. Every concrete ToolProvider in com.newoether.agora.tool is reachable:
  *     all of them are registered in builtInToolProviders EXCEPT
  *       - AutomationToolProvider — foreground-only, attached per-instance via
- *         additionalToolProviders (headless automation must not self-replicate), and
- *       - UmaSessionExportToolProvider — reachable through UmaToolProvider's delegation.
+ *         additionalToolProviders (headless automation must not self-replicate),
+ *       - UmaSessionExportToolProvider — reachable through UmaToolProvider's delegation, and
+ *       - GitHubPullRequestToolProvider — reachable through GitHubWatchToolProvider's
+ *         delegation (registering it standalone advertises the PR tools twice; the
+ *         duplicate test below catches exactly that).
  *  2. Every tool a provider advertises in definitions() is routable through its handles().
  *  3. No tool name is advertised twice across the built-in chain (silent shadowing).
  *
@@ -87,7 +90,6 @@ class ToolProviderRegistrationTest {
             "GitHubWatchToolProvider",
             "GitHubActionsLogToolProvider",
             "GitHubWorkspaceToolProvider",
-            "GitHubPullRequestToolProvider",
             "GitHubRepositoryMutationToolProvider",
             "GitHubBranchMutationToolProvider",
             "GitHubCloneToolProvider",
