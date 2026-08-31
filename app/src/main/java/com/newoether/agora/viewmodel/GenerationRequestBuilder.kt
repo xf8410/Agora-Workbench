@@ -73,8 +73,8 @@ class GenerationRequestBuilder(
         return settings.resolveActiveKey(providerName) ?: ""
     }
 
-    private fun resolveImageGenBaseUrl(): String? {
-        val model = settings.imageGenModel.value ?: return null
+    private fun resolveImageGenBaseUrl(): String {
+        val model = settings.imageGenModel.value ?: return ""
         return providerRegistry.getEffectiveBaseUrl(providerRegistry.providerForModel(model)) ?: ""
     }
 
@@ -202,6 +202,7 @@ class GenerationRequestBuilder(
             }
         } else ""
         val activeMemoryValue = if (includeActiveMemory && activeMemory.isNotBlank()) activeMemory else ""
+        val activeMemoryWithIndex = (activeMemoryValue + memoryIndex).trim()
 
         val runtimeValues = mapOf(
             PredefinedVariables.TIME to sdf.format(now),
@@ -209,7 +210,7 @@ class GenerationRequestBuilder(
             PredefinedVariables.SENT_TIME to sdf.format(now),
             PredefinedVariables.SENT_DATE to dateSdf.format(now),
             PredefinedVariables.MODEL_ID to modelId,
-            PredefinedVariables.ACTIVE_MEMORY to (activeMemoryValue + memoryIndex).trim()
+            PredefinedVariables.ACTIVE_MEMORY to activeMemoryWithIndex
         )
 
         if (entry != null) {
