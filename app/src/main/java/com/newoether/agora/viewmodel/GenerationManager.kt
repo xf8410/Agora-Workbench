@@ -111,7 +111,11 @@ data class GenerationContext(
     val transcriptionBaseUrl: String? = null,
     /** Wall-clock budget for a single tool execution; downgrades a blocking tool from a
      *  permanent generation hang to a recoverable tool error (#49). */
-    val toolTimeoutMs: Long = Constants.TOOL_EXECUTION_TIMEOUT_MS
+    val toolTimeoutMs: Long = Constants.TOOL_EXECUTION_TIMEOUT_MS,
+    /** Whether this generation records an auto session handoff into the active memory on
+     *  terminal persist. Headless automation (Task/Loop/workspace) turns this off so
+     *  scheduled-run chatter never pollutes the user's recent-session memory. */
+    val autoSessionHandoff: Boolean = true
 )
 
 internal fun applyUserTemplateToMessages(
@@ -986,7 +990,7 @@ class GenerationManager(
                             // active memory so the next conversation starts with fresh context,
                             // including when this generation failed or was interrupted.
                             try {
-                                if (ctx.accessActiveMemory) {
+                                if (ctx.accessActiveMemory && ctx.autoSessionHandoff) {
                                     val handoffUserText = parentId?.let { pid ->
                                         conversations.getMessagesByIds(listOf(pid)).firstOrNull()?.text
                                     }
