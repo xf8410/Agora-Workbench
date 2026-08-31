@@ -21,7 +21,8 @@ import java.io.File
 
 /**
  * github_upload_file：把本机文件（聊天附件/沙盒产物）提交为用户 GitHub 仓库的真实 Git 文件。
- * 图片自动压缩（长边≤2048、JPEG 质量自适应），体积≤900KB；分支强制 workbench/*。
+ * 图片自动压缩（长边 2048 封顶、JPEG 质量自适应），体积 900KB 封顶；
+ * 分支强制 workbench 前缀（星号分支，校验逻辑见 GitHubBinaryUploader）。
  */
 class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
     private val client = GitHubApiClient(context.applicationContext)
@@ -32,7 +33,7 @@ class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
         ToolDefinition(
             function = ToolFunction(
                 name = UPLOAD_FILE,
-                description = "Upload a local file from this device into the user's GitHub repository as a real Git commit on a workbench/* branch. Use the absolute local path of a chat attachment or workspace artifact. Images are auto-compressed to fit 900 KB. A missing workbench branch is created from the default branch automatically.",
+                description = "Upload a local file from this device into the user's GitHub repository as a real Git commit on a workbench-prefixed branch. Use the absolute local path of a chat attachment or workspace artifact. Images are auto-compressed to fit 900 KB. A missing workbench branch is created from the default branch automatically.",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "repo" to ToolProperty("string", "Repository in owner/name form."),
@@ -73,7 +74,7 @@ class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
         val payload: ByteArray = if (name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp")) {
             compress(raw) ?: return errorJson("Image could not be decoded")
         } else {
-            if (raw.size > 900_000) return errorJson("File too large (${raw.size / 1000} KB, max 900 KB)")
+            if (raw.size > 900_000) return errorJson("File too large (" + (raw.size / 1000) + " KB, max 900 KB)")
             raw
         }
 
@@ -90,7 +91,7 @@ class GitHubFileUploadToolProvider(context: Context) : ToolProvider {
     }
 
     private suspend fun ensureBranch(repo: String, branch: String) {
-        require(branch.startsWith("workbench/")) { "Branch must start with workbench/" }
+        require(branch.startsWith("workbench")) { "Branch must start with workbench" }
         val defaultBranch = runCatching {
             client.repository(repo)["default_branch"]?.jsonPrimitive?.content ?: "main"
         }.getOrDefault("main")
