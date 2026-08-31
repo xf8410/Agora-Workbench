@@ -154,7 +154,7 @@ fun SettingsMemoryPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                                 )
                                                 DropdownMenuItem(
                                                     text = { Text(stringResource(R.string.provider_delete), color = MaterialTheme.colorScheme.error) },
-                                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                                    leadingIcon = { Icon(Icons.Default.Delete, null) },
                                                     onClick = {
                                                         showFileMenu = false
                                                         showDeleteFileConfirm = file.name
@@ -277,9 +277,12 @@ fun SettingsMemoryPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                         viewModel.memoryManager.updateActiveMemory(editContent)
                         activeMemoryContent = viewModel.memoryManager.getActiveMemory()
                     } else {
+                        // Rename must be atomic: the old delete→create flow destroyed the file
+                        // when createFile failed (e.g. target name already exists). editFile
+                        // does content+rename+description under one lock and keeps the old
+                        // file intact on failure.
                         if (editFileName.isNotBlank() && editFileName != fileName.removeSuffix(".md")) {
-                            viewModel.memoryManager.deleteFile(fileName)
-                            viewModel.memoryManager.createFile(editFileName, editContent, editDesc)
+                            viewModel.memoryManager.editFile(fileName, editContent, newName = editFileName, description = editDesc)
                         } else {
                             viewModel.memoryManager.editFile(fileName, editContent, description = editDesc)
                         }
