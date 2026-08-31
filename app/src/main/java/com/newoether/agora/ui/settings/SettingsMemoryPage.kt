@@ -154,7 +154,7 @@ fun SettingsMemoryPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                                 )
                                                 DropdownMenuItem(
                                                     text = { Text(stringResource(R.string.provider_delete), color = MaterialTheme.colorScheme.error) },
-                                                    leadingIcon = { Icon(Icons.Default.Delete, null) },
+                                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
                                                     onClick = {
                                                         showFileMenu = false
                                                         showDeleteFileConfirm = file.name
