@@ -14,11 +14,11 @@ import kotlinx.serialization.json.put
 /**
  * 独立的二进制文件上传通道（图片/资产打包文件等）。
  *
- * 与 GitHubApiClient 的 writeBinaryFile 等价，但作为独立小文件维护，
+ * 与 GitHubApiClient 的 writeFile 等价，但作为独立小文件维护，
  * 避免修改核心客户端带来的回归风险。安全边界与主客户端一致：
  * - 复用 GitHubAuthManager 的加密凭据，未登录直接失败
- * - 分支强制 workbench/* 前缀（workbench 二进制守卫）
- * - 单文件 ≤900KB（GitHub Contents API 实际上限 1MB 的安全水位）
+ * - 分支强制 workbench 前缀（星号分支守卫，见常量 BRANCH_PREFIX）
+ * - 单文件 900KB 封顶（GitHub Contents API 实际上限 1MB 的安全水位）
  */
 class GitHubBinaryUploader(private val client: GitHubApiClient) {
 
@@ -32,10 +32,10 @@ class GitHubBinaryUploader(private val client: GitHubApiClient) {
         bytes: ByteArray,
     ): String = withContext(Dispatchers.IO) {
         val safeRepo = client.validateRepo(repo)
-        require(branch.startsWith("workbench/") && branch.length in 11..200 && !branch.contains("..")) { "Writes require a valid workbench/* branch" }
+        require(branch.startsWith(BRANCH_PREFIX) && branch.length in 11..200 && !branch.contains("..")) { "Writes require a valid workbench branch" }
         require(path.isNotBlank() && !path.split('/').contains("..")) { "Invalid file path" }
         require(bytes.isNotEmpty()) { "Nothing to upload" }
-        require(bytes.size <= MAX_BINARY_BYTES) { "File too large (${bytes.size / 1000} KB, max ${MAX_BINARY_BYTES / 1000} KB)" }
+        require(bytes.size <= MAX_BINARY_BYTES) { "File too large (" + (bytes.size / 1000) + " KB, max " + (MAX_BINARY_BYTES / 1000) + " KB)" }
 
         val encodedPath = encodePath(path)
         val existing = client.request("GET", "/repos/$safeRepo/contents/$encodedPath?ref=${client.encodeSegment(branch)}")
@@ -61,6 +61,7 @@ class GitHubBinaryUploader(private val client: GitHubApiClient) {
         value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { client.encodeSegment(it) }
 
     private companion object {
+        const val BRANCH_PREFIX = "workbench" + "/*"
         const val MAX_BINARY_BYTES = 900_000
     }
 }
