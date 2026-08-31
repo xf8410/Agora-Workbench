@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.AgentRepository
 import com.newoether.agora.model.Agent
+import com.newoether.agora.model.apiModelName
 import com.newoether.agora.ui.components.clearFocusOnTap
 import com.newoether.agora.viewmodel.ChatViewModel
 
