@@ -38,12 +38,15 @@ object AgentCodec {
 /**
  * File-backed agent/team store WITH observable state.
  *
- * History note: this repository was built as a fire-and-forget JSON store — the data layer and
+ * History note: this repository shipped as a fire-and-forget JSON store — the data layer and
  * the send-path relay (MessageGenerationController.runAgentRelay) were wired, but no UI was
  * ever connected, so "multi-agent" was invisible dead weight. This version adds StateFlows so
- * the settings UI can list/edit agents and pick a per-conversation team. Write methods update
- * the flows synchronously under the same lock that writes the files, so UI and send-path reads
- * always agree with the persisted JSON.
+ * the settings UI can list/edit agents and pick a per-conversation team.
+ *
+ * IMPORTANT: instances are intentionally cheap and there may be several (the send path owns
+ * one, the settings page another). The JSON FILES are the source of truth: every read goes
+ * through loadAgents()/loadTeams() which re-read from disk and sync the flows, so writes from
+ * one instance are always visible to the others.
  */
 class AgentRepository(context: Context) {
 
@@ -89,16 +92,17 @@ class AgentRepository(context: Context) {
         _teams.value = teams.toMap()
     }
 
+    /** Re-reads from disk first: multiple instances share the same files, not each other. */
     @Synchronized
     fun teamFor(conversationId: String): List<Agent> {
-        val ids = _teams.value[conversationId] ?: return emptyList()
-        val byId = _agents.value.associateBy { it.id }
+        val ids = loadTeams()[conversationId] ?: return emptyList()
+        val byId = loadAgents().associateBy { it.id }
         return ids.mapNotNull { byId[it] }.filter { it.enabled }
     }
 
     @Synchronized
     fun setTeamFor(conversationId: String, agentIds: List<String>) {
-        val teams = _teams.value.toMutableMap()
+        val teams = loadTeams().toMutableMap()
         if (agentIds.isEmpty()) teams.remove(conversationId) else teams[conversationId] = agentIds
         saveTeams(teams)
     }
@@ -106,7 +110,7 @@ class AgentRepository(context: Context) {
     /** Replace one agent (update) or append it (id not present). Emits a new list. */
     @Synchronized
     fun upsertAgent(agent: Agent) {
-        val current = _agents.value
+        val current = loadAgents()
         val next = if (current.any { it.id == agent.id }) {
             current.map { if (it.id == agent.id) agent else it }
         } else {
@@ -117,11 +121,11 @@ class AgentRepository(context: Context) {
 
     @Synchronized
     fun deleteAgent(agentId: String) {
-        saveAgents(_agents.value.filterNot { it.id == agentId })
+        saveAgents(loadAgents().filterNot { it.id == agentId })
         // Drop the id from every team so a deleted agent cannot linger in a roster.
-        val teams = _teams.value.mapValues { (_, ids) -> ids.filterNot { it == agentId } }
+        val teams = loadTeams().mapValues { (_, ids) -> ids.filterNot { it == agentId } }
             .filterValues { it.isNotEmpty() }
-        if (teams != _teams.value) saveTeams(teams)
+        if (teams != loadTeams()) saveTeams(teams)
     }
 
     fun isMultiAgent(conversationId: String): Boolean = teamFor(conversationId).isNotEmpty()
