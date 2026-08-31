@@ -2,11 +2,8 @@ package com.newoether.agora.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -17,9 +14,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.R
 import com.newoether.agora.data.AgentRepository
@@ -178,30 +177,26 @@ fun SettingsAgentsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                 }
             )
 
+            val convList = conversations.take(30)
             SettingsGroup(
-                title = "对话团队",
-                items = {
-                    val convList = conversations.take(30)
+                title = "对话团队（最近 ${convList.size} 个）",
+                items = buildList {
                     if (convList.isEmpty()) {
-                        listOf {
+                        add {
                             SettingsItem(
                                 headlineContent = { Text("暂无对话", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                                 modifier = Modifier.heightIn(min = 56.dp)
                             )
                         }
                     } else {
-                        convList.map { conversation ->
-                            {
+                        convList.forEach { conversation ->
+                            add {
                                 val teamIds = teams[conversation.id].orEmpty()
                                 val byId = agents.associateBy { it.id }
                                 val teamNames = teamIds.mapNotNull { byId[it]?.name }
                                 SettingsItem(
                                     headlineContent = {
-                                        Text(
-                                            conversation.title,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
+                                        Text(conversation.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     },
                                     supportingContent = {
                                         Text(
@@ -216,7 +211,7 @@ fun SettingsAgentsPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                             }
                         }
                     }
-                }.invoke()
+                }
             )
         }
     }
