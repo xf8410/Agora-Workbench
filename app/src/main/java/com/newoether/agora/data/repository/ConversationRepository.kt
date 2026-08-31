@@ -144,6 +144,13 @@ class ConversationRepository(
         chatDao.stopStuckMessages(conversationId)
     }
 
+    /** Cold-start sweep across ALL conversations: no generation survives process death, so any
+     *  non-terminal row older than [cutoff] is an orphan. Cures zombie SENDING rows in
+     *  background conversations that never get re-opened (the per-conversation
+     *  fixStuckMessages only runs on open). */
+    suspend fun stopAllStuckMessages(cutoff: Long): Int =
+        chatDao.stopStuckMessagesBefore(cutoff)
+
     // ── Embeddings ────────────────────────────────────────────
 
     suspend fun deleteEmbeddingsByConversation(conversationId: String) =
