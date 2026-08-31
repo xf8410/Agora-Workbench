@@ -199,6 +199,61 @@ class MemoryManager(context: Context) {
         return "Deleted ${file.name}"
     }
 
+    /**
+     * Auto session handoff: the app (not the model) records a rolling snapshot of recent
+     * exchanges at the TOP of the active memory, so "what was just said" survives even
+     * when a reply was interrupted by an exception. Bounded: newest entries first, oldest
+     * entries dropped once the entry/char limits are exceeded.
+     */
+    @Synchronized
+    fun appendSessionHandoff(
+        conversationId: String,
+        title: String?,
+        userText: String?,
+        replyExcerpt: String?,
+        statusTag: String
+    ) {
+        fun sanitize(value: String?, max: Int): String =
+            value?.replace(Regex("\\s+"), " ")?.trim()?.take(max).orEmpty()
+        val user = sanitize(userText, 160)
+        val reply = sanitize(replyExcerpt, 240)
+        if (user.isEmpty() && reply.isEmpty()) return
+        val t = sanitize(title, 40)
+        val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+            .format(java.util.Date(System.currentTimeMillis()))
+        val entry = buildString {
+            append("- ").append(time)
+            if (t.isNotEmpty()) append(" 「").append(t).append("」")
+            append(" ").append(statusTag)
+            if (user.isNotEmpty()) append("｜用户：").append(user)
+            if (reply.isNotEmpty()) append("｜回复：").append(reply)
+        }
+        val startMarker = "<!-- agora:auto-session:start -->"
+        val endMarker = "<!-- agora:auto-session:end -->"
+        val header = "$startMarker\n## 最近会话（自动记录，最新在上）\n"
+        val existing = getActiveMemory()
+        val startIdx = existing.indexOf(startMarker)
+        val rawEndIdx = existing.indexOf(endMarker)
+        val newContent: String
+        if (startIdx >= 0 && rawEndIdx > startIdx) {
+            val endIdx = rawEndIdx + endMarker.length
+            val head = existing.substring(0, startIdx)
+            val tail = existing.substring(endIdx)
+            val lines = existing.substring(startIdx, endIdx).lines()
+                .filter { it.startsWith("- ") }
+                .toMutableList()
+            lines.add(0, entry)
+            while (lines.size > 1 && (lines.size > 8 || lines.joinToString("\n").length > 4000)) {
+                lines.removeAt(lines.lastIndex)
+            }
+            newContent = head + header + lines.joinToString("\n") + "\n" + endMarker + tail
+        } else {
+            val rest = if (existing.isBlank()) "" else "\n" + existing
+            newContent = header + entry + "\n" + endMarker + rest
+        }
+        activeMemoryFile.writeText(newContent)
+    }
+
     private fun resolveFile(name: String): File {
         val fileSafeName = name.replace(Regex("""[/\\]"""), "_")
         val file = File(memoryDir, if (fileSafeName.endsWith(".md")) fileSafeName else "$fileSafeName.md")
