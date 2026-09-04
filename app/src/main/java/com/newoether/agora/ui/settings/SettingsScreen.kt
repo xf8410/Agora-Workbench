@@ -198,9 +198,6 @@ private val settingsGroups = listOf(
         SettingsCategory("appearance", R.string.settings_appearance, R.string.settings_appearance_desc, Icons.Default.Palette),
         SettingsCategory("language", R.string.language_title, R.string.language_desc, Icons.Default.Translate),
     )),
-    SettingsGroupData(titleRes = R.string.settings_group_about, items = listOf(
-        SettingsCategory("about", R.string.settings_about, R.string.settings_about_desc, Icons.Default.Info),
-    )),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -250,7 +247,6 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 "memory" -> SettingsMemoryPage(viewModel, onBack = { selectedCategory = null })
                 "datacontrol" -> SettingsDataControlPage(viewModel, onBack = { selectedCategory = null })
                 "appearance" -> SettingsAppearancePage(viewModel, onBack = { selectedCategory = null })
-                "about" -> SettingsAboutPage(viewModel, onBack = { selectedCategory = null })
                 else -> {
                     CollapsingSettingsLazyScaffold(
                         title = stringResource(R.string.settings_title),
