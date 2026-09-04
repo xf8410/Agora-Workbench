@@ -4,6 +4,7 @@ import android.app.Application
 import com.newoether.agora.util.DebugLog
 import com.newoether.agora.api.LlmProvider
 import com.newoether.agora.api.ProviderConfig
+import com.newoether.agora.api.SessionUsageRuntime
 import com.newoether.agora.api.StreamEvent
 import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.data.MemoryManager
@@ -677,6 +678,19 @@ class GenerationManager(
                                 currentThoughtStartMs = System.currentTimeMillis()
                             }
                             if (totalThoughts.isEmpty()) totalThoughts = thinkingPlaceholder
+                        }
+                        // Durable per-request usage record (session usage dashboard).
+                        // Silent best-effort: bookkeeping must never break generation.
+                        try {
+                            SessionUsageRuntime.record(
+                                requestId = modelMessageId,
+                                providerId = SessionUsageRuntime.stableProviderId(config.providerName, config.baseUrl),
+                                providerName = config.providerName,
+                                modelId = config.modelId,
+                                usage = event.usage,
+                            )
+                        } catch (usageError: Exception) {
+                            DebugLog.e("AgoraVM", "Usage record failed", usageError)
                         }
                     }
                     is StreamEvent.Retrying -> {
