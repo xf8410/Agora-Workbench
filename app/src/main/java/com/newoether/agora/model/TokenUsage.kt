@@ -21,6 +21,10 @@ data class TokenUsage(
     val cacheCreationTokens: Int? = null,
     val totalTokens: Int? = null,
     val cacheDetailsStatus: CacheDetailsStatus = CacheDetailsStatus.NOT_PROVIDED,
+    /** Whether the usage was provider-reported or locally estimated. */
+    val origin: UsageOrigin = UsageOrigin.PROVIDER_REPORTED,
+    /** The provider's raw usage object, retained for diagnostics and later re-mapping. */
+    val rawUsageJson: String? = null,
 ) {
     init {
         require(inputTokensTotal == null || inputTokensTotal >= 0)
