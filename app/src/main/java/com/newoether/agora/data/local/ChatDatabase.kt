@@ -29,7 +29,7 @@ class MessageConverters {
 
     @TypeConverter
     fun toStringList(value: String?): List<String> {
-        if (value.isNullOrEmpty()) return emptyList()
+        if (value == null) return emptyList()
         return try {
             Json.decodeFromString<List<String>>(value)
         } catch (_: Exception) {
@@ -55,7 +55,7 @@ data class ChatEntity(
     val graduated: Boolean = false,
     /** Unsent composer text for per-conversation draft persistence. */
     val draftText: String = "",
-    /** JSON-serialized list of [com.newoether.agora.model.SelectedAttachment]; null = no draft attachments. */
+    /** JSON-serialized list of SelectedAttachment; null = no draft attachments. */
     val draftAttachments: String? = null
 )
 
@@ -193,6 +193,13 @@ data class MessageListRow(
 /** Lightweight projection for startup cleanup; never loads message bodies. */
 data class MessageImagesProjection(
     val images: List<String>,
+)
+
+/** Lightweight media projection for export scans; never loads message bodies. */
+data class MessageMediaProjection(
+    val id: String,
+    val images: List<String>,
+    val attachmentMeta: String?,
 )
 
 @Dao
@@ -381,6 +388,20 @@ interface ChatDao {
     @Query("SELECT * FROM messages ORDER BY timestamp ASC LIMIT :limit OFFSET :offset")
     suspend fun getMessagesPage(limit: Int, offset: Int): List<MessageEntity>
 
+    /** rowid-ordered page: same rows as [getMessagesPage] but avoids a full-table sort per page. */
+    @Query("SELECT * FROM messages ORDER BY rowid LIMIT :limit OFFSET :offset")
+    suspend fun getMessagesPageByRowid(limit: Int, offset: Int): List<MessageEntity>
+
+    /** Media-bearing rows only (id/images/attachmentMeta) for export scans; never message bodies. */
+    @Query("SELECT id, images, attachmentMeta FROM messages WHERE images != '' OR attachmentMeta IS NOT NULL ORDER BY rowid LIMIT :limit OFFSET :offset")
+    suspend fun getMediaProjectionPage(limit: Int, offset: Int): List<MessageMediaProjection>
+
+    @Query("SELECT COUNT(*) FROM messages WHERE images != '' OR attachmentMeta IS NOT NULL")
+    suspend fun getMediaMessageCount(): Int
+
+    @Query("SELECT COUNT(*) FROM messages")
+    suspend fun getMessagesCount(): Int
+
     @Query("DELETE FROM conversations")
     suspend fun deleteAllConversations()
 
@@ -483,7 +504,7 @@ interface ChatDao {
     /** Clock-change CAS: only the observed active loop revision/cycle may be moved. */
     @Query(
         """
-        UPDATE loops SET nextFireAt = :replacementNextFireAt
+        UPDATE loops SET nextFireAt = :replacementNextRunAt
         WHERE conversationId = :conversationId AND active = 1
           AND revision = :expectedRevision AND cycleCount = :expectedCycleCount
           AND intervalMs = :expectedIntervalMs AND nextFireAt = :expectedNextFireAt
@@ -495,7 +516,7 @@ interface ChatDao {
         expectedCycleCount: Int,
         expectedIntervalMs: Long,
         expectedNextFireAt: Long,
-        replacementNextFireAt: Long,
+        replacementNextRunAt: Long,
     ): Int
 
     /** Safely quarantines an invalid legacy loop without reviving or clobbering a newer state. */
