@@ -48,8 +48,9 @@ class ConversationGenerationState(val conversationId: String) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     var generationJob: Job? = null
 
-    /** This conversation's in-flight HTTP streaming handles. Cancelled together on stop. */
-    val streamScope: StreamScope = StreamScope()
+    /** This conversation's in-flight HTTP streaming handles. Cancelled together on stop.
+     *  Bound to [conversationId] so usage records attribute to the right conversation. */
+    val streamScope: StreamScope = StreamScope(conversationId)
 
     // ── Private UI state (mirrored to the global UI flows only while this conversation is open) ──
     val streamingMessage = MutableStateFlow<ChatMessage?>(null)
@@ -235,27 +236,3 @@ data class QueuedSend(
     val attachments: List<SelectedAttachment>,
     val createdAt: Long = System.currentTimeMillis(),
 )
-
-/**
- * Per-conversation collection of in-flight HTTP streaming handles. [cancelAll] severs only the
- * streams opened under this scope — so a Stop on conversation A no longer kills conversation B's
- * in-flight provider stream (the fix for the global `cancelAllStreams` race).
- */
-class StreamScope {
-    private val handles = java.util.Collections.newSetFromMap(
-        java.util.concurrent.ConcurrentHashMap<com.newoether.agora.api.HttpClient.StreamHandle, Boolean>()
-    )
-
-    fun register(handle: com.newoether.agora.api.HttpClient.StreamHandle) {
-        handles.add(handle)
-    }
-
-    fun unregister(handle: com.newoether.agora.api.HttpClient.StreamHandle) {
-        handles.remove(handle)
-    }
-
-    fun cancelAll() {
-        handles.toList().forEach { runCatching { it.cancel() } }
-        handles.clear()
-    }
-}
