@@ -1,6 +1,7 @@
 package com.newoether.agora
 
 import android.app.Application
+import com.newoether.agora.api.SessionUsageRuntime
 import com.newoether.agora.di.AppContainer
 import com.newoether.agora.util.CrashReporter
 
@@ -20,6 +21,8 @@ class AgoraApplication : Application() {
         super.onCreate()
         CrashReporter.install(this)
         com.newoether.agora.uma.UmaApplicationContext.install(this)
+        // Durable per-request token-usage store backing the session usage dashboard.
+        SessionUsageRuntime.install(this)
         // Arm scheduled task alarms for this process (idempotent; also re-armed after boot).
         container.automationScheduler.start()
     }
