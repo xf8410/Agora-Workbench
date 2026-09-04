@@ -96,6 +96,11 @@ class ImportExportManager(
                 }
                 _exportProgress.value = null
                 emitSnackbar(SnackbarEvent(app.getString(R.string.export_success)))
+            } catch (e: OutOfMemoryError) {
+                // Errors are NOT caught by catch(Exception) — without this branch an OOM during
+                // the media scan would kill the coroutine and freeze the progress dialog forever.
+                _exportProgress.value = null
+                emitSnackbar(SnackbarEvent(app.getString(R.string.import_out_of_memory)))
             } catch (e: Exception) {
                 _exportProgress.value = null
                 emitSnackbar(SnackbarEvent(
