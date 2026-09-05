@@ -231,55 +231,63 @@ class DataExporter(
             if (ExportCategory.CONVERSATIONS in categories) {
                 val imageMap = mutableMapOf<String, List<String>>() // messageId -> list of image URIs to keep
 
-                // Export media page by page; never load every message body into the Java heap.
+                // The conversations block is by far the heaviest step (media scan + full message
+                // dump), so subdivide its progress slice: 50% media scan, 50% message JSON dump.
+                val stepWidth = 1f / totalSteps
+                val convBase = 1f / totalSteps // progress already emitted by the manifest step
+                val totalMediaRows = chatDao.getMediaMessageCount()
+                val totalMessages = chatDao.getMessagesCount()
+
+                // Media scan page by page with a lightweight projection (no message bodies).
+                // Media bytes are STREAMED into the zip — never read fully into the heap, so a
+                // large image/video can no longer OOM or stall the whole export.
                 var mediaOffset = 0
                 while (true) {
-                    val mediaPage = chatDao.getMessagesPage(EXPORT_PAGE_SIZE, mediaOffset)
+                    val mediaPage = chatDao.getMediaProjectionPage(EXPORT_PAGE_SIZE, mediaOffset)
                     if (mediaPage.isEmpty()) break
                     for (msg in mediaPage) {
-                    if (msg.images.isEmpty()) continue
                     val surviving = mutableListOf<String>()
                     for ((idx, imgUri) in msg.images.withIndex()) {
-                        try {
-                            val inStream = openImageStream(imgUri)
-                            val bytes = inStream?.readBytes()
-                            inStream?.close()
-                            if (bytes != null && bytes.isNotEmpty()) {
+                        val inStream = openImageStream(imgUri)
+                        if (inStream == null) continue
+                        val copied: Long = inStream.use { stream ->
+                            try {
                                 zip.putNextEntry(ZipEntry("images/${msg.id}/$idx"))
-                                zip.write(bytes)
-                                zip.closeEntry()
-                                surviving.add(imgUri)
+                                stream.copyTo(zip)
+                            } catch (_: Exception) {
+                                runCatching { zip.closeEntry() }
+                                0L
                             }
-                        } catch (_: Exception) {
-                            // File not accessible — drop from export
                         }
+                        if (copied > 0) surviving.add(imgUri)
                     }
                     imagesExportedTotal += surviving.size
                     if (surviving.isNotEmpty()) {
                         imageMap[msg.id] = surviving
                     }
 
-                    // Export video files referenced by attachmentMeta
+                    // Stream video files referenced by attachmentMeta
                     val meta = try {
                         msg.attachmentMeta?.let { Json.decodeFromString<AttachmentMeta>(it) }
                     } catch (_: Exception) { null }
                     if (meta != null) {
                         for (item in meta.items) {
                             if (item.type != "video" || item.originalUri.isNullOrBlank()) continue
-                            val uri = item.originalUri
+                            val videoUri = item.originalUri
                             // Handle file:// URIs (local copies)
-                            if (uri.startsWith("file://")) {
-                                val filePath = uri.removePrefix("file://")
+                            if (videoUri.startsWith("file://")) {
+                                val filePath = videoUri.removePrefix("file://")
                                 val file = java.io.File(filePath)
                                 if (file.exists()) {
                                     try {
-                                        val bytes = file.readBytes()
-                                        if (bytes.isNotEmpty()) {
+                                        file.inputStream().use { stream ->
                                             zip.putNextEntry(ZipEntry("videos/${msg.id}/${item.imageIndex ?: 0}"))
-                                            zip.write(bytes)
+                                            stream.copyTo(zip)
                                             zip.closeEntry()
                                         }
-                                    } catch (_: Exception) {}
+                                    } catch (_: Exception) {
+                                        runCatching { zip.closeEntry() }
+                                    }
                                 }
                             }
                         }
@@ -287,6 +295,10 @@ class DataExporter(
                     }
                     mediaOffset += mediaPage.size
                     if (mediaPage.size < EXPORT_PAGE_SIZE) break
+                    if (totalMediaRows > 0) {
+                        val frac = minOf(1f, mediaOffset.toFloat() / totalMediaRows)
+                        onProgress(convBase + stepWidth * 0.5f * frac)
+                    }
                 }
 
                 val conversations = chatDao.getAllConversationsList().map { c ->
@@ -339,7 +351,7 @@ class DataExporter(
                 var messageOffset = 0
                 var firstMessage = true
                 while (true) {
-                    val page = chatDao.getMessagesPage(EXPORT_PAGE_SIZE, messageOffset)
+                    val page = chatDao.getMessagesPageByRowid(EXPORT_PAGE_SIZE, messageOffset)
                     if (page.isEmpty()) break
                     for (m in page) {
                         if (!firstMessage) writeJson(",")
@@ -353,6 +365,10 @@ class DataExporter(
                     }
                     messageOffset += page.size
                     if (page.size < EXPORT_PAGE_SIZE) break
+                    if (totalMessages > 0) {
+                        val frac = minOf(1f, messageOffset.toFloat() / totalMessages)
+                        onProgress(convBase + stepWidth * (0.5f + 0.5f * frac))
+                    }
                 }
                 writeJson("],\"tasks\":")
                 writeJson(Json.encodeToString(tasks))
