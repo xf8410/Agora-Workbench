@@ -950,6 +950,8 @@
     <string name="settings_github_desc">Sign in, manage private repositories, Actions, Codespaces, and memory sync</string>
     <string name="settings_uma">赛马娘工作台</string>
     <string name="settings_uma_desc">Agora 内置 SO 端点工具、后台监听和游戏浮窗</string>
+    <string name="settings_ramen">收集数据工作台</string>
+    <string name="settings_ramen_desc">juece-ramen 决策数据连接、状态查看与数据清空</string>
 
     <string name="tool_detail_loading">Loading complete tool details…</string>
     <string name="tool_detail_load_failed">Complete tool details could not be loaded.</string>
