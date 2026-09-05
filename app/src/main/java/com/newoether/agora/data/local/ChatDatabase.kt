@@ -504,7 +504,7 @@ interface ChatDao {
     /** Clock-change CAS: only the observed active loop revision/cycle may be moved. */
     @Query(
         """
-        UPDATE loops SET nextFireAt = :replacementNextRunAt
+        UPDATE loops SET nextFireAt = :replacementNextFireAt
         WHERE conversationId = :conversationId AND active = 1
           AND revision = :expectedRevision AND cycleCount = :expectedCycleCount
           AND intervalMs = :expectedIntervalMs AND nextFireAt = :expectedNextFireAt
@@ -516,7 +516,7 @@ interface ChatDao {
         expectedCycleCount: Int,
         expectedIntervalMs: Long,
         expectedNextFireAt: Long,
-        replacementNextRunAt: Long,
+        replacementNextFireAt: Long,
     ): Int
 
     /** Safely quarantines an invalid legacy loop without reviving or clobbering a newer state. */
