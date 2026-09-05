@@ -59,9 +59,13 @@ object RamenDataSourceStore {
         persist { it.putString(KEY_BASE_URL, cachedBaseUrl) }
     }
 
-    private inline fun persist(edit: (android.content.SharedPreferences.Editor) -> Unit) {
+    private fun persist(edit: (android.content.SharedPreferences.Editor) -> Unit) {
         runCatching {
-            prefs?.let { store -> edit(store.edit()).apply() }
+            prefs?.let { store ->
+                val editor = store.edit()
+                edit(editor)
+                editor.apply()
+            }
         }
     }
 }

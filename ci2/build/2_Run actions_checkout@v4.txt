@@ -1,0 +1,240 @@
+﻿2026-09-05T23:12:47.6873974Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-05T23:12:47.6885596Z ##[group]Run actions/checkout@v4
+2026-09-05T23:12:47.6887033Z with:
+2026-09-05T23:12:47.6887921Z   submodules: recursive
+2026-09-05T23:12:47.6888886Z   fetch-depth: 0
+2026-09-05T23:12:47.6889913Z   repository: xf8410/Agora-Workbench
+2026-09-05T23:12:47.6898728Z   token: ***
+2026-09-05T23:12:47.6899781Z   ssh-strict: true
+2026-09-05T23:12:47.6900695Z   ssh-user: git
+2026-09-05T23:12:47.6901606Z   persist-credentials: true
+2026-09-05T23:12:47.6902837Z   clean: true
+2026-09-05T23:12:47.6903816Z   sparse-checkout-cone-mode: true
+2026-09-05T23:12:47.6904997Z   fetch-tags: false
+2026-09-05T23:12:47.6905949Z   show-progress: true
+2026-09-05T23:12:47.6906876Z   lfs: false
+2026-09-05T23:12:47.6907948Z   set-safe-directory: true
+2026-09-05T23:12:47.6909003Z   allow-unsafe-pr-checkout: false
+2026-09-05T23:12:47.6910472Z ##[endgroup]
+2026-09-05T23:12:47.7921300Z Syncing repository: xf8410/Agora-Workbench
+2026-09-05T23:12:47.7925803Z ##[group]Getting Git version info
+2026-09-05T23:12:47.7928471Z Working directory is '/home/runner/work/Agora-Workbench/Agora-Workbench'
+2026-09-05T23:12:47.7932593Z [command]/usr/bin/git version
+2026-09-05T23:12:47.8040209Z git version 2.55.0
+2026-09-05T23:12:47.8063400Z ##[endgroup]
+2026-09-05T23:12:47.8080057Z Temporarily overriding HOME='/home/runner/work/_temp/7a324184-84de-44f8-b73a-4a0873aaf18d' before making global git config changes
+2026-09-05T23:12:47.8085301Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-05T23:12:47.8089109Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Agora-Workbench/Agora-Workbench
+2026-09-05T23:12:47.8140548Z Deleting the contents of '/home/runner/work/Agora-Workbench/Agora-Workbench'
+2026-09-05T23:12:47.8145152Z ##[group]Initializing the repository
+2026-09-05T23:12:47.8149490Z [command]/usr/bin/git init /home/runner/work/Agora-Workbench/Agora-Workbench
+2026-09-05T23:12:47.8300557Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-05T23:12:47.8304682Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-05T23:12:47.8307996Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-05T23:12:47.8310585Z hint: call:
+2026-09-05T23:12:47.8311931Z hint:
+2026-09-05T23:12:47.8313819Z hint: 	git config --global init.defaultBranch <name>
+2026-09-05T23:12:47.8316025Z hint:
+2026-09-05T23:12:47.8317969Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-05T23:12:47.8321174Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-05T23:12:47.8324923Z hint:
+2026-09-05T23:12:47.8326594Z hint: 	git branch -m <name>
+2026-09-05T23:12:47.8408569Z hint:
+2026-09-05T23:12:47.8410917Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-05T23:12:47.8414931Z Initialized empty Git repository in /home/runner/work/Agora-Workbench/Agora-Workbench/.git/
+2026-09-05T23:12:47.8420287Z [command]/usr/bin/git remote add origin https://github.com/xf8410/Agora-Workbench
+2026-09-05T23:12:47.8425270Z ##[endgroup]
+2026-09-05T23:12:47.8427637Z ##[group]Disabling automatic garbage collection
+2026-09-05T23:12:47.8429727Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-05T23:12:47.8438349Z ##[endgroup]
+2026-09-05T23:12:47.8440508Z ##[group]Setting up auth
+2026-09-05T23:12:47.8443039Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-05T23:12:47.8452679Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-05T23:12:47.8884606Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-05T23:12:47.8927266Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-05T23:12:47.9149772Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-05T23:12:47.9188231Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-05T23:12:47.9412395Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-05T23:12:47.9451240Z ##[endgroup]
+2026-09-05T23:12:47.9454098Z ##[group]Fetching the repository
+2026-09-05T23:12:47.9464525Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-09-05T23:12:49.8393972Z From https://github.com/xf8410/Agora-Workbench
+2026-09-05T23:12:49.8394933Z  * [new branch]      main                    -> origin/main
+2026-09-05T23:12:49.8395751Z  * [new branch]      workbench/agent-team-ui -> origin/workbench/agent-team-ui
+2026-09-05T23:12:49.8396773Z  * [new branch]      workbench/agora-reliability-v1 -> origin/workbench/agora-reliability-v1
+2026-09-05T23:12:49.8398101Z  * [new branch]      workbench/chat-history-performance-1.4-fix -> origin/workbench/chat-history-performance-1.4-fix
+2026-09-05T23:12:49.8399731Z  * [new branch]      workbench/complete-long-reasoning-timeout-fix -> origin/workbench/complete-long-reasoning-timeout-fix
+2026-09-05T23:12:49.8401396Z  * [new branch]      workbench/compose-anthropic-stream-usage-20260809 -> origin/workbench/compose-anthropic-stream-usage-20260809
+2026-09-05T23:12:49.8403766Z  * [new branch]      workbench/connect-openai-token-usage-20260809 -> origin/workbench/connect-openai-token-usage-20260809
+2026-09-05T23:12:49.8405191Z  * [new branch]      workbench/consolidate-clone-tool -> origin/workbench/consolidate-clone-tool
+2026-09-05T23:12:49.8406674Z  * [new branch]      workbench/consolidate-missing-features -> origin/workbench/consolidate-missing-features
+2026-09-05T23:12:49.8408246Z  * [new branch]      workbench/continue-missing-features -> origin/workbench/continue-missing-features
+2026-09-05T23:12:49.8409898Z  * [new branch]      workbench/deduplicate-tool-definitions-20260809 -> origin/workbench/deduplicate-tool-definitions-20260809
+2026-09-05T23:12:49.8411450Z  * [new branch]      workbench/dispatch-guardrails -> origin/workbench/dispatch-guardrails
+2026-09-05T23:12:49.8413152Z  * [new branch]      workbench/durable-archive-action-logs -> origin/workbench/durable-archive-action-logs
+2026-09-05T23:12:49.8414744Z  * [new branch]      workbench/emit-mapped-openai-token-usage-20260809 -> origin/workbench/emit-mapped-openai-token-usage-20260809
+2026-09-05T23:12:49.8416394Z  * [new branch]      workbench/enable-zip-bin-attachments -> origin/workbench/enable-zip-bin-attachments
+2026-09-05T23:12:49.8417697Z  * [new branch]      workbench/export-backup-16pct-fix -> origin/workbench/export-backup-16pct-fix
+2026-09-05T23:12:49.8419230Z  * [new branch]      workbench/fix-backup-classification-package-20260818 -> origin/workbench/fix-backup-classification-package-20260818
+2026-09-05T23:12:49.8420876Z  * [new branch]      workbench/fix-backup-import-oom-20260810 -> origin/workbench/fix-backup-import-oom-20260810
+2026-09-05T23:12:49.8422871Z  * [new branch]      workbench/fix-client-resilience-ci -> origin/workbench/fix-client-resilience-ci
+2026-09-05T23:12:49.8424330Z  * [new branch]      workbench/fix-client-resilience-ci-v2 -> origin/workbench/fix-client-resilience-ci-v2
+2026-09-05T23:12:49.8425977Z  * [new branch]      workbench/fix-client-resilience-ci-v3 -> origin/workbench/fix-client-resilience-ci-v3
+2026-09-05T23:12:49.8427441Z  * [new branch]      workbench/fix-client-resilience-ci-v4 -> origin/workbench/fix-client-resilience-ci-v4
+2026-09-05T23:12:49.8429105Z  * [new branch]      workbench/fix-conversation-cross-talk -> origin/workbench/fix-conversation-cross-talk
+2026-09-05T23:12:49.8430448Z  * [new branch]      workbench/fix-github-json-chat-leak -> origin/workbench/fix-github-json-chat-leak
+2026-09-05T23:12:49.8431833Z  * [new branch]      workbench/fix-github-tool-suite-build -> origin/workbench/fix-github-tool-suite-build
+2026-09-05T23:12:49.8433986Z  * [new branch]      workbench/fix-invisible-messages -> origin/workbench/fix-invisible-messages
+2026-09-05T23:12:49.8435389Z  * [new branch]      workbench/fix-log-summary-truncation-20260826 -> origin/workbench/fix-log-summary-truncation-20260826
+2026-09-05T23:12:49.8437027Z  * [new branch]      workbench/fix-long-conversation-durability -> origin/workbench/fix-long-conversation-durability
+2026-09-05T23:12:49.8438887Z  * [new branch]      workbench/fix-main-verification-artifact-upload-20260809 -> origin/workbench/fix-main-verification-artifact-upload-20260809
+2026-09-05T23:12:49.8440646Z  * [new branch]      workbench/fix-negative-snackbar-padding -> origin/workbench/fix-negative-snackbar-padding
+2026-09-05T23:12:49.8442397Z  * [new branch]      workbench/fix-negative-snackbar-padding-v2 -> origin/workbench/fix-negative-snackbar-padding-v2
+2026-09-05T23:12:49.8444025Z  * [new branch]      workbench/fix-openai-think-and-all-read-timeouts -> origin/workbench/fix-openai-think-and-all-read-timeouts
+2026-09-05T23:12:49.8445395Z  * [new branch]      workbench/fix-red-build -> origin/workbench/fix-red-build
+2026-09-05T23:12:49.8446754Z  * [new branch]      workbench/fix-release-dispatch-defaults-20260810 -> origin/workbench/fix-release-dispatch-defaults-20260810
+2026-09-05T23:12:49.8448410Z  * [new branch]      workbench/fix-reply-disappears-on-next-send -> origin/workbench/fix-reply-disappears-on-next-send
+2026-09-05T23:12:49.8450302Z  * [new branch]      workbench/fix-stable-signing-and-latest-release -> origin/workbench/fix-stable-signing-and-latest-release
+2026-09-05T23:12:49.8451734Z  * [new branch]      workbench/fix-uma-read-endpoint -> origin/workbench/fix-uma-read-endpoint
+2026-09-05T23:12:49.8453588Z  * [new branch]      workbench/fix-uma-upload-checkpoint-isolation-20260812 -> origin/workbench/fix-uma-upload-checkpoint-isolation-20260812
+2026-09-05T23:12:49.8455335Z  * [new branch]      workbench/fix-version-release-pipeline -> origin/workbench/fix-version-release-pipeline
+2026-09-05T23:12:49.8456676Z  * [new branch]      workbench/fix-zip-cursor-window -> origin/workbench/fix-zip-cursor-window
+2026-09-05T23:12:49.8457921Z  * [new branch]      workbench/fix-zip-cursor-window-v2 -> origin/workbench/fix-zip-cursor-window-v2
+2026-09-05T23:12:49.8459270Z  * [new branch]      workbench/fork-upstream-pr-workspace -> origin/workbench/fork-upstream-pr-workspace
+2026-09-05T23:12:49.8460851Z  * [new branch]      workbench/generation-ui-timeout-tools-20260818 -> origin/workbench/generation-ui-timeout-tools-20260818
+2026-09-05T23:12:49.8462818Z  * [new branch]      workbench/github-actions-manual-window-20260809 -> origin/workbench/github-actions-manual-window-20260809
+2026-09-05T23:12:49.8464461Z  * [new branch]      workbench/github-actions-status-model-20260809 -> origin/workbench/github-actions-status-model-20260809
+2026-09-05T23:12:49.8465895Z  * [new branch]      workbench/github-binary-upload -> origin/workbench/github-binary-upload
+2026-09-05T23:12:49.8467052Z  * [new branch]      workbench/github-code-editor -> origin/workbench/github-code-editor
+2026-09-05T23:12:49.8468329Z  * [new branch]      workbench/github-create-repository-tool -> origin/workbench/github-create-repository-tool
+2026-09-05T23:12:49.8469719Z  * [new branch]      workbench/github-pr-merge-tools -> origin/workbench/github-pr-merge-tools
+2026-09-05T23:12:49.8470939Z  * [new branch]      workbench/github-task-completion -> origin/workbench/github-task-completion
+2026-09-05T23:12:49.8472393Z  * [new branch]      workbench/github-tool-suite -> origin/workbench/github-tool-suite
+2026-09-05T23:12:49.8473900Z  * [new branch]      workbench/integrate-client-resilience-fixes -> origin/workbench/integrate-client-resilience-fixes
+2026-09-05T23:12:49.8475986Z  * [new branch]      workbench/local-artifact-store-phase1-20260812 -> origin/workbench/local-artifact-store-phase1-20260812
+2026-09-05T23:12:49.8478075Z  * [new branch]      workbench/map-anthropic-token-usage-20260809 -> origin/workbench/map-anthropic-token-usage-20260809
+2026-09-05T23:12:49.8480026Z  * [new branch]      workbench/map-openai-token-usage-20260809 -> origin/workbench/map-openai-token-usage-20260809
+2026-09-05T23:12:49.8481715Z  * [new branch]      workbench/mobile-long-stream-performance-20260814 -> origin/workbench/mobile-long-stream-performance-20260814
+2026-09-05T23:12:49.8483436Z  * [new branch]      workbench/multiagent-team -> origin/workbench/multiagent-team
+2026-09-05T23:12:49.8484655Z  * [new branch]      workbench/pc-ramen-test-workbench -> origin/workbench/pc-ramen-test-workbench
+2026-09-05T23:12:49.8486362Z  * [new branch]      workbench/pr-close-and-upstream-resolver -> origin/workbench/pr-close-and-upstream-resolver
+2026-09-05T23:12:49.8487951Z  * [new branch]      workbench/project-aware-code-intelligence -> origin/workbench/project-aware-code-intelligence
+2026-09-05T23:12:49.8489436Z  * [new branch]      workbench/public-repository-browser -> origin/workbench/public-repository-browser
+2026-09-05T23:12:49.8490651Z  * [new branch]      workbench/ramen-datasource -> origin/workbench/ramen-datasource
+2026-09-05T23:12:49.8492285Z  * [new branch]      workbench/register-manual-main-build-20260811 -> origin/workbench/register-manual-main-build-20260811
+2026-09-05T23:12:49.8494125Z  * [new branch]      workbench/register-uma-session-export-tools-20260810 -> origin/workbench/register-uma-session-export-tools-20260810
+2026-09-05T23:12:49.8495823Z  * [new branch]      workbench/release-1.4.6-current-main -> origin/workbench/release-1.4.6-current-main
+2026-09-05T23:12:49.8497306Z  * [new branch]      workbench/release-1.4.7 -> origin/workbench/release-1.4.7
+2026-09-05T23:12:49.8498634Z  * [new branch]      workbench/release-1.4.8-session-upload-20260810 -> origin/workbench/release-1.4.8-session-upload-20260810
+2026-09-05T23:12:49.8500053Z  * [new branch]      workbench/release-1.4.9-defaults -> origin/workbench/release-1.4.9-defaults
+2026-09-05T23:12:49.8501125Z  * [new branch]      workbench/release-1.5.1 -> origin/workbench/release-1.5.1
+2026-09-05T23:12:49.8502969Z  * [new branch]      workbench/remove-about-page -> origin/workbench/remove-about-page
+2026-09-05T23:12:49.8504333Z  * [new branch]      workbench/remove-stream-read-hard-timeout -> origin/workbench/remove-stream-read-hard-timeout
+2026-09-05T23:12:49.8505814Z  * [new branch]      workbench/repo-hygiene-cleanup-20260826 -> origin/workbench/repo-hygiene-cleanup-20260826
+2026-09-05T23:12:49.8507343Z  * [new branch]      workbench/root-fix-conversation-loss-v5 -> origin/workbench/root-fix-conversation-loss-v5
+2026-09-05T23:12:49.8508963Z  * [new branch]      workbench/root-fix-conversation-loss-v5-phase2 -> origin/workbench/root-fix-conversation-loss-v5-phase2
+2026-09-05T23:12:49.8511040Z  * [new branch]      workbench/root-fix-conversation-loss-v5-phase3 -> origin/workbench/root-fix-conversation-loss-v5-phase3
+2026-09-05T23:12:49.8513658Z  * [new branch]      workbench/root-fix-conversation-loss-v5-phase4 -> origin/workbench/root-fix-conversation-loss-v5-phase4
+2026-09-05T23:12:49.8518871Z  * [new branch]      workbench/root-fix-conversation-loss-v5-phase4-bounded -> origin/workbench/root-fix-conversation-loss-v5-phase4-bounded
+2026-09-05T23:12:49.8521055Z  * [new branch]      workbench/root-fix-conversation-loss-v5-phase5-tests-scroll-anchor -> origin/workbench/root-fix-conversation-loss-v5-phase5-tests-scroll-anchor
+2026-09-05T23:12:49.8523273Z  * [new branch]      workbench/root-fix-release-tools-phase1 -> origin/workbench/root-fix-release-tools-phase1
+2026-09-05T23:12:49.8524704Z  * [new branch]      workbench/separate-public-repo-read -> origin/workbench/separate-public-repo-read
+2026-09-05T23:12:49.8526436Z  * [new branch]      workbench/session-usage-dashboard-20260813 -> origin/workbench/session-usage-dashboard-20260813
+2026-09-05T23:12:49.8527751Z  * [new branch]      workbench/sign-1.4.7-debug -> origin/workbench/sign-1.4.7-debug
+2026-09-05T23:12:49.8529075Z  * [new branch]      workbench/spreadsheet-attachments-20260807 -> origin/workbench/spreadsheet-attachments-20260807
+2026-09-05T23:12:49.8530688Z  * [new branch]      workbench/spreadsheet-attachments-v2-20260807 -> origin/workbench/spreadsheet-attachments-v2-20260807
+2026-09-05T23:12:49.8532580Z  * [new branch]      workbench/stop-interrupt-draft-loss-20260826 -> origin/workbench/stop-interrupt-draft-loss-20260826
+2026-09-05T23:12:49.8534094Z  * [new branch]      workbench/todo-history-blank-sniff -> origin/workbench/todo-history-blank-sniff
+2026-09-05T23:12:49.8535310Z  * [new branch]      workbench/token-usage-port -> origin/workbench/token-usage-port
+2026-09-05T23:12:49.8536734Z  * [new branch]      workbench/tool-detail-overlap-fix-20260826 -> origin/workbench/tool-detail-overlap-fix-20260826
+2026-09-05T23:12:49.8538115Z  * [new branch]      workbench/tool-memory-chat-fix -> origin/workbench/tool-memory-chat-fix
+2026-09-05T23:12:49.8539511Z  * [new branch]      workbench/uma-binary-session-export-20260810 -> origin/workbench/uma-binary-session-export-20260810
+2026-09-05T23:12:49.8540910Z  * [new branch]      workbench/uma-broad-local-reader -> origin/workbench/uma-broad-local-reader
+2026-09-05T23:12:49.8542715Z  * [new branch]      workbench/uma-export-download-tree-signing-20260811 -> origin/workbench/uma-export-download-tree-signing-20260811
+2026-09-05T23:12:49.8544414Z  * [new branch]      workbench/uma-export-picker-tree-batching -> origin/workbench/uma-export-picker-tree-batching
+2026-09-05T23:12:49.8545918Z  * [new branch]      workbench/uma-git-blob-upload-20260810 -> origin/workbench/uma-git-blob-upload-20260810
+2026-09-05T23:12:49.8547533Z  * [new branch]      workbench/uma-git-tree-20260810 -> origin/workbench/uma-git-tree-20260810
+2026-09-05T23:12:49.8548826Z  * [new branch]      workbench/uma-overlay-capture-toggle -> origin/workbench/uma-overlay-capture-toggle
+2026-09-05T23:12:49.8550482Z  * [new branch]      workbench/uma-session-batched-upload-progress-20260811 -> origin/workbench/uma-session-batched-upload-progress-20260811
+2026-09-05T23:12:49.8552689Z  * [new branch]      workbench/uma-session-complete-upload-json-20260810 -> origin/workbench/uma-session-complete-upload-json-20260810
+2026-09-05T23:12:49.8554417Z  * [new branch]      workbench/uma-session-export-resume-20260810 -> origin/workbench/uma-session-export-resume-20260810
+2026-09-05T23:12:49.8556146Z  * [new branch]      workbench/uma-session-github-upload-pipeline-20260810 -> origin/workbench/uma-session-github-upload-pipeline-20260810
+2026-09-05T23:12:49.8558215Z  * [new branch]      workbench/uma-session-github-upload-tool-20260810 -> origin/workbench/uma-session-github-upload-tool-20260810
+2026-09-05T23:12:49.8559848Z  * [new branch]      workbench/uma-session-msgpack-json-20260810 -> origin/workbench/uma-session-msgpack-json-20260810
+2026-09-05T23:12:49.8561344Z  * [new branch]      workbench/uma-session-zip-export-20260810 -> origin/workbench/uma-session-zip-export-20260810
+2026-09-05T23:12:49.8563184Z  * [new branch]      workbench/uma-storage-files-pagination-20260810 -> origin/workbench/uma-storage-files-pagination-20260810
+2026-09-05T23:12:49.8564772Z  * [new branch]      workbench/uma-upload-durable-restart-20260826 -> origin/workbench/uma-upload-durable-restart-20260826
+2026-09-05T23:12:49.8566299Z  * [new branch]      workbench/unified-token-usage-model-20260809 -> origin/workbench/unified-token-usage-model-20260809
+2026-09-05T23:12:49.8567793Z  * [new branch]      workbench/upstream-sync-conflict-resolution -> origin/workbench/upstream-sync-conflict-resolution
+2026-09-05T23:12:49.8568977Z  * [new branch]      workbench/v3-release    -> origin/workbench/v3-release
+2026-09-05T23:12:49.8570008Z  * [new branch]      workbench/workspace-lane-sync-ui -> origin/workbench/workspace-lane-sync-ui
+2026-09-05T23:12:49.8571453Z  * [new branch]      workbench/workspace-persistent-chat -> origin/workbench/workspace-persistent-chat
+2026-09-05T23:12:49.8572939Z  * [new branch]      workbench/zip-attachments-final -> origin/workbench/zip-attachments-final
+2026-09-05T23:12:49.8574172Z  * [new branch]      workbench/zip-attachments-no-limits -> origin/workbench/zip-attachments-no-limits
+2026-09-05T23:12:49.8575492Z  * [new branch]      workbench/zip-attachments-no-limits-v2 -> origin/workbench/zip-attachments-no-limits-v2
+2026-09-05T23:12:49.8576846Z  * [new branch]      workbench/zip-attachments-no-limits-v3 -> origin/workbench/zip-attachments-no-limits-v3
+2026-09-05T23:12:49.8578203Z  * [new branch]      workbench/zip-attachments-unrestricted -> origin/workbench/zip-attachments-unrestricted
+2026-09-05T23:12:49.8579286Z  * [new tag]         v1.3.8-workbench        -> v1.3.8-workbench
+2026-09-05T23:12:49.8579996Z  * [new tag]         v1.3.9-workbench        -> v1.3.9-workbench
+2026-09-05T23:12:49.8580735Z  * [new tag]         v1.4.0-workbench        -> v1.4.0-workbench
+2026-09-05T23:12:49.8581468Z  * [new tag]         v1.4.2-workbench        -> v1.4.2-workbench
+2026-09-05T23:12:49.8582447Z  * [new tag]         v1.4.3-workbench        -> v1.4.3-workbench
+2026-09-05T23:12:49.8583096Z  * [new tag]         v1.4.4-workbench        -> v1.4.4-workbench
+2026-09-05T23:12:49.8583738Z  * [new tag]         v1.4.6-workbench        -> v1.4.6-workbench
+2026-09-05T23:12:49.8584398Z  * [new tag]         v1.4.7-workbench        -> v1.4.7-workbench
+2026-09-05T23:12:49.8585058Z  * [new tag]         v1.4.8-workbench        -> v1.4.8-workbench
+2026-09-05T23:12:49.8585713Z  * [new tag]         v1.4.9-workbench        -> v1.4.9-workbench
+2026-09-05T23:12:49.8586378Z  * [new tag]         v1.5.0-workbench        -> v1.5.0-workbench
+2026-09-05T23:12:49.8587368Z  * [new tag]         workbench-latest        -> workbench-latest
+2026-09-05T23:12:49.8588134Z  * [new tag]         workbench-signing-key   -> workbench-signing-key
+2026-09-05T23:12:49.8590240Z [command]/usr/bin/git branch --list --remote origin/workbench/ramen-datasource
+2026-09-05T23:12:49.8591072Z   origin/workbench/ramen-datasource
+2026-09-05T23:12:49.8592711Z [command]/usr/bin/git rev-parse refs/remotes/origin/workbench/ramen-datasource
+2026-09-05T23:12:49.8593493Z edd69bf0e32189e58781d3790b41f0e3d0f65dfd
+2026-09-05T23:12:49.8594824Z ##[endgroup]
+2026-09-05T23:12:49.8595492Z ##[group]Determining the checkout info
+2026-09-05T23:12:49.8596234Z ##[endgroup]
+2026-09-05T23:12:49.8596659Z [command]/usr/bin/git sparse-checkout disable
+2026-09-05T23:12:49.8604794Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-05T23:12:49.8653767Z ##[group]Checking out the ref
+2026-09-05T23:12:49.8654781Z [command]/usr/bin/git checkout --progress --force -B workbench/ramen-datasource refs/remotes/origin/workbench/ramen-datasource
+2026-09-05T23:12:50.1566672Z Switched to a new branch 'workbench/ramen-datasource'
+2026-09-05T23:12:50.1572193Z branch 'workbench/ramen-datasource' set up to track 'origin/workbench/ramen-datasource'.
+2026-09-05T23:12:50.1587680Z ##[endgroup]
+2026-09-05T23:12:50.1588315Z ##[group]Setting up auth for fetching submodules
+2026-09-05T23:12:50.1594807Z [command]/usr/bin/git config --global http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-05T23:12:50.1636785Z [command]/usr/bin/git config --global --unset-all url.https://github.com/.insteadOf
+2026-09-05T23:12:50.1672458Z [command]/usr/bin/git config --global --add url.https://github.com/.insteadOf git@github.com:
+2026-09-05T23:12:50.1721444Z [command]/usr/bin/git config --global --add url.https://github.com/.insteadOf org-198759476@github.com:
+2026-09-05T23:12:50.1736682Z ##[endgroup]
+2026-09-05T23:12:50.1737534Z ##[group]Fetching submodules
+2026-09-05T23:12:50.1740128Z [command]/usr/bin/git submodule sync --recursive
+2026-09-05T23:12:50.2003044Z [command]/usr/bin/git -c protocol.version=2 submodule update --init --force --recursive
+2026-09-05T23:12:50.2214701Z Submodule 'thirdparty/llama.cpp' (https://github.com/ggml-org/llama.cpp.git) registered for path 'thirdparty/llama.cpp'
+2026-09-05T23:12:50.2219268Z Submodule 'thirdparty/proot' (https://github.com/termux/proot.git) registered for path 'thirdparty/proot'
+2026-09-05T23:12:50.2253168Z Cloning into '/home/runner/work/Agora-Workbench/Agora-Workbench/thirdparty/llama.cpp'...
+2026-09-05T23:13:07.7102272Z Cloning into '/home/runner/work/Agora-Workbench/Agora-Workbench/thirdparty/proot'...
+2026-09-05T23:13:09.8624706Z Submodule path 'thirdparty/llama.cpp': checked out '00d56b11c3477b99bc18562dc1d1834f0d961778'
+2026-09-05T23:13:09.8909252Z Submodule path 'thirdparty/proot': checked out 'a7147b50d708567dbf884d21e0f0c8698bba0d10'
+2026-09-05T23:13:09.8943628Z [command]/usr/bin/git submodule foreach --recursive git config --local gc.auto 0
+2026-09-05T23:13:09.9162796Z Entering 'thirdparty/llama.cpp'
+2026-09-05T23:13:09.9204753Z Entering 'thirdparty/proot'
+2026-09-05T23:13:09.9249633Z ##[endgroup]
+2026-09-05T23:13:09.9250296Z ##[group]Persisting credentials for submodules
+2026-09-05T23:13:09.9257848Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'url\.https\:\/\/github\.com\/\.insteadOf' && git config --local --unset-all 'url.https://github.com/.insteadOf' || :"
+2026-09-05T23:13:09.9470546Z Entering 'thirdparty/llama.cpp'
+2026-09-05T23:13:09.9516926Z Entering 'thirdparty/proot'
+2026-09-05T23:13:09.9573127Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local 'http.https://github.com/.extraheader' 'AUTHORIZATION: basic ***' && git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-09-05T23:13:09.9785487Z Entering 'thirdparty/llama.cpp'
+2026-09-05T23:13:09.9823427Z file:/home/runner/work/Agora-Workbench/Agora-Workbench/.git/modules/thirdparty/llama.cpp/config	remote.origin.url
+2026-09-05T23:13:09.9845733Z Entering 'thirdparty/proot'
+2026-09-05T23:13:09.9883665Z file:/home/runner/work/Agora-Workbench/Agora-Workbench/.git/modules/thirdparty/proot/config	remote.origin.url
+2026-09-05T23:13:09.9925972Z [command]/usr/bin/git submodule foreach --recursive git config --local --add 'url.https://github.com/.insteadOf' 'git@github.com:'
+2026-09-05T23:13:10.0137610Z Entering 'thirdparty/llama.cpp'
+2026-09-05T23:13:10.0179227Z Entering 'thirdparty/proot'
+2026-09-05T23:13:10.0230206Z [command]/usr/bin/git submodule foreach --recursive git config --local --add 'url.https://github.com/.insteadOf' 'org-198759476@github.com:'
+2026-09-05T23:13:10.0442612Z Entering 'thirdparty/llama.cpp'
+2026-09-05T23:13:10.0487026Z Entering 'thirdparty/proot'
+2026-09-05T23:13:10.0536447Z ##[endgroup]
+2026-09-05T23:13:10.0586079Z [command]/usr/bin/git log -1 --format=%H
+2026-09-05T23:13:10.0616231Z edd69bf0e32189e58781d3790b41f0e3d0f65dfd

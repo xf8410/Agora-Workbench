@@ -1,0 +1,22 @@
+﻿2026-09-05T23:13:44.2535062Z ##[group]Run mkdir -p ci-logs
+2026-09-05T23:13:44.2535453Z [36;1mmkdir -p ci-logs[0m
+2026-09-05T23:13:44.2535744Z [36;1mcat > ci-logs/manifest.json <<EOF[0m
+2026-09-05T23:13:44.2536058Z [36;1m{[0m
+2026-09-05T23:13:44.2536297Z [36;1m  "repository": "${GITHUB_REPOSITORY}",[0m
+2026-09-05T23:13:44.2536617Z [36;1m  "workflow": "${GITHUB_WORKFLOW}",[0m
+2026-09-05T23:13:44.2536925Z [36;1m  "run_id": "${GITHUB_RUN_ID}",[0m
+2026-09-05T23:13:44.2537240Z [36;1m  "run_attempt": "${GITHUB_RUN_ATTEMPT}",[0m
+2026-09-05T23:13:44.2537554Z [36;1m  "event": "${GITHUB_EVENT_NAME}",[0m
+2026-09-05T23:13:44.2537838Z [36;1m  "ref": "${GITHUB_REF}",[0m
+2026-09-05T23:13:44.2538104Z [36;1m  "head_sha": "${GITHUB_SHA}",[0m
+2026-09-05T23:13:44.2538386Z [36;1m  "actor": "${GITHUB_ACTOR}",[0m
+2026-09-05T23:13:44.2538815Z [36;1m  "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"[0m
+2026-09-05T23:13:44.2539237Z [36;1m}[0m
+2026-09-05T23:13:44.2539425Z [36;1mEOF[0m
+2026-09-05T23:13:44.2576952Z shell: /usr/bin/bash -e {0}
+2026-09-05T23:13:44.2577220Z env:
+2026-09-05T23:13:44.2577542Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:13:44.2578054Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:13:44.2578464Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-09-05T23:13:44.2578782Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-09-05T23:13:44.2579111Z ##[endgroup]

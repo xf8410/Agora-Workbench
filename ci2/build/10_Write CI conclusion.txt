@@ -1,0 +1,19 @@
+﻿2026-09-05T23:15:01.3900246Z ##[group]Run cat > ci-logs/conclusion.txt <<EOF
+2026-09-05T23:15:01.3900642Z [36;1mcat > ci-logs/conclusion.txt <<EOF[0m
+2026-09-05T23:15:01.3900955Z [36;1munit_tests=${UNIT_OUTCOME}[0m
+2026-09-05T23:15:01.3901227Z [36;1mbuild_apk=${BUILD_OUTCOME}[0m
+2026-09-05T23:15:01.3901495Z [36;1mverify_apk=${VERIFY_OUTCOME}[0m
+2026-09-05T23:15:01.3901929Z [36;1mEOF[0m
+2026-09-05T23:15:01.3902565Z [36;1mcp -R app/build/reports/tests ci-logs/test-reports 2>/dev/null || true[0m
+2026-09-05T23:15:01.3903087Z [36;1mcp -R app/build/test-results ci-logs/test-results 2>/dev/null || true[0m
+2026-09-05T23:15:01.3903536Z [36;1mcat ci-logs/conclusion.txt >> "$GITHUB_STEP_SUMMARY"[0m
+2026-09-05T23:15:01.3940039Z shell: /usr/bin/bash -e {0}
+2026-09-05T23:15:01.3940294Z env:
+2026-09-05T23:15:01.3940606Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:15:01.3941119Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:15:01.3941531Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-09-05T23:15:01.3941885Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-09-05T23:15:01.3942435Z   UNIT_OUTCOME: failure
+2026-09-05T23:15:01.3942664Z   BUILD_OUTCOME: skipped
+2026-09-05T23:15:01.3942890Z   VERIFY_OUTCOME: skipped
+2026-09-05T23:15:01.3943118Z ##[endgroup]
