@@ -63,11 +63,13 @@ data class UmaGitCommitResult(
 class UmaGitCommitClient(
     private val client: GitHubApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true },
+    /** Branch policy hook; defaults to the session-archive workbench/* rule. */
+    private val requireBranch: (String) -> String = ::requireUmaWorkbenchBranch,
 ) {
     suspend fun readBranchBase(repo: String, branch: String): UmaGitBranchBase =
         withContext(Dispatchers.IO) {
             val safeRepo = client.validateRepo(repo)
-            val safeBranch = requireUmaWorkbenchBranch(branch)
+            val safeBranch = requireBranch(branch)
             val ref = requestObject(
                 "GET",
                 "/repos/$safeRepo/git/ref/heads/${client.encodeSegment(safeBranch)}",
@@ -87,7 +89,7 @@ class UmaGitCommitClient(
         message: String,
     ): UmaGitCommitResult = withContext(Dispatchers.IO) {
         val safeRepo = client.validateRepo(repo)
-        val safeBranch = requireUmaWorkbenchBranch(base.branch)
+        val safeBranch = requireBranch(base.branch)
         require(UMA_GIT_SHA_PATTERN.matches(base.headCommitSha)) { "invalid expected head SHA" }
         require(UMA_GIT_SHA_PATTERN.matches(base.treeSha)) { "invalid base tree SHA" }
         require(UMA_GIT_SHA_PATTERN.matches(newTreeSha)) { "invalid new tree SHA" }
