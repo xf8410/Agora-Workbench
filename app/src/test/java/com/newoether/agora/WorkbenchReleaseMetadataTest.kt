@@ -6,9 +6,9 @@ import java.io.File
 
 class WorkbenchReleaseMetadataTest {
     @Test
-    fun releaseVersion_isWorkbench146() {
+    fun releaseVersion_isWorkbench147() {
         val gradle = File("build.gradle.kts").readText()
-        assertTrue(gradle.contains("versionCode = 34"))
-        assertTrue(gradle.contains("versionName = \"1.4.6-workbench\""))
+        assertTrue(gradle.contains("versionCode = 35"))
+        assertTrue(gradle.contains("versionName = \"1.4.7-workbench\""))
     }
 }
