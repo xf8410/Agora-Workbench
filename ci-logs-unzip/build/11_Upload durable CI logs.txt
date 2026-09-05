@@ -1,0 +1,30 @@
+﻿2026-09-05T23:09:55.8460633Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-05T23:09:55.8461490Z ##[group]Run actions/upload-artifact@v4
+2026-09-05T23:09:55.8461695Z with:
+2026-09-05T23:09:55.8461929Z   name: ci-logs-33997827457-1-cc61bef35cb3ff988ae8a43b9ca45791f3fddc61
+2026-09-05T23:09:55.8462203Z   path: ci-logs/
+2026-09-05T23:09:55.8462376Z   if-no-files-found: error
+2026-09-05T23:09:55.8462557Z   retention-days: 90
+2026-09-05T23:09:55.8462734Z   compression-level: 6
+2026-09-05T23:09:55.8462917Z   overwrite: false
+2026-09-05T23:09:55.8463082Z   include-hidden-files: false
+2026-09-05T23:09:55.8463253Z env:
+2026-09-05T23:09:55.8463500Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:09:55.8463848Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:09:55.8464170Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-09-05T23:09:55.8464391Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-09-05T23:09:55.8464596Z ##[endgroup]
+2026-09-05T23:09:55.9761579Z (node:2922) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-05T23:09:55.9762468Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-05T23:09:55.9840442Z With the provided path, there will be 3 files uploaded
+2026-09-05T23:09:55.9841192Z Artifact name is valid!
+2026-09-05T23:09:55.9841531Z Root directory input is valid!
+2026-09-05T23:09:56.2606449Z Beginning upload of artifact content to blob storage
+2026-09-05T23:09:56.2784961Z (node:2922) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-05T23:09:56.4556901Z Uploaded bytes 30292
+2026-09-05T23:09:56.4965429Z Finished uploading artifact content to blob storage!
+2026-09-05T23:09:56.4966691Z SHA256 digest of uploaded artifact zip is bf5d6f5792cec2119bf13b3b759ef8079d36ee42ce661bab3c979a0be487ed1c
+2026-09-05T23:09:56.4967432Z Finalizing artifact upload
+2026-09-05T23:09:56.7843175Z Artifact ci-logs-33997827457-1-cc61bef35cb3ff988ae8a43b9ca45791f3fddc61.zip successfully finalized. Artifact ID 9978606566
+2026-09-05T23:09:56.7844446Z Artifact ci-logs-33997827457-1-cc61bef35cb3ff988ae8a43b9ca45791f3fddc61 has been successfully uploaded! Final size is 30292 bytes. Artifact ID is 9978606566
+2026-09-05T23:09:56.7848999Z Artifact download URL: https://github.com/xf8410/Agora-Workbench/actions/runs/33997827457/artifacts/9978606566

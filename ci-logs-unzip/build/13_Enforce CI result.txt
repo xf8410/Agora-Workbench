@@ -1,0 +1,15 @@
+﻿2026-09-05T23:09:56.7940579Z ##[group]Run test "$UNIT_OUTCOME" = success
+2026-09-05T23:09:56.7940876Z [36;1mtest "$UNIT_OUTCOME" = success[0m
+2026-09-05T23:09:56.7941107Z [36;1mtest "$BUILD_OUTCOME" = success[0m
+2026-09-05T23:09:56.7941327Z [36;1mtest "$VERIFY_OUTCOME" = success[0m
+2026-09-05T23:09:56.7964559Z shell: /usr/bin/bash -e {0}
+2026-09-05T23:09:56.7964773Z env:
+2026-09-05T23:09:56.7965027Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:09:56.7965388Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+2026-09-05T23:09:56.7965719Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-09-05T23:09:56.7965959Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-09-05T23:09:56.7966178Z   UNIT_OUTCOME: failure
+2026-09-05T23:09:56.7966362Z   BUILD_OUTCOME: skipped
+2026-09-05T23:09:56.7966561Z   VERIFY_OUTCOME: skipped
+2026-09-05T23:09:56.7966739Z ##[endgroup]
+2026-09-05T23:09:56.8005220Z ##[error]Process completed with exit code 1.

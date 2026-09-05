@@ -63,7 +63,7 @@ data class UmaGitCommitResult(
 class UmaGitCommitClient(
     private val client: GitHubApiClient,
     private val json: Json = Json { ignoreUnknownKeys = true },
-    /** Branch policy hook; defaults to the session-archive workbench/* rule. */
+    /** Branch policy hook; defaults to the session-archive workbench-branch rule. */
     private val requireBranch: (String) -> String = ::requireUmaWorkbenchBranch,
 ) {
     suspend fun readBranchBase(repo: String, branch: String): UmaGitBranchBase =

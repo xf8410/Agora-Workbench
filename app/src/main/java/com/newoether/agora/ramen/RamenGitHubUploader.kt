@@ -67,7 +67,7 @@ internal fun ramenUuid8(): String = UUID.randomUUID().toString().substring(0, 8)
 internal fun ramenCommitMessage(recordCount: Int): String =
     "${Constants.RAMEN_UPLOAD_COMMIT_MESSAGE_PREFIX} $recordCount 条决策记录"
 
-/** The ramen data repository commits to its fixed main branch, unlike workbench/* session archives. */
+/** The ramen data repository commits to its fixed main branch, unlike workbench-branch session archives. */
 internal fun requireRamenUploadBranch(branch: String): String {
     require(branch == Constants.RAMEN_UPLOAD_BRANCH) {
         "ramen uploads must target the fixed ${Constants.RAMEN_UPLOAD_BRANCH} branch"
