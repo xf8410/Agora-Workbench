@@ -94,6 +94,7 @@ class ToolProviderRegistrationTest {
             "GitHubBranchMutationToolProvider",
             "GitHubCloneToolProvider",
             "UmaToolProvider",
+            "RamenToolProvider",
             "ShellToolProvider",
         )
         assertEquals(

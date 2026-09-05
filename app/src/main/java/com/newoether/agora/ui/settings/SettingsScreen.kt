@@ -185,6 +185,7 @@ private val settingsGroups = listOf(
         SettingsCategory("github", R.string.settings_github, R.string.settings_github_desc, Icons.Default.Code),
         SettingsCategory("agents", icon = Icons.Default.Groups, title = "多智能体接力", description = "为对话配置多个 AI，按顺序接力生成一条回复"),
         SettingsCategory("uma", R.string.settings_uma, R.string.settings_uma_desc, Icons.Default.Sports),
+        SettingsCategory("ramen", R.string.settings_ramen, R.string.settings_ramen_desc, Icons.Default.RamenDining),
         SettingsCategory("automation", R.string.settings_automation, R.string.settings_automation_desc, Icons.Default.Repeat),
     )),
     SettingsGroupData(titleRes = R.string.settings_group_network, items = listOf(
@@ -241,6 +242,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 "github" -> SettingsGitHubPage(onBack = { selectedCategory = null })
                 "agents" -> SettingsAgentsPage(viewModel, onBack = { selectedCategory = null })
                 "uma" -> SettingsUmaPage(viewModel, onBack = { selectedCategory = null })
+                "ramen" -> SettingsRamenPage(viewModel, onBack = { selectedCategory = null })
                 "automation" -> SettingsAutomationPage(viewModel, onBack = { selectedCategory = null })
                 "proxy" -> SettingsProxyPage(viewModel, onBack = { selectedCategory = null })
                 "language" -> SettingsLanguagePage(viewModel, onBack = { selectedCategory = null })
