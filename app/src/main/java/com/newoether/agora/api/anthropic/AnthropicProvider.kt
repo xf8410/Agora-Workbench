@@ -336,6 +336,12 @@ class AnthropicProvider : LlmProvider {
                                             emit(StreamEvent.UsageUpdate(total))
                                         }
                                     }
+                                    "message_stop" -> {
+                                        // Terminal Anthropic SSE event. Exit the read loop here
+                                        // instead of waiting for the server to close the (possibly
+                                        // keep-alive) connection after the answer completed.
+                                        break
+                                    }
                                 }
                             } catch (e: Exception) {
                                 DebugLog.e("AgoraAPI", "Parse error: ${e.message}", e)
