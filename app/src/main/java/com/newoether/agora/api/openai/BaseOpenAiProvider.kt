@@ -22,6 +22,13 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 abstract class BaseOpenAiProvider : LlmProvider {
+    private companion object {
+        /** Bounded wait for [DONE] / trailing usage once the terminal finish_reason arrived. */
+        const val POST_TERMINAL_READ_SECONDS = 3L
+        /** Line cap for the post-terminal tail so a chatty server cannot pin the stream open. */
+        const val POST_TERMINAL_MAX_LINES = 20
+    }
+
     protected val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
 
     protected open fun customizeRequest(request: OpenAiChatRequest, config: ProviderConfig): OpenAiChatRequest = request
@@ -152,16 +159,47 @@ abstract class BaseOpenAiProvider : LlmProvider {
             emit(event)
         }
         var structuredToolCallsEmitted = false
+        // Post-terminal tail state. The stream read timeout is unlimited (slow-thinking models
+        // must never be cut off mid-stream), so once the terminal finish_reason is seen the
+        // socket read timeout is tightened and remaining reads are line-capped — otherwise a
+        // server that omits [DONE] and holds the keep-alive connection open would block this
+        // loop forever after the answer already completed (UI stuck "generating" until Stop).
+        var sawTerminalFinish = false
+        var tailLineCount = 0
+
+        /** Emits accumulated structured tool calls; true when anything was emitted. */
+        suspend fun flushPendingToolCalls(): Boolean {
+            val calls = pendingToolCalls.values.filter { it.name.isNotEmpty() }.map {
+                StreamEvent.ToolCallRequest(
+                    id = it.id.ifBlank { syntheticToolCallId() },
+                    name = it.name,
+                    arguments = it.args.toString(),
+                )
+            }
+            pendingToolCalls.clear()
+            if (calls.isEmpty()) return false
+            if (calls.size == 1) emit(calls.first())
+            else emit(StreamEvent.ToolCallsRequest(calls))
+            return true
+        }
 
         while (currentCoroutineContext().isActive) {
             val line = try {
                 handle.readLine()
             } catch (e: SocketTimeoutException) {
+                // Mid-stream gaps (slow first token, long thinking) keep waiting; only the
+                // post-terminal tail treats a read timeout as end-of-stream.
                 if (!currentCoroutineContext().isActive) break
+                if (sawTerminalFinish) break
                 continue
             } ?: break
-            if (!line.startsWith("data: ")) continue
-            val jsonStr = line.substring(6).trim()
+            if (sawTerminalFinish) {
+                tailLineCount++
+                if (tailLineCount > POST_TERMINAL_MAX_LINES) break
+            }
+            // SSE spec allows "data:" with or without the trailing space.
+            if (!line.startsWith("data:")) continue
+            val jsonStr = line.substring(5).trim()
             if (jsonStr == "[DONE]") break
             try {
                 val response = json.decodeFromString<OpenAiStreamResponse>(jsonStr)
@@ -169,25 +207,38 @@ abstract class BaseOpenAiProvider : LlmProvider {
                 choice?.delta?.let { delta ->
                     parseDeltaContent(delta, config, thinkParser, emitAndAccumulate)
                     delta.toolCalls?.forEach { tc ->
-                        val existing = if (tc.id != null) pendingToolCalls.values.firstOrNull { it.id == tc.id } else null
+                        val existing = if (!tc.id.isNullOrBlank()) pendingToolCalls.values.firstOrNull { it.id == tc.id } else null
                         val pending = existing ?: run {
-                            val idx = tc.index ?: pendingToolCalls.size
+                            val idx = when {
+                                tc.index != null -> tc.index
+                                pendingToolCalls.isEmpty() -> 0
+                                // Deltas carrying neither index nor id belong to the most recent
+                                // (still-active) tool call — allocating a fresh slot here would
+                                // strand every argument chunk on a nameless call, which the
+                                // emit filter then drops (lost tool arguments).
+                                else -> pendingToolCalls.keys.max()
+                            }
                             pendingToolCalls.getOrPut(idx) { PendingToolCall() }
                         }
-                        if (tc.id != null) pending.id = tc.id
+                        if (!tc.id.isNullOrBlank()) pending.id = tc.id
                         tc.function?.name?.let { if (it.isNotEmpty()) pending.name = it }
                         tc.function?.arguments?.let { pending.args.append(if (it is JsonPrimitive) it.content else it.toString()) }
                     }
                 }
                 if (choice?.finishReason == "tool_calls" && pendingToolCalls.isNotEmpty()) {
-                    val calls = pendingToolCalls.values.filter { it.name.isNotEmpty() }.map {
-                        StreamEvent.ToolCallRequest(it.id, it.name, it.args.toString())
-                    }
-                    pendingToolCalls.clear()
-                    if (calls.size == 1) { structuredToolCallsEmitted = true; emit(calls.first()) }
-                    else if (calls.size > 1) { structuredToolCallsEmitted = true; emit(StreamEvent.ToolCallsRequest(calls)) }
+                    if (flushPendingToolCalls()) structuredToolCallsEmitted = true
                 }
                 response.usage?.let { emit(StreamEvent.UsageUpdate(it.toTokenUsage())) }
+                if (isTerminalOpenAiSseLine(line)) {
+                    // Terminal line was still delivered and parsed above (usage / final tool
+                    // metadata). Switch to the bounded tail: [DONE] or trailing usage may
+                    // still arrive; silence now ends the stream instead of blocking forever.
+                    sawTerminalFinish = true
+                    tailLineCount = 0
+                    runCatching {
+                        handle.source?.timeout()?.timeout(POST_TERMINAL_READ_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+                    }
+                }
             } catch (e: Exception) {
                 DebugLog.e("AgoraAPI", "Parse error: ${e.message}", e)
             }
@@ -198,6 +249,12 @@ abstract class BaseOpenAiProvider : LlmProvider {
             onThought = { emitAndAccumulate(StreamEvent.ThoughtChunk(it)) }
         )
 
+        // Servers that report finish_reason "stop" (llama.cpp, several proxies) may still have
+        // streamed structured tool_calls deltas; recover them here before falling back to the
+        // content-text parser, which only sees text that made it into `content`.
+        if (!structuredToolCallsEmitted && !config.tools.isNullOrEmpty() && flushPendingToolCalls()) {
+            structuredToolCallsEmitted = true
+        }
         if (!structuredToolCallsEmitted && !config.tools.isNullOrEmpty()) {
             val parsed = ToolCallTextParser.parse(contentBuf.toString())
             if (parsed.size == 1) {
