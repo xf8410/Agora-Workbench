@@ -9,7 +9,6 @@ import java.io.InputStream
 import java.net.URI
 import java.security.MessageDigest
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -100,7 +99,7 @@ class BinaryAuditStore(private val context: Context) {
                 sha256 = sha,
                 importedAt = System.currentTimeMillis()
             )
-            writeIndex(readIndex().entries + entry)
+            writeIndex(IndexFile(entries = readIndex().entries + entry))
             return entry
         } catch (t: Throwable) {
             temp.delete()
