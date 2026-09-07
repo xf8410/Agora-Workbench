@@ -1,33 +1,42 @@
 package com.newoether.agora.tool
 
 import com.newoether.agora.audit.BinaryAnalyzers
+import com.newoether.agora.audit.BinaryAuditEntry
 import com.newoether.agora.audit.BinaryAuditStore
 import com.newoether.agora.api.ToolDefinition
 import com.newoether.agora.api.ToolFunction
 import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
 import com.newoether.agora.viewmodel.GenerationContext
+import java.io.File
+import java.io.FileInputStream
+import java.io.RandomAccessFile
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /**
  * Large-binary audit tools. Lets the agent import, cache and inspect multi-megabyte game
  * binaries (libil2cpp.so, global-metadata.dat, asset bundles) that can never enter the
- * conversation or the heap. Reads are bounded windows over a memory-mapped-free random-access
- * stream, so any offset of any file size is safe on phones.
+ * conversation or the heap. Reads are bounded windows over random-access streams, so any
+ * offset of any file size is safe on phones; every failure degrades to an ok:false JSON
+ * payload instead of killing the generation.
  */
-class BinaryAuditToolProvider(private val context: android.content.Context) : ToolProvider {
+class BinaryAuditToolProvider(context: Context) : ToolProvider {
 
-    private val store by lazy { BinaryAuditStore(context.applicationContext) }
+    private val appContext = context.applicationContext
+    private val store by lazy { BinaryAuditStore(appContext) }
     private val json = Json { ignoreUnknownKeys = true }
 
     override fun definitions(ctx: GenerationContext): List<ToolDefinition> {
         fun string(description: String) = ToolProperty("string", description)
         fun integer(description: String) = ToolProperty("integer", description)
         return listOf(
-            tool("audit_import", "Import a large binary (content://, file:// or absolute path) into the on-device audit store. Streams through a 256KiB buffer, dedupes by SHA-256 (re-importing identical content is a cheap cache hit) and returns sourceId, byteLength and sha256. There is no size limit.", mapOf(
+            tool("audit_import", "Import a large binary (content://, file:// or absolute path) into the on-device audit store. Streams through a 256KiB buffer, dedupes by SHA-256 (re-importing identical content is a cheap cache hit) and returns source_id, byte_length and sha256. There is no size limit.", mapOf(
                 "source" to string("Content URI, file URI or absolute path of the binary."),
                 "name" to string("Display name, e.g. global-metadata.dat (optional)."),
             ), listOf("source")),
@@ -35,12 +44,12 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
             tool("audit_info", "Format-detect one stored binary from its header: IL2CPP metadata (version + section table), ELF or SQLite. Reads at most the first 512 bytes.", mapOf(
                 "source_id" to string("sourceId (or unique prefix) from audit_import/audit_list."),
             ), listOf("source_id")),
-            tool("audit_read_bytes", "Read a bounded byte window of a stored binary as hex + ASCII (like a hex editor). Defaults to the first 512 bytes; hard cap 64KiB per call. Use offsets to walk the file.", mapOf(
+            tool("audit_read_bytes", "Read a bounded byte window of a stored binary as hex + ASCII (like a hex editor). Defaults to the first 512 bytes; hard cap 64KiB per call. Use offset to walk the file.", mapOf(
                 "source_id" to string("sourceId (or unique prefix)."),
                 "offset" to integer("Byte offset to start from (default 0)."),
                 "length" to integer("Bytes to read (default 512, max 65536)."),
             ), listOf("source_id")),
-            tool("audit_extract_strings", "Extract printable ASCII/UTF-8 strings (length >= 5) from a byte window of a stored binary, each with its absolute offset. Windows chain via the returned next_offset. For a 16MB file use e.g. offset 0 length 262144 repeatedly.", mapOf(
+            tool("audit_extract_strings", "Extract printable ASCII strings (length >= 5) from a byte window of a stored binary, each with its absolute offset. Windows chain via next_offset: for a 16MB file call repeatedly with offset 0, 262144, 524288, ... until complete=true.", mapOf(
                 "source_id" to string("sourceId (or unique prefix)."),
                 "offset" to integer("Window start (default 0)."),
                 "length" to integer("Window length (default 262144, max 1048576)."),
@@ -49,42 +58,31 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
     }
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
-        val args = runCatching { json.decodeFromString<Map<String, JsonPrimitive>>(arguments.ifBlank { "{}") } }
+        val args = runCatching { json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" }) }
             .getOrElse { return error("Invalid tool arguments") }
-        fun text(key: String) = args[key]?.content.orEmpty()
-        fun long(key: String, fallback: Long) = args[key]?.content?.toLongOrNull() ?: fallback
+        fun text(key: String) = (args[key] as? JsonPrimitive)?.content.orEmpty()
+        fun long(key: String, fallback: Long) = args[key]?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() } ?: fallback
         return runCatching {
             when (name) {
                 "audit_import" -> {
-                    val entry = store.import(
-                        name = text("name"),
-                        open = store.openSource(text("source"))
-                    )
-                    buildJsonObject {
-                        put("ok", true)
-                        put("source_id", entry.sourceId)
-                        put("name", entry.name)
-                        put("byte_length", entry.byteLength)
-                        put("sha256", entry.sha256)
-                    }.toString()
+                    val entry = store.import(name = text("name"), open = store.openSource(text("source")))
+                    entryJson(entry)
                 }
-                "audit_list" -> {
+                "audit_list" -> buildJsonObject {
                     val list = store.entries()
-                    buildJsonObject {
-                        put("ok", true)
-                        put("count", list.size)
-                        put("entries", kotlinx.serialization.json.buildJsonArray {
-                            list.forEach { e ->
-                                add(buildJsonObject {
-                                    put("source_id", e.sourceId)
-                                    put("name", e.name)
-                                    put("byte_length", e.byteLength)
-                                    put("sha256", e.sha256)
-                                })
-                            }
-                        })
-                    }.toString()
-                }
+                    put("ok", true)
+                    put("count", list.size)
+                    putJsonArray("entries") {
+                        list.forEach { e ->
+                            add(buildJsonObject {
+                                put("source_id", e.sourceId)
+                                put("name", e.name)
+                                put("byte_length", e.byteLength)
+                                put("sha256", e.sha256)
+                            })
+                        }
+                    }
+                }.toString()
                 else -> {
                     val entry = store.resolve(text("source_id"))
                     val file = store.fileOf(entry)
@@ -119,14 +117,14 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
                                 put("next_offset", offset + bytes.size)
                                 put("complete", offset + bytes.size >= entry.byteLength)
                                 put("string_count", strings.size)
-                                put("strings", kotlinx.serialization.json.buildJsonArray {
+                                putJsonArray("strings") {
                                     strings.take(MAX_STRINGS_RETURNED).forEach { s ->
                                         add(buildJsonObject {
                                             put("offset", s.offset)
                                             put("value", s.value)
                                         })
                                     }
-                                })
+                                }
                             }.toString()
                         }
                         else -> error("Unknown audit tool: $name")
@@ -136,36 +134,14 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
         }.getOrElse { error(it.message ?: "audit tool failed") }
     }
 
-    private fun auditInfo(entry: com.newoether.agora.audit.BinaryAuditEntry, file: java.io.File): String {
+    private fun auditInfo(entry: BinaryAuditEntry, file: File): String {
         val header = readWindow(file, 0, 512)
+        val isIl2cpp = header.size >= 4 && readIntLe(header, 0) == IL2CPP_MAGIC_INT
         return try {
-            if (header.size >= 16 && readIntLe(header, 0) == IL2CPP_MAGIC_INT) {
+            if (isIl2cpp) {
                 val analysis = BinaryAnalyzers.analyzeIl2CppMetadataHeader(header)
-                buildJsonObject {
-                    put("ok", true)
-                    put("format", analysis.format)
-                    put("name", entry.name)
-                    put("byte_length", entry.byteLength)
-                    put("sha256", entry.sha256)
-                    put("metadata_version", analysis.version)
-                    put("sections", kotlinx.serialization.json.buildJsonArray {
-                        analysis.sections.forEach { s ->
-                            add(buildJsonObject {
-                                put("name", s.name)
-                                put("offset", s.offset)
-                                put("byte_count", s.byteCount)
-                            })
-                        }
-                    })
-                    put("warnings", kotlinx.serialization.json.buildJsonArray {
-                        analysis.warnings.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) }
-                    })
-                }.toString()
-            } else {
-                val analysis = when {
-                    header.size >= 64 && header[0] == 0x7f.toByte() && header[1] == 'E'.code.toByte() -> BinaryAnalyzers.analyzeElf(header)
-                    header.size >= 100 && header.copyOfRange(0, 15).toString(Charsets.US_ASCII) == "SQLite format 3" -> BinaryAnalyzers.analyzeSqliteHeader(header)
-                    else -> error("Unrecognized format — likely encrypted or a Unity asset bundle; use audit_read_bytes to inspect")
+                val outOfRange = analysis.sections.count {
+                    it.byteCount > 0 && (it.offset < 0 || it.offset + it.byteCount > file.length())
                 }
                 buildJsonObject {
                     put("ok", true)
@@ -173,9 +149,36 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
                     put("name", entry.name)
                     put("byte_length", entry.byteLength)
                     put("sha256", entry.sha256)
-                    put("warnings", kotlinx.serialization.json.buildJsonArray {
-                        analysis.warnings.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) }
-                    })
+                    put("metadata_version", analysis.version)
+                    put("sections_out_of_range", outOfRange)
+                    putJsonArray("sections") {
+                        analysis.sections.forEach { s ->
+                            add(buildJsonObject {
+                                put("name", s.name)
+                                put("offset", s.offset)
+                                put("byte_count", s.byteCount)
+                            })
+                        }
+                    }
+                    putJsonArray("warnings") {
+                        analysis.warnings.forEach { add(JsonPrimitive(it)) }
+                    }
+                }.toString()
+            } else {
+                val analysis = when {
+                    header.size >= 64 && header[0] == 0x7f.toByte() && header[1] == 'E'.code.toByte() && header[2] == 'L'.code.toByte() && header[3] == 'F'.code.toByte() -> BinaryAnalyzers.analyzeElf(header)
+                    header.size >= 100 && header.copyOfRange(0, 15).toString(Charsets.US_ASCII) == "SQLite format 3" -> BinaryAnalyzers.analyzeSqliteHeader(header)
+                    else -> throw IllegalStateException("Unrecognized format — likely encrypted (e.g. FairGuard) or a Unity asset bundle; use audit_read_bytes to inspect the header bytes")
+                }
+                buildJsonObject {
+                    put("ok", true)
+                    put("format", analysis.format)
+                    put("name", entry.name)
+                    put("byte_length", entry.byteLength)
+                    put("sha256", entry.sha256)
+                    putJsonArray("warnings") {
+                        analysis.warnings.forEach { add(JsonPrimitive(it)) }
+                    }
                 }.toString()
             }
         } catch (t: IllegalArgumentException) {
@@ -183,8 +186,8 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
         }
     }
 
-    private fun readWindow(file: java.io.File, offset: Long, length: Long): ByteArray {
-        java.io.RandomAccessFile(file, "r").use { raf ->
+    private fun readWindow(file: File, offset: Long, length: Long): ByteArray {
+        RandomAccessFile(file, "r").use { raf ->
             require(offset < raf.length()) { "offset $offset beyond EOF ${raf.length()}" }
             raf.seek(offset)
             val buffer = ByteArray(length.toInt())
@@ -206,8 +209,7 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
         var start = -1
         for (i in bytes.indices) {
             val b = bytes[i].toInt() and 0xff
-            val printable = b in 0x20..0x7e
-            if (printable) {
+            if (b in 0x20..0x7e) {
                 if (sb.isEmpty()) start = i
                 sb.append(b.toChar())
             } else {
@@ -222,6 +224,14 @@ class BinaryAuditToolProvider(private val context: android.content.Context) : To
         }
         return result
     }
+
+    private fun entryJson(e: BinaryAuditEntry) = buildJsonObject {
+        put("ok", true)
+        put("source_id", e.sourceId)
+        put("name", e.name)
+        put("byte_length", e.byteLength)
+        put("sha256", e.sha256)
+    }.toString()
 
     private fun ByteArray.toHex(): String = joinToString(" ") { "%02X".format(it) }
 
