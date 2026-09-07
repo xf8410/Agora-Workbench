@@ -208,13 +208,9 @@ class GenerationManager(
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
-<<<<<<< HEAD
         githubWorkspaceToolProvider, githubRepositoryMutationToolProvider,
-        githubBranchMutationToolProvider, githubCloneToolProvider, umaToolProvider, shellToolProvider
-=======
-        githubWorkspaceToolProvider, githubPullRequestToolProvider, githubRepositoryMutationToolProvider,
-        githubCloneToolProvider, publicContributionTraceToolProvider, umaToolProvider, shellToolProvider
->>>>>>> origin/workbench/project-aware-code-intelligence
+        githubBranchMutationToolProvider, githubCloneToolProvider,
+        publicContributionTraceToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
