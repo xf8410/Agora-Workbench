@@ -15,7 +15,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-data class GitHubApiResponse(val code: Int, val body: String, val linkHeader: String? = null)
+data class GitHubApiResponse(val code: Int, val body: String, val truncated: Boolean = false, val linkHeader: String? = null)
 
 /** Controlled GitHub REST client. Public GETs may be anonymous; mutations always require auth. */
 class GitHubApiClient(context: Context) {
@@ -51,10 +51,12 @@ class GitHubApiClient(context: Context) {
             // Read before disconnect; getHeaderField is case-insensitive and null when absent.
             val linkHeader = connection.getHeaderField("Link")
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val read = stream?.bufferedReader()?.use { it.readTextLimited(MAX_API_RESPONSE_CHARS) }
             GitHubApiResponse(
                 code,
-                stream?.bufferedReader()?.use { it.readTextLimited(MAX_API_RESPONSE_CHARS) }.orEmpty(),
-                linkHeader,
+                read?.first.orEmpty(),
+                truncated = read?.second ?: false,
+                linkHeader = linkHeader,
             )
         } finally { connection.disconnect() }
     }
@@ -172,10 +174,15 @@ class GitHubApiClient(context: Context) {
         }
     }
 
-    private fun java.io.BufferedReader.readTextLimited(limit: Int): String {
-        val out = StringBuilder(minOf(limit, 8192)); val buffer = CharArray(8192)
-        while (out.length < limit) { val count = read(buffer, 0, minOf(buffer.size, limit - out.length)); if (count < 0) break; out.append(buffer, 0, count) }
-        return out.toString()
+    private fun java.io.BufferedReader.readTextLimited(limit: Int): Pair<String, Boolean> {
+        val out = StringBuilder(minOf(limit, 8192))
+        val buffer = CharArray(8192)
+        while (out.length < limit) {
+            val count = read(buffer, 0, minOf(buffer.size, limit - out.length))
+            if (count < 0) return out.toString() to false
+            out.append(buffer, 0, count)
+        }
+        return out.toString() to (read() >= 0)
     }
     fun encodeSegment(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
     private fun encodePath(value: String) = value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { encodeSegment(it) }
