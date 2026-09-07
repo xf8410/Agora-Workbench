@@ -229,5 +229,7 @@ class GitHubApiClient(context: Context) {
         const val MAX_API_RESPONSE_CHARS = 2_000_000
         const val MAX_WRITE_BYTES = 750_000
         const val MAX_ACTIONS_LOG_CHARS = 60_000
+        // 大体积 blob 在慢链路上传远超默认读超时；取 15 分钟（requestStreamBody 专用）。
+        const val STREAM_BODY_READ_TIMEOUT_MS = 15 * 60_000L
     }
 }

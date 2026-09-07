@@ -218,7 +218,7 @@ class CourierFileAccess(
                 val process = ProcessBuilder("su", "-c", "id")
                     .redirectErrorStream(true)
                     .start()
-                val done = process.waitFor(Constants.COURIER_SU_PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                val done = process.waitFor(Constants.COURIER_SU_PROBE_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
                 process.inputStream.use { it.readBytes() } // drain to avoid buffer deadlock
                 val ok = done && process.exitValue() == 0
                 if (!done) process.destroy()

@@ -113,16 +113,16 @@ class PhoneFileToolProvider(context: Context) : ToolProvider {
                 LIST_DIR -> executeList(access, text("path"))
                 UPLOAD_FILE -> executeUploadFile(
                     access,
-                    path = text("path"),
+                    rawPath = text("path"),
                     repo = text("repo").ifBlank { settings.courierTargetRepo.first() },
                     targetPath = text("target_path"),
                     splitMb = text("split_mb").toIntOrNull() ?: Constants.COURIER_FILE_SPLIT_DEFAULT_MB,
                 )
                 UPLOAD_DIR -> executeUploadDir(
                     access,
-                    path = text("path"),
+                    rawPath = text("path"),
                     repo = text("repo").ifBlank { settings.courierTargetRepo.first() },
-                    targetPrefix = text("target_prefix"),
+                    rawTargetPrefix = text("target_prefix"),
                     maxVolumeMb = text("max_volume_mb").toIntOrNull() ?: Constants.COURIER_DEFAULT_VOLUME_MB,
                     maxTotalMb = text("max_total_mb").toIntOrNull() ?: Constants.COURIER_DEFAULT_TOTAL_MB,
                     maxFiles = text("max_files").toIntOrNull() ?: Constants.COURIER_DEFAULT_MAX_FILES,

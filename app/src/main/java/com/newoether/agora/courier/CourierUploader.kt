@@ -24,7 +24,7 @@ import kotlinx.serialization.json.put
  * 单卷可到 [MAX_VOLUME_BYTES]（Contents API 1MB 上限装不下分卷）。
  *
  * 与 GitHubBinaryUploader 的差异（这是新类而不是改动它的原因）：
- * - 分支不强制 workbench/*：Courier 的目标是机主在设置里指定的私有中转仓（如 bestsoccer-gala）
+ * - 分支不强制 workbench/…：Courier 的目标是机主在设置里指定的私有中转仓（如 bestsoccer-gala）
  * - 体积不设 900KB 上限：走 blob API 且 base64 流式写入，避免一次性构造巨型 JSON 字符串
  * - token 只经 GitHubApiClient 的已登录会话传递，不落日志、不进 URL
  */
@@ -34,7 +34,7 @@ class CourierUploader(private val client: GitHubApiClient) {
     /** GitHub Git Data "Create a blob" official cap is 100 MB; keep a safety margin. */
     private val maxVolumeBytes = MAX_VOLUME_BYTES
 
-    /** Validates a branch/ref name without the workbench/* restriction (see class doc). */
+    /** Validates a branch/ref name without the workbench/… restriction (see class doc). */
     private fun requireValidBranch(branch: String) {
         require(branch.matches(BRANCH_PATTERN)) { "Invalid branch name: $branch" }
     }
