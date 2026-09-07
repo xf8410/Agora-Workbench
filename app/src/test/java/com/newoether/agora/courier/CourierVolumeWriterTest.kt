@@ -7,9 +7,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 
 class CourierVolumeWriterTest {
-    private fun tempDir(): File = createTempDir(prefix = "courier-test")
+    private fun tempDir(): File = Files.createTempDirectory("courier-test").toFile()
 
     @Test
     fun `zip volume contains every planned file under its relative path`() {
