@@ -1,5 +1,6 @@
 package com.newoether.agora.tool
 
+import android.content.Context
 import com.newoether.agora.audit.BinaryAnalyzers
 import com.newoether.agora.audit.BinaryAuditEntry
 import com.newoether.agora.audit.BinaryAuditStore
@@ -9,7 +10,6 @@ import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
 import com.newoether.agora.viewmodel.GenerationContext
 import java.io.File
-import java.io.FileInputStream
 import java.io.RandomAccessFile
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
