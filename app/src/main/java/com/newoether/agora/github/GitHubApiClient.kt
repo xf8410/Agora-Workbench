@@ -166,6 +166,44 @@ class GitHubApiClient(context: Context) {
         return repo
     }
 
+    /**
+     * Streaming-body variant of [request] for payloads far above the JSON-string comfort zone
+     * (Git Blob uploads of tens of MB). The body is written chunk-by-chunk into the connection
+     * output stream, so a large base64 payload never materializes as one giant String.
+     * Auth, headers and response handling are identical to [request].
+     */
+    suspend fun requestStreamBody(
+        method: String,
+        path: String,
+        contentType: String,
+        bodyWriter: (java.io.OutputStream) -> Unit,
+    ): GitHubApiResponse = withContext(Dispatchers.IO) {
+        require(path.startsWith('/')) { "GitHub API path must start with /" }
+        val session = auth.loadSession() ?: error("GitHub is not signed in")
+        val connection = URL("https://api.github.com$path").openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = 15_000
+            // Large blob uploads over slow links need far more than the default 45s read window.
+            connection.readTimeout = STREAM_BODY_READ_TIMEOUT_MS
+            connection.setRequestProperty("Accept", "application/vnd.github+json")
+            connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            connection.setRequestProperty("User-Agent", "Agora-Workbench")
+            connection.setRequestProperty("Authorization", "Bearer ${session.token}")
+            connection.setRequestProperty("Content-Type", contentType)
+            connection.doOutput = true
+            // Chunked streaming: body length is unknown upfront and can reach tens of MB.
+            connection.setChunkedStreamingMode(0)
+            connection.outputStream.use(bodyWriter)
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val read = stream?.bufferedReader()?.use { it.readTextLimited(MAX_API_RESPONSE_CHARS) }
+            GitHubApiResponse(code, read?.first.orEmpty(), truncated = read?.second ?: false)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun requireSuccess(response: GitHubApiResponse) {
         if (response.code !in 200..299) {
             val message = runCatching { json.parseToJsonElement(response.body).jsonObject["message"]?.jsonPrimitive?.content }.getOrNull() ?: "GitHub API error"

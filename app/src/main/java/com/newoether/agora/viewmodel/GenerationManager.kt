@@ -200,6 +200,7 @@ class GenerationManager(
     }
     private val githubCloneToolProvider = com.newoether.agora.tool.GitHubCloneToolProvider(app, sandboxFactory)
     private val publicContributionTraceToolProvider = com.newoether.agora.tool.PublicContributionTraceToolProvider(app)
+    private val phoneFileToolProvider = com.newoether.agora.tool.PhoneFileToolProvider(app)
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
         // Forward to the ViewModel-provided gate at call time (read the var lazily).
@@ -210,7 +211,7 @@ class GenerationManager(
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
         githubWorkspaceToolProvider, githubRepositoryMutationToolProvider,
         githubBranchMutationToolProvider, githubCloneToolProvider,
-        publicContributionTraceToolProvider, umaToolProvider, shellToolProvider
+        publicContributionTraceToolProvider, phoneFileToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 

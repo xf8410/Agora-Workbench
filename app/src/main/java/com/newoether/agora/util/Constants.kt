@@ -43,4 +43,29 @@ object Constants {
     const val PROVIDER_OPEN_ROUTER = "Open Router"
     const val PROVIDER_UNKNOWN = "Unknown"
     const val EXAMPLE_MODEL_ID = "gemini-1.5-flash"
+
+    // ── File Courier（文件投递）───────────────────────────────
+    // 机主指定的默认中转仓：手机文件经 zip 分卷后上传到该私有仓供云端取回。
+    const val COURIER_DEFAULT_REPO = "xf8410/bestsoccer-gala"
+    // 机主私有仓的默认分支（manifest 与卷都提交到这个分支）。
+    const val COURIER_DEFAULT_BRANCH = "main"
+    // 单卷默认大小。来源：机主工单示例 max_volume_mb=90。
+    const val COURIER_DEFAULT_VOLUME_MB = 90
+    // 单任务总字节数默认上限。来源：机主工单示例 max_total_mb=400。
+    const val COURIER_DEFAULT_TOTAL_MB = 400
+    // 单任务文件数默认上限。来源：机主工单示例 max_files=500。
+    const val COURIER_DEFAULT_MAX_FILES = 500
+    // upload_phone_file 的默认分卷阈值。来源：机主测试对象为 30-50MB 级 APK zip，
+    // 取 32MB 每片保证 50MB 文件切 2 片且每片远低于 Blob API 上限。
+    const val COURIER_FILE_SPLIT_DEFAULT_MB = 32
+    // GitHub Git Data "Create a blob" API 官方上限 100MB，留 5MB 安全水位。
+    const val COURIER_MAX_SINGLE_BLOB_MB = 95
+    // list_phone_dir 返回条目上限：工具结果会进入模型上下文（MAX_TOOL_RESULT_LENGTH=100k 字符）。
+    const val COURIER_LIST_MAX_ENTRIES = 1000
+    // 单卷上传失败重试次数。来源：机主工单"重试 2 次后放弃并记 errors"。
+    const val COURIER_UPLOAD_RETRIES = 2
+    // su 可用性探测的超时（机主手机无 root，探测只是兜底策略，快速失败）。
+    const val COURIER_SU_PROBE_TIMEOUT_MS = 3_000
+    // su cat 读文件前的确认输出行数上限（探测 su 时防止超大输出）。
+    const val COURIER_SU_LIST_TIMEOUT_MS = 15_000
 }
