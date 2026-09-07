@@ -10,8 +10,13 @@ import androidx.compose.ui.zIndex
 
 /**
  * Double-buffered crossfade Markdown composable.
- * Prevents visual "flash" from AST re-parsing during streaming by maintaining
+ * Prevents visual "flash" from AST re-parsing during normal streaming by maintaining
  * two content buffers and crossfading between them over ~180ms.
+ *
+ * Very large tool/reasoning responses deliberately use a single render tree. Keeping the old and
+ * new Markdown trees alive at the same time can otherwise double the peak Compose/AST memory for
+ * hundreds of thousands of characters. This changes only the transition strategy: the complete
+ * text is still rendered and persisted, with no content or feature removed.
  */
 @Composable
 internal fun RecomposeSafeMarkdown(
@@ -20,8 +25,9 @@ internal fun RecomposeSafeMarkdown(
     modifier: Modifier = Modifier,
     render: @Composable (text: String) -> Unit
 ) {
-    // Only streaming needs double buffering. Stored history renders one Markdown tree.
-    if (!isStreaming) {
+    // Stored history needs one tree. Extremely large live text also stays single-buffered to keep
+    // peak memory bounded; crossfade remains enabled for ordinary responses.
+    if (!isStreaming || !shouldDoubleBufferStreamingMarkdown(content.length)) {
         render(content)
         return
     }
@@ -105,3 +111,8 @@ internal fun RecomposeSafeMarkdown(
         }
     }
 }
+
+internal const val STREAMING_MARKDOWN_DOUBLE_BUFFER_MAX_CHARS = 32_768
+
+internal fun shouldDoubleBufferStreamingMarkdown(contentLength: Int): Boolean =
+    contentLength <= STREAMING_MARKDOWN_DOUBLE_BUFFER_MAX_CHARS
