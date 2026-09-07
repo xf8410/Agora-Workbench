@@ -9,6 +9,10 @@ import com.newoether.agora.github.GitHubApiClient
 import com.newoether.agora.viewmodel.GenerationContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+<<<<<<< HEAD
+=======
+import kotlinx.serialization.json.JsonObject
+>>>>>>> origin/workbench/stop-interrupt-draft-loss-20260826
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -24,6 +28,7 @@ import kotlinx.serialization.json.put
  * SHA it intends to delete, so a stale view of the branch cannot silently destroy new commits.
  * The stale-branch report uses per-branch compare calls so a bounded scan stays correct even when
  * Link pagination returns hundreds of refs.
+<<<<<<< HEAD
  *
  * Also exposes github_upload_file (binary/image upload onto workbench-prefixed branches) by
  * delegating to GitHubFileUploadToolProvider, so the AI can commit chat attachments or workspace
@@ -32,6 +37,11 @@ import kotlinx.serialization.json.put
 class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
     private val client = GitHubApiClient(context.applicationContext)
     private val uploadDelegate = GitHubFileUploadToolProvider(context)
+=======
+ */
+class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
+    private val client = GitHubApiClient(context.applicationContext)
+>>>>>>> origin/workbench/stop-interrupt-draft-loss-20260826
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Null fails closed. The UI must show and approve the exact deletion summary. */
@@ -62,6 +72,7 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
                 ),
             ),
         ),
+<<<<<<< HEAD
     ) + uploadDelegate.definitions(ctx)
 
     override fun handles(name: String): Boolean =
@@ -69,6 +80,13 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
 
     override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
         if (uploadDelegate.handles(name)) return uploadDelegate.execute(name, arguments, ctx)
+=======
+    )
+
+    override fun handles(name: String): Boolean = name == DELETE_BRANCH || name == LIST_STALE_BRANCHES
+
+    override suspend fun execute(name: String, arguments: String, ctx: GenerationContext): String {
+>>>>>>> origin/workbench/stop-interrupt-draft-loss-20260826
         if (!client.isSignedIn()) return errorJson("GitHub is not signed in")
         val args = runCatching {
             json.decodeFromString<Map<String, JsonElement>>(arguments.ifBlank { "{}" })
@@ -95,7 +113,11 @@ class GitHubBranchMutationToolProvider(context: Context) : ToolProvider {
             .get("default_branch")?.jsonPrimitive?.content ?: "main"
     }
 
+<<<<<<< HEAD
     /** Follows GitHub's Link header so repositories with more than 100 branches are fully scanned. */
+=======
+    /** Follows GitHub's Link header so repositories with >100 branches are fully scanned. */
+>>>>>>> origin/workbench/stop-interrupt-draft-loss-20260826
     private suspend fun listAllBranchHeads(repo: String): List<Pair<String, String>> {
         val heads = mutableListOf<Pair<String, String>>()
         var path: String? = "/repos/$repo/branches?per_page=100"
