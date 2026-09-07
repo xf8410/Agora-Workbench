@@ -5,7 +5,7 @@ import com.newoether.agora.github.GitHubApiResponse
 import com.newoether.agora.util.Constants
 import java.io.File
 import java.io.IOException
-import java.util.Base64
+import android.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -191,7 +191,7 @@ class CourierUploader(private val client: GitHubApiClient) {
 
     /**
      * Streams `{"content":"<base64>","encoding":"base64"}` into the connection without
-     * materializing the full JSON string in memory. Base64.Encoder.encode(byte[], OutputStream)
+     * materializing the full JSON string in memory. android.util.Base64.NO_WRAP keeps
      * appends the full encoding (padding included) without closing the underlying stream, so the
      * JSON suffix can still be written afterwards.
      */
@@ -199,12 +199,14 @@ class CourierUploader(private val client: GitHubApiClient) {
         val response: GitHubApiResponse = client.requestStreamBody(
             "POST", "/repos/$repo/git/blobs", "application/json",
         ) { output ->
-            output.write("{\"content\":\"".toByteArray(Charsets.UTF_8))
-            try {
-                Base64.getEncoder().encode(bytes, output)
+            // android.util.Base64.NO_WRAP：GitHub blob 要求无换行的标准 base64（minSdk 24 无法用 java.util.Base64）
+            val encoded = try {
+                Base64.encodeToString(bytes, Base64.NO_WRAP)
             } catch (e: IOException) {
-                throw IOException("Base64 streaming into the blob request body failed", e)
+                throw IOException("Base64 encoding into the blob request body failed", e)
             }
+            output.write("{\"content\":\"".toByteArray(Charsets.UTF_8))
+            output.write(encoded.toByteArray(Charsets.UTF_8))
             output.write("\",\"encoding\":\"base64\"}".toByteArray(Charsets.UTF_8))
         }
         require(response.code in 200..299) { "Blob upload failed (HTTP ${response.code}): ${response.body.take(300)}" }
