@@ -1,6 +1,9 @@
 name: Apply import hardening + audit registration once
 
 on:
+  push:
+    branches:
+      - workbench/binary-audit-tools
   workflow_dispatch:
 
 permissions:
