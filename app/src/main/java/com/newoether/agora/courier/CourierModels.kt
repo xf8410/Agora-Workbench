@@ -48,34 +48,39 @@ data class CourierLimits(
  */
 object CourierVolumePlanner {
 
+    /**
+     * First-fit 装箱：保持输入顺序，每个文件放入第一个装得下的开放卷，放不下才开新卷，
+     * 超过单卷上限的文件先冲刷开放卷再自成 singleOversize 卷。开放卷按创建顺序编号。
+     */
     fun plan(files: List<PlannedFile>, limits: CourierLimits): List<VolumePlan> {
-        val sorted = files.sortedBy { it.relativePath }
         val volumes = mutableListOf<VolumePlan>()
-        var current = mutableListOf<PlannedFile>()
-        var currentBytes = 0L
-        var oversize = false
+        val openFiles = mutableListOf<MutableList<PlannedFile>>()
+        val openBytes = mutableListOf<Long>()
 
-        fun flush() {
-            if (current.isEmpty()) return
-            volumes += VolumePlan(volumes.size + 1, current.toList(), currentBytes, oversize)
-            current = mutableListOf()
-            currentBytes = 0L
-            oversize = false
+        fun flushOpen() {
+            for (i in openFiles.indices) {
+                volumes += VolumePlan(volumes.size + 1, openFiles[i].toList(), openBytes[i], false)
+            }
+            openFiles.clear()
+            openBytes.clear()
         }
 
-        for (file in sorted) {
+        for (file in files) {
             if (file.sizeBytes > limits.maxVolumeBytes) {
-                flush()
+                flushOpen()
                 volumes += VolumePlan(volumes.size + 1, listOf(file), file.sizeBytes, singleOversize = true)
                 continue
             }
-            if (current.isNotEmpty() && currentBytes + file.sizeBytes > limits.maxVolumeBytes) {
-                flush()
+            val idx = openFiles.indexOfFirst { files -> openBytes[openFiles.indexOf(files)] + file.sizeBytes <= limits.maxVolumeBytes }
+            if (idx >= 0) {
+                openFiles[idx] += file
+                openBytes[idx] += file.sizeBytes
+            } else {
+                openFiles += mutableListOf(file)
+                openBytes += file.sizeBytes
             }
-            current += file
-            currentBytes += file.sizeBytes
         }
-        flush()
+        flushOpen()
         return volumes
     }
 }

@@ -88,7 +88,7 @@ class SafPathMapperTest {
     @Test
     fun `relativeUnder strips the delivery root`() {
         assertEquals(
-            "Android/data/com.example/cache.bin",
+            "com.example/cache.bin",
             SafPathMapper.relativeUnder(
                 "/storage/emulated/0/Android/data/com.example/cache.bin",
                 "/storage/emulated/0/Android/data",

@@ -56,18 +56,18 @@ object CourierVolumeWriter {
         try {
             var remaining = length
             open().use { input ->
-                require(input.skip(offset) == offset) { "cannot seek to raw part offset" }
+                check(input.skip(offset) == offset) { "cannot seek to raw part offset" }
                 FileOutputStream(temporary, false).buffered().use { output ->
                     val buffer = ByteArray(BUFFER_BYTES)
                     while (remaining > 0) {
                         val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                        require(read >= 0) { "source ended before the raw part was complete" }
+                        check(read >= 0) { "source ended before the raw part was complete" }
                         output.write(buffer, 0, read)
                         remaining -= read
                     }
                 }
             }
-            require(remaining == 0L) { "raw part incomplete" }
+            check(remaining == 0L) { "raw part incomplete" }
             if (targetFile.exists()) require(targetFile.delete()) { "cannot replace existing volume" }
             require(temporary.renameTo(targetFile)) { "cannot finalize volume ${targetFile.name}" }
         } finally {
