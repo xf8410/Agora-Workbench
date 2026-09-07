@@ -199,6 +199,7 @@ class GenerationManager(
         }
     }
     private val githubCloneToolProvider = com.newoether.agora.tool.GitHubCloneToolProvider(app, sandboxFactory)
+    private val publicContributionTraceToolProvider = com.newoether.agora.tool.PublicContributionTraceToolProvider(app)
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
         // Forward to the ViewModel-provided gate at call time (read the var lazily).
@@ -207,8 +208,13 @@ class GenerationManager(
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
+<<<<<<< HEAD
         githubWorkspaceToolProvider, githubRepositoryMutationToolProvider,
         githubBranchMutationToolProvider, githubCloneToolProvider, umaToolProvider, shellToolProvider
+=======
+        githubWorkspaceToolProvider, githubPullRequestToolProvider, githubRepositoryMutationToolProvider,
+        githubCloneToolProvider, publicContributionTraceToolProvider, umaToolProvider, shellToolProvider
+>>>>>>> origin/workbench/project-aware-code-intelligence
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
@@ -410,7 +416,7 @@ class GenerationManager(
             val combinedText = if (attachmentText.isNotBlank()) it.text + attachmentText else it.text
             val hasTranscription = ctx.imageTranscriptionEnabled && meta != null && meta.items.any { item -> !item.transcription.isNullOrBlank() }
             val effectiveImages = if (hasTranscription) emptyList() else it.images
-            ChatMessage(id = it.id, parentId = it.parentId, text = combinedText, images = effectiveImages, thoughts = it.thoughts, thoughtTitle = it.thoughtTitle, tokenCount = it.tokenCount, status = it.status, participant = it.participant, timestamp = it.timestamp, thoughtTimeMs = it.thoughtTimeMs, segments = segs, toolCall = toolCall)
+            ChatMessage(id = it.id, parentId = it.parentId, text = combinedText, images = effectiveImages, thoughts = it.thoughts, thoughtTitle = it.thoughtTitle, tokenCount = it.tokenCount, status = it.status, participant = it.participant, timestamp = it.timestamp, thoughtTimeMs = it.thoughtTimeMs, modelName = it.modelName, segments = segs, toolCall = toolCall)
         }.filter { it.participant != Participant.ERROR }
             .let { path ->
                 if (isRegenerate && replaceMessageId != null) {
@@ -473,7 +479,6 @@ class GenerationManager(
         var cumulativeThoughtMs: Long = 0
         var currentThoughtStartMs: Long? = null
         var currentThoughtDurationMs: Long = 0
-        var currentStatus = MessageStatus.SENDING
         var retryText: String? = null
         val segments = mutableListOf(MessageSegment(type = "answer"))
         val generatedImages = mutableListOf<String>()
