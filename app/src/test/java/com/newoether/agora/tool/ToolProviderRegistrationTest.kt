@@ -93,6 +93,7 @@ class ToolProviderRegistrationTest {
             "GitHubRepositoryMutationToolProvider",
             "GitHubBranchMutationToolProvider",
             "GitHubCloneToolProvider",
+            "PublicContributionTraceToolProvider",
             "UmaToolProvider",
             "ShellToolProvider",
         )
