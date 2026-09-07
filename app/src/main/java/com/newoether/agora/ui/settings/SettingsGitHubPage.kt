@@ -22,11 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.newoether.agora.github.GitHubApiClient
 import com.newoether.agora.github.GitHubAuthManager
 import com.newoether.agora.github.GitHubBinaryUploader
 import com.newoether.agora.github.GitHubDeviceCode
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream
@@ -36,7 +38,7 @@ private data class RemoteEntry(val name: String, val path: String, val type: Str
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsGitHubPage(onBack: () -> Unit) {
+fun SettingsGitHubPage(viewModel: com.newoether.agora.viewmodel.ChatViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val manager = remember { GitHubAuthManager(context.applicationContext) }
     val client = remember { GitHubApiClient(context.applicationContext) }
@@ -80,6 +82,7 @@ fun SettingsGitHubPage(onBack: () -> Unit) {
                     Button(enabled = !busy && token.isNotBlank(), onClick = { busy = true; status = "Validating…"; scope.launch { manager.loginWithToken(token).fold(onSuccess = { session = it; token = ""; status = "Signed in as ${it.login}" }, onFailure = { status = it.message.orEmpty() }); busy = false } }) { Text("Validate and save") }
                 } }))
             }
+            CourierSettingsSection(viewModel)
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (status.isNotBlank()) Text(status, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary)
         }
@@ -158,4 +161,162 @@ private fun prepareImageUpload(raw: ByteArray): ByteArray {
     var out = ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.JPEG, quality, it) }
     while (out.size() > 600_000 && quality > 55) { quality -= 12; out = ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.JPEG, quality, it) } }
     return out.toByteArray()
+}
+
+/** 文件投递：目标仓、所有文件访问引导、SAF 目录授权管理与读取策略探测。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CourierSettingsSection(viewModel: com.newoether.agora.viewmodel.ChatViewModel) {
+    val context = LocalContext.current
+    val settings = remember { com.newoether.agora.data.SettingsManager(context.applicationContext) }
+    val scope = rememberCoroutineScope()
+    var targetRepo by remember { mutableStateOf("") }
+    var treeUris by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var probe by remember { mutableStateOf<com.newoether.agora.courier.StrategyProbe?>(null) }
+    var probing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        targetRepo = settings.courierTargetRepo.first()
+        treeUris = settings.courierSafTreeUris.first()
+    }
+
+    fun snackbar(message: String) = viewModel.emitSnackbar(message)
+
+    val pickTree = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }.onFailure { snackbar("持久化授权失败：${it.message}"); return@rememberLauncherForActivityResult }
+        scope.launch {
+            settings.addCourierSafTreeUri(uri.toString())
+            treeUris = settings.courierSafTreeUris.first()
+            snackbar("已授权目录：$uri")
+        }
+    }
+
+    SettingsGroup(title = "文件投递", items = listOf(
+        { Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("目标仓库", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "手机文件经 zip 分卷上传到该私有仓（默认 ${com.newoether.agora.util.Constants.COURIER_DEFAULT_REPO}），供云端取回。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = targetRepo,
+                onValueChange = { targetRepo = it },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                singleLine = true,
+                label = { Text("目标仓 owner/name") },
+                placeholder = { Text(com.newoether.agora.util.Constants.COURIER_DEFAULT_REPO) },
+            )
+            Button(
+                onClick = {
+                    val repo = targetRepo.trim().removePrefix("https://github.com/").removeSuffix("/").removeSuffix(".git")
+                    runCatching { GitHubApiClient(context.applicationContext).validateRepo(repo) }
+                        .onSuccess {
+                            scope.launch {
+                                settings.saveCourierTargetRepo(it)
+                                targetRepo = it
+                                snackbar("目标仓已保存：$it")
+                            }
+                        }
+                        .onFailure { snackbar(it.message ?: "仓库名格式无效") }
+                },
+                enabled = targetRepo.isNotBlank(),
+                modifier = Modifier.padding(top = 8.dp),
+            ) { Text("保存目标仓") }
+        } },
+        { SettingsItem(
+            headlineContent = { Text("所有文件访问") },
+            supportingContent = { Text("跳转系统设置开启「允许访问所有文件」，覆盖公共存储直读；Android/data 沙盒目录仍需下方 SAF 授权。") },
+            leadingContent = { Icon(Icons.Default.FolderOpen, null, tint = MaterialTheme.colorScheme.primary) },
+            modifier = Modifier.clickable {
+                runCatching {
+                    context.startActivity(com.newoether.agora.courier.CourierFileAccess.allFilesAccessIntent(context))
+                }.onFailure {
+                    snackbar("请到 系统设置 → 应用 → Agora Workbench → 权限 手动开启所有文件访问")
+                }
+            },
+        ) },
+        { SettingsItem(
+            headlineContent = { Text("授权 Android/data 目录（SAF）") },
+            supportingContent = { Text("选择一次目标目录（如 Android/data 本身或某个应用目录），授权后智能体即可读取其下全部文件。") },
+            leadingContent = { Icon(Icons.Default.CreateNewFolder, null, tint = MaterialTheme.colorScheme.primary) },
+            modifier = Modifier.clickable { pickTree.launch(null) },
+        ) },
+        { Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("已授权目录", style = MaterialTheme.typography.titleMedium)
+            if (treeUris.isEmpty()) {
+                Text(
+                    "暂无授权。机主参考：MT管理器/系统文件管理器能看 Android/data，本应用通过 SAF 获得同等能力。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            treeUris.sorted().forEach { uri ->
+                val label = remember(uri) {
+                    runCatching { android.provider.DocumentsContract.getTreeDocumentId(android.net.Uri.parse(uri)) }
+                        .getOrDefault(uri)
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    TextButton(onClick = {
+                        scope.launch {
+                            runCatching {
+                                context.contentResolver.releasePersistableUriPermission(
+                                    android.net.Uri.parse(uri),
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                                )
+                            }
+                            settings.removeCourierSafTreeUri(uri)
+                            treeUris = settings.courierSafTreeUris.first()
+                        }
+                    }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        } },
+        { Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("读取策略探测", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    if (probing) return@TextButton
+                    probing = true
+                    scope.launch {
+                        val access = com.newoether.agora.courier.CourierFileAccess(
+                            context.applicationContext,
+                            settings.courierSafTreeUris.first(),
+                        )
+                        probe = access.probe()
+                        probing = false
+                    }
+                }) { Text(if (probing) "探测中…" else "立即探测") }
+            }
+            probe?.let { p ->
+                Text(
+                    "File 直读：${if (p.directAvailable) "可用" else "不可用"}\n" +
+                        "SAF 授权目录：${p.safAuthorizedTreeUris.size} 个\n" +
+                        "su（root）：${if (p.suAvailable) "可用" else "不可用（已跳过）"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        } },
+    ))
 }

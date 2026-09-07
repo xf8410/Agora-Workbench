@@ -198,6 +198,9 @@ class SettingsManager(private val context: Context) {
         val AUTO_DELETE_PERIOD_HOURS = intPreferencesKey("auto_delete_period_hours")
         val LAST_BACKUP_TIMESTAMP = longPreferencesKey("last_backup_timestamp")
         val LAST_MODELS_FETCH_FINGERPRINT = stringPreferencesKey("last_models_fetch_fingerprint")
+        // ── File Courier（文件投递）───────────────────────────────
+        val COURIER_TARGET_REPO = stringPreferencesKey("courier_target_repo")
+        val COURIER_SAF_TREE_URIS = stringSetPreferencesKey("courier_saf_tree_uris")
     }
 
     val selectedModel: Flow<String> = context.dataStore.data.map { it[SELECTED_MODEL] ?: Constants.EXAMPLE_MODEL_ID }
@@ -358,6 +361,32 @@ class SettingsManager(private val context: Context) {
     val autoDeletePeriodHours: Flow<Int> = context.dataStore.data.map { it[AUTO_DELETE_PERIOD_HOURS] ?: 168 }
     val lastBackupTimestamp: Flow<Long> = context.dataStore.data.map { it[LAST_BACKUP_TIMESTAMP] ?: 0L }
     val lastModelsFetchFingerprint: Flow<String> = context.dataStore.data.map { it[LAST_MODELS_FETCH_FINGERPRINT] ?: "" }
+
+    // ── File Courier（文件投递）───────────────────────────────
+    val courierTargetRepo: Flow<String> = context.dataStore.data.map {
+        it[COURIER_TARGET_REPO]?.takeIf(String::isNotBlank) ?: Constants.COURIER_DEFAULT_REPO
+    }
+    val courierSafTreeUris: Flow<Set<String>> = context.dataStore.data.map { it[COURIER_SAF_TREE_URIS] ?: emptySet() }
+
+    suspend fun saveCourierTargetRepo(repo: String) {
+        // 空值 = 回到默认仓（Flow 端把 blank 视为 COURIER_DEFAULT_REPO），与 saveProviderBaseUrl 的语义一致
+        context.dataStore.edit { prefs ->
+            if (repo.isBlank()) prefs.remove(COURIER_TARGET_REPO) else prefs[COURIER_TARGET_REPO] = repo.trim()
+        }
+    }
+
+    suspend fun addCourierSafTreeUri(uri: String) {
+        context.dataStore.edit { prefs ->
+            prefs[COURIER_SAF_TREE_URIS] = (prefs[COURIER_SAF_TREE_URIS] ?: emptySet()) + uri
+        }
+    }
+
+    suspend fun removeCourierSafTreeUri(uri: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[COURIER_SAF_TREE_URIS] ?: return@edit
+            prefs[COURIER_SAF_TREE_URIS] = current - uri
+        }
+    }
 
     suspend fun saveProviderBaseUrl(provider: String, url: String) {
         // Blank = "use the provider's default base URL". Persisting "" would poison the map

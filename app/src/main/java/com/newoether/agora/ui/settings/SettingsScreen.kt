@@ -238,7 +238,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 "websearch" -> SettingsWebSearchPage(viewModel, onBack = { selectedCategory = null })
                 "imagegen" -> SettingsImageGenPage(viewModel, onBack = { selectedCategory = null })
                 "shell" -> SettingsShellPage(viewModel, onBack = { selectedCategory = null })
-                "github" -> SettingsGitHubPage(onBack = { selectedCategory = null })
+                "github" -> SettingsGitHubPage(viewModel, onBack = { selectedCategory = null })
                 "agents" -> SettingsAgentsPage(viewModel, onBack = { selectedCategory = null })
                 "uma" -> SettingsUmaPage(viewModel, onBack = { selectedCategory = null })
                 "automation" -> SettingsAutomationPage(viewModel, onBack = { selectedCategory = null })
