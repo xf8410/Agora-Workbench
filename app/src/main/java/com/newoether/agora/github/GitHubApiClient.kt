@@ -59,6 +59,55 @@ class GitHubApiClient(context: Context) {
         } finally { connection.disconnect() }
     }
 
+    /**
+     * Downloads a bounded textual response from a GitHub API endpoint that returns a signed
+     * redirect (notably Actions job logs). The GitHub token is sent only to api.github.com;
+     * the signed download URL is fetched without Authorization.
+     */
+    suspend fun downloadRedirectedText(path: String, maxChars: Int): GitHubApiResponse =
+        withContext(Dispatchers.IO) {
+            require(path.startsWith('/')) { "GitHub API path must start with /" }
+            require(maxChars in 1..MAX_ACTIONS_LOG_CHARS) { "Invalid Actions log limit" }
+            val session = auth.loadSession() ?: error("GitHub is not signed in")
+            val api = URL("https://api.github.com$path").openConnection() as HttpURLConnection
+            try {
+                api.instanceFollowRedirects = false
+                api.requestMethod = "GET"
+                api.connectTimeout = 15_000
+                api.readTimeout = 45_000
+                api.setRequestProperty("Accept", "application/vnd.github+json")
+                api.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                api.setRequestProperty("User-Agent", "Agora-Workbench")
+                api.setRequestProperty("Authorization", "Bearer ${session.token}")
+                val code = api.responseCode
+                if (code !in 300..399) {
+                    val stream = if (code in 200..299) api.inputStream else api.errorStream
+                    val read = stream?.bufferedReader()?.use { it.readTextLimited(maxChars) }
+                    return@withContext GitHubApiResponse(code, read?.first.orEmpty(), read?.second ?: false)
+                }
+                val location = api.getHeaderField("Location") ?: error("GitHub log redirect has no Location")
+                val target = URL(location)
+                require(target.protocol.equals("https", ignoreCase = true)) { "Refusing non-HTTPS log redirect" }
+                val download = target.openConnection() as HttpURLConnection
+                try {
+                    download.instanceFollowRedirects = true
+                    download.requestMethod = "GET"
+                    download.connectTimeout = 15_000
+                    download.readTimeout = 45_000
+                    download.setRequestProperty("User-Agent", "Agora-Workbench")
+                    // Deliberately no Authorization header on the signed external URL.
+                    val downloadCode = download.responseCode
+                    val stream = if (downloadCode in 200..299) download.inputStream else download.errorStream
+                    val read = stream?.bufferedReader()?.use { it.readTextLimited(maxChars) }
+                    GitHubApiResponse(downloadCode, read?.first.orEmpty(), read?.second ?: false)
+                } finally {
+                    download.disconnect()
+                }
+            } finally {
+                api.disconnect()
+            }
+        }
+
     suspend fun publicRequest(method: String, path: String): GitHubApiResponse =
         request(method, path, requireAuth = false)
 
@@ -134,5 +183,6 @@ class GitHubApiClient(context: Context) {
         val REPO_PATTERN = Regex("[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}")
         const val MAX_API_RESPONSE_CHARS = 2_000_000
         const val MAX_WRITE_BYTES = 750_000
+        const val MAX_ACTIONS_LOG_CHARS = 60_000
     }
 }
