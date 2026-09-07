@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="agent_team_title">AI Team</string>
+    <string name="agent_team_conversation_section">This conversation\'s team</string>
+    <string name="agent_team_hint">Tick two or more agents: every message you send is then answered by them in sequence (relay), each with its own model and role.</string>
+    <string name="agent_team_need_more">Pick %1$d more to enable the relay.</string>
+    <string name="agent_team_new_chat_hint">Send the first message in this chat first, then come back here to pick its team.</string>
+    <string name="agent_team_empty">No agents yet. Create one below.</string>
+    <string name="agent_team_library">Agents</string>
+    <string name="agent_team_add">New agent</string>
+    <string name="agent_team_disabled_tag">disabled</string>
+    <string name="agent_editor_new_title">New agent</string>
+    <string name="agent_editor_edit_title">Edit agent</string>
+    <string name="agent_editor_name">Name</string>
+    <string name="agent_editor_role">Role prompt (this agent\'s system prompt)</string>
+    <string name="agent_editor_model">Model</string>
+    <string name="agent_editor_enabled">Enabled</string>
+    <string name="agent_editor_no_models">No enabled models. Enable a model in Settings → Models first.</string>
+    <string name="agent_editor_delete_confirm">Delete this agent? It is removed from every team that uses it.</string>
+    <string name="agent_name_required">Name is required.</string>
+    <string name="relay_failed_prefix">Relay failed: %1$s</string>
+</resources>

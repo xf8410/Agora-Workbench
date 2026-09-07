@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="agent_team_title">AI 团队</string>
+    <string name="agent_team_conversation_section">本会话的团队</string>
+    <string name="agent_team_hint">勾选两个或以上的智能体：之后每次发送消息都会由他们按顺序接力回答（各自使用自己的模型与职责）。</string>
+    <string name="agent_team_need_more">再选 %1$d 个即可启用接力。</string>
+    <string name="agent_team_new_chat_hint">先在本会话发送第一条消息，然后再回到这里为它选择团队。</string>
+    <string name="agent_team_empty">还没有智能体，先在下方创建一个。</string>
+    <string name="agent_team_library">智能体</string>
+    <string name="agent_team_add">新建智能体</string>
+    <string name="agent_team_disabled_tag">已停用</string>
+    <string name="agent_editor_new_title">新建智能体</string>
+    <string name="agent_editor_edit_title">编辑智能体</string>
+    <string name="agent_editor_name">名称</string>
+    <string name="agent_editor_role">职责提示词（该智能体的 system prompt）</string>
+    <string name="agent_editor_model">模型</string>
+    <string name="agent_editor_enabled">启用</string>
+    <string name="agent_editor_no_models">没有已启用的模型。请先在 设置 → 模型 中启用一个。</string>
+    <string name="agent_editor_delete_confirm">删除该智能体？它将从所有使用它的团队中移除。</string>
+    <string name="agent_name_required">名称不能为空。</string>
+    <string name="relay_failed_prefix">接力失败：%1$s</string>
+</resources>

@@ -8,10 +8,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -28,9 +30,11 @@ import com.newoether.agora.ui.theme.ChatType
 
 /**
  * The chat screen's top bar: a title capsule (drawer menu + brand/conversation title with
- * the context-estimate token subtitle), an actions capsule (system prompt + new chat), and —
- * in an existing conversation — a session usage summary strip that opens the per-request
- * usage detail dialog. Extracted from [ChatApp]; all behavior is routed through callbacks.
+ * the context-estimate token subtitle), an actions capsule (AI team + system prompt + new
+ * chat), and - in an existing conversation - a session usage summary strip that opens the
+ * per-request usage detail dialog. Extracted from [ChatApp]; all behavior is routed through
+ * callbacks. The AI-team entry owns its own [AgentTeamDialog] host state because it needs
+ * no ViewModel access (see [AgentTeamDialog]).
  */
 @Composable
 internal fun ChatTopBar(
@@ -52,6 +56,7 @@ internal fun ChatTopBar(
         ConversationUsageSummary(currentConversationId.orEmpty(), records)
     }
     var showUsageDetails by remember { mutableStateOf(false) }
+    var showAgentTeamDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -150,6 +155,9 @@ internal fun ChatTopBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Spacer(modifier = Modifier.width(5.dp))
+                    IconButton(onClick = { showAgentTeamDialog = true }, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Default.Groups, contentDescription = stringResource(R.string.agent_team_title), modifier = Modifier.size(26.dp))
+                    }
                     IconButton(onClick = onSystemPromptClick, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.Default.Psychology, contentDescription = stringResource(R.string.system_prompt), modifier = Modifier.size(26.dp))
                     }
@@ -220,6 +228,13 @@ internal fun ChatTopBar(
             }
         }
     )
+    if (showAgentTeamDialog) {
+        AgentTeamDialog(
+            conversationId = currentConversationId,
+            isNewChatMode = isNewChatMode,
+            onDismiss = { showAgentTeamDialog = false }
+        )
+    }
 }
 
 private fun compact(value: Int): String = when {
