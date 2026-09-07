@@ -54,20 +54,28 @@ jobs:
         continue-on-error: true
         timeout-minutes: 20
         run: |
-          set -o pipefail
           chmod +x gradlew
           timeout --signal=TERM --kill-after=60s 18m \
             ./gradlew --no-daemon --stacktrace --info testFdroidDebugUnitTest \
-            2>&1 | tee ci-logs/unit-test-console.log
+            > ci-logs/unit-test-console.log 2>&1
+          gradle_rc=$?
+          tail -n 200 ci-logs/unit-test-console.log || true
+          # 清掉可能残留的 daemon/编译器子进程，防止持有句柄把 step 拖死
+          pkill -f KotlinCompileDaemon 2>/dev/null || true
+          pkill -f GradleDaemon 2>/dev/null || true
+          exit $gradle_rc
 
       - name: Build APK
         id: build_apk
         if: steps.unit_tests.outcome == 'success'
         continue-on-error: true
         run: |
-          set -o pipefail
           ./gradlew --no-daemon --stacktrace assembleFdroidDebug \
-            2>&1 | tee ci-logs/apk-build-console.log
+            > ci-logs/apk-build-console.log 2>&1
+          gradle_rc=$?
+          tail -n 100 ci-logs/apk-build-console.log || true
+          pkill -f GradleDaemon 2>/dev/null || true
+          exit $gradle_rc
 
       - name: Verify APK output
         id: verify_apk

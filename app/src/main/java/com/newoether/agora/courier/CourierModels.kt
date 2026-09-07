@@ -71,7 +71,10 @@ object CourierVolumePlanner {
                 volumes += VolumePlan(volumes.size + 1, listOf(file), file.sizeBytes, singleOversize = true)
                 continue
             }
-            val idx = openFiles.indexOfFirst { files -> openBytes[openFiles.indexOf(files)] + file.sizeBytes <= limits.maxVolumeBytes }
+            var idx = -1
+            for (i in openFiles.indices) {
+                if (openBytes[i] + file.sizeBytes <= limits.maxVolumeBytes) { idx = i; break }
+            }
             if (idx >= 0) {
                 openFiles[idx] += file
                 openBytes[idx] += file.sizeBytes
