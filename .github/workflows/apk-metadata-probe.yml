@@ -1,0 +1,85 @@
+name: Download APK and probe global-metadata.dat
+
+# 云端直接拉 2.3GB 官方包，解 zip 取 global-metadata.dat 探头，
+# 衍生文本产物提交回本分支 —— 与手机端完全无关，永不消耗手机内存。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the 2.3GB channel APK
+        run: |
+          curl -L --retry 3 --retry-delay 5 \
+            -o app.apk \
+            "https://lf6-apk-channel.bytesmanager.com/obj/ad-app-package/fbbb309f6495e0c3b439cd6246d7d603ffc50ee9_offset_2446893076.apk"
+          ls -la app.apk
+          sha256sum app.apk | tee apk.sha256
+
+      - name: Extract global-metadata.dat + build_info + game_config.properties
+        run: |
+          unzip -o app.apk \
+            'assets/bin/Data/Managed/Metadata/global-metadata.dat' \
+            'assets/bin/Data/boot.build_info.txt' \
+            'assets/bin/Data/boot.game_config.properties' \
+            -d extracted/ || true
+          find extracted -type f | tee extracted-files.txt
+
+      - name: Probe metadata header and anchor strings
+        run: |
+          META="extracted/assets/bin/Data/Managed/Metadata/global-metadata.dat"
+          test -f "$META" || { echo "metadata missing"; exit 1; }
+          {
+            echo "## global-metadata.dat"
+            echo ""
+            echo "- size_bytes: $(stat -c%s "$META")"
+            echo "- sha256: $(sha256sum "$META" | cut -d' ' -f1)"
+            echo ""
+            echo "### magic (first 16 bytes, hex)"
+            xxd -l 16 "$META"
+            echo ""
+            echo "### head 4096 bytes (hex + ascii)"
+            xxd -l 4096 "$META"
+            echo ""
+            echo "### anchor string offsets (decimal)"
+            for anchor in "Assembly-CSharp" "mscorlib" "UnityEngine"; do
+              off=$(grep -abo "$anchor" "$META" | head -3 | tr '\n' ' ')
+              echo "- $anchor: ${off:-NOT FOUND}"
+            done
+          } | tee probe-report.md
+
+      - name: Copy text derivatives into repo
+        run: |
+          mkdir -p apk-probe
+          cp probe-report.md apk-probe/probe-report.md
+          cp apk.sha256 apk-probe/apk.sha256
+          cp extracted-files.txt apk-probe/extracted-files.txt
+          META="extracted/assets/bin/Data/Managed/Metadata/global-metadata.dat"
+          if [ -f "$META" ]; then
+            head -c 4096 "$META" > apk-probe/metadata-head-4k.bin
+            stat -c%s "$META" > apk-probe/metadata-size.txt
+          fi
+          for f in extracted/assets/bin/Data/boot.build_info.txt \
+                   extracted/assets/bin/Data/boot.game_config.properties; do
+            [ -f "$f" ] && cp "$f" apk-probe/$(basename "$f").txt || true
+          done
+          ls -la apk-probe/
+
+      - name: Commit derivatives
+        run: |
+          git config user.name "ci-probe-bot"
+          git config user.email "ci-probe-bot@users.noreply.github.com"
+          git add apk-probe/
+          git commit -m "probe: 2.3GB 官方包 metadata 头部探测结果（云端下载解包，手机零参与）" || echo "nothing to commit"
+          git push origin HEAD
