@@ -23,6 +23,9 @@ import org.junit.Test
  *    (and umaToolProvider) from builtInToolProviders.
  *  - 8cf6117b: GitHubPullRequestToolProvider and GitHubCloneToolProvider were added
  *    as files but never registered — 3 GitHub tools were unusable from birth.
+ *  - PR #54 shipped BinaryAuditToolProvider but never registered it: all five audit_*
+ *    tools were dead code on main until 2026-09-08.
+ *  - PR #56 shipped NetDownloadToolProvider; registered in the same change as its merge.
  *
  * The registration is a hand-maintained list inside GenerationManager with no compile-time
  * safety, so merges/rewrites drop entries silently. These tests turn any future drop into a
@@ -95,6 +98,8 @@ class ToolProviderRegistrationTest {
             "GitHubCloneToolProvider",
             "PublicContributionTraceToolProvider",
             "PhoneFileToolProvider",
+            "BinaryAuditToolProvider",
+            "NetDownloadToolProvider",
             "UmaToolProvider",
             "ShellToolProvider",
         )
