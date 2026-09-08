@@ -8,9 +8,11 @@ import org.junit.Test
 /**
  * Pure-logic tests for [NetDownloadToolProvider] helpers. No Android dependencies.
  *
- * Note: sanitizeFileName takes the LAST path component (never used as a filesystem path —
- * stored files are sha-named) and preserves spaces (display names are user-facing);
- * everything outside [A-Za-z0-9._ -] folds to '_'.
+ * sanitizeFileName semantics (aligned with the implementation, traced char by char):
+ *  - takes the LAST '/' and LAST '\' path component (display name only — stored files are
+ *    sha-named, so this never becomes a filesystem path);
+ *  - folds every char outside [A-Za-z0-9._ -] to '_';
+ *  - a blank result falls back to "download.bin" (the ifBlank guard).
  */
 class NetDownloadToolProviderTest {
 
@@ -30,12 +32,13 @@ class NetDownloadToolProviderTest {
         // Last path component wins — separators never survive into the display name.
         assertEquals("passwd", NetDownloadToolProvider.sanitizeFileName("/etc/passwd"))
         assertEquals("evil", NetDownloadToolProvider.sanitizeFileName("..\\evil"))
-        // Spaces survive: this is a display name, not a path.
+        // Space is inside the allowed class and survives; ':' folds to '_'.
         assertEquals("a b", NetDownloadToolProvider.sanitizeFileName("a b"))
-        // Everything outside the allowed set folds to '_'.
         assertEquals("a_b", NetDownloadToolProvider.sanitizeFileName("a:b"))
+        // Non-ASCII folds one-to-one: single CJK char -> single '_'.
         assertEquals("_", NetDownloadToolProvider.sanitizeFileName("中"))
-        assertEquals("", NetDownloadToolProvider.sanitizeFileName("///"))
+        // All-separator input is blank after stripping -> ifBlank fallback kicks in.
+        assertEquals("download.bin", NetDownloadToolProvider.sanitizeFileName("///"))
     }
 
     @Test
