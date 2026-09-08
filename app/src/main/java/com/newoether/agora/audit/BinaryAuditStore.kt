@@ -107,6 +107,56 @@ class BinaryAuditStore(private val context: Context) {
         }
     }
 
+    /**
+     * Adopts an already-materialized temp file (e.g. a finished download in cacheDir) without
+     * copying bytes: streams it once for the SHA-256, then renames it into the store (same
+     * volume → rename, not a byte copy, so a multi-GB file lands instantly with no 2× space
+     * spike). The temp file is consumed: moved into the store, or deleted when the content
+     * already exists (dedupe hit).
+     */
+    @Synchronized
+    fun adopt(temp: File, name: String): BinaryAuditEntry {
+        require(temp.isFile) { "temp file missing: ${temp.name}" }
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            var length = 0L
+            FileInputStream(temp).use { input ->
+                val buffer = ByteArray(COPY_BUFFER)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    if (read > 0) {
+                        digest.update(buffer, 0, read)
+                        length += read
+                    }
+                }
+            }
+            require(length > 0) { "temp file is empty" }
+            val sha = digest.digest().joinToString("") { "%02x".format(it) }
+            readIndex().entries.firstOrNull { it.sha256 == sha }?.let { existing ->
+                temp.delete()
+                return existing
+            }
+            val target = File(root, sha)
+            if (!temp.renameTo(target)) {
+                temp.copyTo(target, overwrite = true)
+                temp.delete()
+            }
+            val entry = BinaryAuditEntry(
+                sourceId = sha,
+                name = sanitize(name.ifBlank { sha.take(12) }),
+                byteLength = length,
+                sha256 = sha,
+                importedAt = System.currentTimeMillis()
+            )
+            writeIndex(IndexFile(entries = readIndex().entries + entry))
+            return entry
+        } catch (t: Throwable) {
+            temp.delete()
+            throw t
+        }
+    }
+
     /** Accepts content://, file:// and absolute paths (mirrors AttachmentSourceReader semantics). */
     fun openSource(source: String): () -> InputStream = {
         when {
