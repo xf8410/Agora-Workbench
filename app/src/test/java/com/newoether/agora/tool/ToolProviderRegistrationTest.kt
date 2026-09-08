@@ -26,6 +26,8 @@ import org.junit.Test
  *  - PR #54 shipped BinaryAuditToolProvider but never registered it: all five audit_*
  *    tools were dead code on main until 2026-09-08.
  *  - PR #56 shipped NetDownloadToolProvider; registered in the same change as its merge.
+ *  - audit P0 wave shipped BinaryAuditP0ToolProvider (audit_search / audit_zip_list /
+ *    audit_zip_extract) — registered in the same change, lesson applied.
  *
  * The registration is a hand-maintained list inside GenerationManager with no compile-time
  * safety, so merges/rewrites drop entries silently. These tests turn any future drop into a
@@ -99,6 +101,7 @@ class ToolProviderRegistrationTest {
             "PublicContributionTraceToolProvider",
             "PhoneFileToolProvider",
             "BinaryAuditToolProvider",
+            "BinaryAuditP0ToolProvider",
             "NetDownloadToolProvider",
             "UmaToolProvider",
             "ShellToolProvider",
