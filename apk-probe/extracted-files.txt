@@ -1,0 +1,1 @@
+extracted/assets/bin/Data/Managed/Metadata/global-metadata.dat
