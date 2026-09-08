@@ -24,9 +24,11 @@ import com.newoether.agora.service.AppForegroundTracker
 import com.newoether.agora.api.util.projectAssistantImagesToLatestUserMessage
 import com.newoether.agora.util.Constants
 import com.newoether.agora.util.SearchResultFormatter
+import com.newoether.agora.tool.BinaryAuditToolProvider
 import com.newoether.agora.tool.GitHubBranchMutationToolProvider
 import com.newoether.agora.tool.ImageGenToolProvider
 import com.newoether.agora.tool.MemoryToolProvider
+import com.newoether.agora.tool.NetDownloadToolProvider
 import com.newoether.agora.tool.RagToolProvider
 import com.newoether.agora.tool.ShellToolProvider
 import com.newoether.agora.tool.ToolProvider
@@ -201,6 +203,8 @@ class GenerationManager(
     private val githubCloneToolProvider = com.newoether.agora.tool.GitHubCloneToolProvider(app, sandboxFactory)
     private val publicContributionTraceToolProvider = com.newoether.agora.tool.PublicContributionTraceToolProvider(app)
     private val phoneFileToolProvider = com.newoether.agora.tool.PhoneFileToolProvider(app)
+    private val binaryAuditToolProvider = BinaryAuditToolProvider(app)
+    private val netDownloadToolProvider = NetDownloadToolProvider(app)
     private val umaToolProvider = com.newoether.agora.tool.UmaToolProvider()
     private val shellToolProvider = ShellToolProvider(sandboxFactory).also { stp ->
         // Forward to the ViewModel-provided gate at call time (read the var lazily).
@@ -211,7 +215,8 @@ class GenerationManager(
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
         githubWorkspaceToolProvider, githubRepositoryMutationToolProvider,
         githubBranchMutationToolProvider, githubCloneToolProvider,
-        publicContributionTraceToolProvider, phoneFileToolProvider, umaToolProvider, shellToolProvider
+        publicContributionTraceToolProvider, phoneFileToolProvider,
+        binaryAuditToolProvider, netDownloadToolProvider, umaToolProvider, shellToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
