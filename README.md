@@ -1,3 +1,60 @@
+<div align="center">
+
+# 🤖 Agora-Workbench
+
+**面向大仓库与远程工作区的安卓端 AI 开发工作台**
+
+![仓库](https://img.shields.io/badge/仓库-xf8410-8B5CF6?style=flat-square) ![分支](https://img.shields.io/badge/分支-100-10B981?style=flat-square) ![版本](https://img.shields.io/badge/版本-14-F59E0B?style=flat-square) ![CI](https://img.shields.io/badge/CI-3-3B82F6?style=flat-square)
+
+</div>
+
+---
+> 📌 **一句话定位**：面向大仓库与远程工作区的安卓端 AI 开发工作台
+
+## 🧭 项目定位
+
+Agora Workbench 是项目组的<b>安卓端 AI 工作台</b>（umawork 的姊妹仓）：多模型对话（OpenAI/Anthropic 双协议）、工具调用框架、GitHub 工具族（读写/PR/分支/工作区克隆）、消息持久化与会话可靠性根治。针对<b>超大仓库、大附件、远程工作区</b>三类场景做了专项优化，是大仓协作与移动端开发的主战场。
+
+## ✨ 核心功能
+- 多模型对话：OpenAI / Anthropic 流式协议、工具调用增量归属、流终止看门狗- Token 用量与缓存命中账本：会话级累计统计 + 顶栏横幅 + 逐请求明细弹窗- GitHub 工具族：仓库克隆(tar 解包)、文件读写、分支/PR/工作区全套 mutation，带确认门控与参数护栏- 文件投递工具族 phone_*：SAF 主路径读手机文件 + Git Blob 分卷上传（大文件按卷切分）- 审计工具族 audit_*：二进制安全读取 + 导入路径 OOM 防崩溃- 多智能体接力：RelaySections 解析 + AgentTeamDialog 团队入口 + 顺序接力 UI- 记忆系统：会话自动交接 appendSessionHandoff + 多词分词搜索（AND 优先降级）- 导出备份：v3 兼容 + 流式媒体写入 + 轻量投影 + 细分进度（16% 卡死根治）+ ZIP/表格附件- 工作区持久聊天：车道（lane）绑定 fork/upstream 分支，会话按 workspace:xxx:laneKey 持久化
+
+## 🌿 分支导览（共 100 个分支全览）
+
+<details open>
+<summary><b>点击收起/展开全部分支用途说明</b></summary>
+
+| 分支 | 用途说明 |
+|---|---|
+| `main` | 主干：当前开发线，发版从此处出 |
+| `courier/file-delivery` | 文件投递工具族（phone_* + SAF + Git Blob 分卷上传），已合并进 main |
+| `workbench/* 等 100 个历史分支` | P0 审计工具、可靠性修复、流式超时、Token 用量、备份修复、会话根修 v5 系列等历史工作分支——内容均已按 PR(#41~#54) 合入 main，保留作历史档案，分支用途见各分支首提交信息 |
+
+</details>
+
+## 🏷️ 版本历史
+
+v1.4.3 ~ v1.4.10-workbench / v1.5.0-workbench 共 14 个发布版本，每次发版附签名 APK；版本号说明：跳过历史已占用的 v1.4.8/v1.4.9 tag 段，详见 Releases 页。
+
+完整版本列表 ➡️ [Releases 页](../../releases)
+
+## ⚙️ CI 流水线（共 3 条）
+
+| 流水线 | 用途说明 |
+|---|---|
+| Build Agora Workbench APK | 主 CI：单测全量诊断 + 签名 debug/release APK + 产物上传 + CI 结果强制门禁 |
+| build-public-repository-browser | 公开仓库浏览器构建 |
+| 其余 apply-*/fix-* 一次性流水线 | 历史一次性补丁流水线（已随使命完成逐步清理） |
+
+
+---
+
+## 📜 历史介绍存档
+
+> 以下为仓库原有介绍，**内容未删改**，仅移入存档区（新版介绍以本页上方为准）。
+
+<details>
+<summary><b>点击展开原 README</b></summary>
+
 # Agora Workbench 已验证补丁与功能说明
 
 > 本节是仓库当前的权威说明，按源码、提交和 GitHub Actions 结果编写。下方原有项目介绍完整保留，用于延续既有说明。未经成功构建验证的修改不会写成“已修复”。
@@ -310,3 +367,5 @@ Agora Workbench 是在 Android 端持续改造的个人 AI 工作台，重点不
 ## 说明
 
 本 README 已替换原有官方英文宣传、官方商店入口、F-Droid 入口及上游关联项目说明。此后文档只描述本仓库实际维护的 Agora Workbench 魔改版本。
+
+</details>
