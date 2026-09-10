@@ -55,7 +55,8 @@ class NetDownloadToolProvider(context: Context) : ToolProvider {
                 description = "完整下载一个 HTTP(S) 文件（APK/压缩包等，支持数 GB）到本机 binary-audit 存储：" +
                     "流式分段写盘、绝不整文件进内存，自动跟随重定向，下载前校验 Content-Length 与磁盘剩余空间；" +
                     "中断后再次调用同一 URL 自动断点续传；完成后返回 source_id/sha256/byte_length，" +
-                    "可直接用 audit_read_bytes / audit_info 分析（无需再 audit_import）。",
+                    "可直接用 audit_read_bytes / audit_info 分析（无需再 audit_import）。" +
+                    "仅用于用户明确指定的文件；禁止批量下载第三方技能/插件包（防恶意代码，参考思路后自行实现）。",
                 parameters = ToolParameters(
                     properties = mapOf(
                         "url" to text("待下载文件的 HTTP(S) 直链。"),

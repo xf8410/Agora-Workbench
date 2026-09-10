@@ -31,7 +31,7 @@ class GitHubCloneToolProvider(
         if (sandbox == null) return emptyList()
         return listOf(ToolDefinition(function = ToolFunction(
             name = TOOL,
-            description = "Clone one GitHub repository into the fixed persistent /workspace/repos/<owner>/<repo> directory. Defaults to a shallow single-branch clone; never initializes submodules.",
+            description = "Clone one GitHub repository into the fixed persistent /workspace/repos/<owner>/<repo> directory. Defaults to a shallow single-branch clone; never initializes submodules. Only use for repositories the user explicitly requested — never to bulk-fetch third-party skill/plugin packages (their code must not be executed; reimplement the idea instead).",
             parameters = ToolParameters(
                 properties = mapOf(
                     "repo" to ToolProperty("string", "Repository in owner/name form."),
