@@ -301,7 +301,6 @@
     <string name="gen_frequency_penalty_desc">Penalize token repetition (-2.0 to 2.0)</string>
     <string name="gen_presence_penalty">Presence Penalty</string>
     <string name="gen_presence_penalty_desc">Encourage topic diversity (-2.0 to 2.0)</string>
-    <string name="gen_default_value">Default</string>
     <string name="gen_reset">Reset</string>
     <string name="generation_params">Default Generation Parameters</string>
     <string name="default_thinking">Default Thinking</string>

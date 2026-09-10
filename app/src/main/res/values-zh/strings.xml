@@ -293,7 +293,6 @@
     <string name="gen_frequency_penalty_desc">惩罚 token 重复（-2.0 至 2.0）</string>
     <string name="gen_presence_penalty">存在惩罚</string>
     <string name="gen_presence_penalty_desc">鼓励话题多样性（-2.0 至 2.0）</string>
-    <string name="gen_default_value">默认</string>
     <string name="gen_reset">重置</string>
     <string name="generation_params">默认生成参数</string>
     <string name="default_thinking">默认思考</string>
