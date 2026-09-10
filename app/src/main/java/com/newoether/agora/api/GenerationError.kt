@@ -52,6 +52,12 @@ sealed class GenerationError {
                 "模型服务因内容安全规则拒绝了这次请求。请调整消息内容后重试。"
             evidence.containsAny("billing", "payment", "credit balance") ->
                 "模型账户余额或计费状态有问题。请检查提供商账户。"
+            evidence.containsAny(
+                "context_length_exceeded", "context length", "context window",
+                "maximum context", "prompt is too long", "input token", "token limit",
+                "too many tokens", "max tokens", "request too large"
+            ) ->
+                "本次请求超出模型的上下文长度限制。请减少附件、缩短对话或新建对话后重试。"
             else -> "模型服务拒绝了这次请求。请检查模型、API 密钥和生成设置后重试。"
         }
     }

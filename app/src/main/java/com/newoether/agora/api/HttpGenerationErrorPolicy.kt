@@ -12,6 +12,15 @@ internal object HttpGenerationErrorPolicy {
         Regex("too\\s+many\\s+(input\\s+|prompt\\s+)?tokens", RegexOption.IGNORE_CASE),
         Regex("(input|prompt)[^\\n]{0,40}(too\\s+long|token\\s+limit)", RegexOption.IGNORE_CASE),
         Regex("token[^\\n]{0,40}(budget|limit)[^\\n]{0,40}(exceeded|overflow)", RegexOption.IGNORE_CASE),
+        // Underscore-written error codes (OpenAI style): context_length_exceeded etc.
+        Regex("context[_\\s]+length[_\\s]+(is[_\\s]+)?(exceeded|too[_\\s]+long|overflow)", RegexOption.IGNORE_CASE),
+        Regex("context[_\\s]+window[_\\s]+(exceeded|overflow|too[_\\s]+(long|large))", RegexOption.IGNORE_CASE),
+        Regex("maximum[_\\s]+context[_\\s]+(length|size|tokens?)", RegexOption.IGNORE_CASE),
+        Regex("prompt[_\\s]+is[_\\s]+too[_\\s]+long", RegexOption.IGNORE_CASE),
+        Regex("(input|prompt)[_\\s]+token[_\\s]*(count)?[_\\s]*exceeds", RegexOption.IGNORE_CASE),
+        Regex("(exceed|greater|more)[_\\s]+(than[_\\s]+)?(the[_\\s]+)?(maximum|max)[_\\s]+(number[_\\s]+of[_\\s]+)?(input[_\\s]+)?tokens", RegexOption.IGNORE_CASE),
+        Regex("max[_\\s]+tokens?[_\\s]+exceed", RegexOption.IGNORE_CASE),
+        Regex("request[_\\s]+too[_\\s]+large", RegexOption.IGNORE_CASE),
     )
 
     fun isContextOverflow(responseBody: String): Boolean {
