@@ -33,7 +33,7 @@ Agora Workbench 是项目组的<b>安卓端 AI 工作台</b>（umawork 的姊妹
 
 ## 🏷️ 版本历史
 
-v1.4.3 ~ v1.4.10-workbench / v1.5.0 ~ v1.5.1-workbench 共 15 个发布版本，每次发版附签名 APK；版本号说明：跳过历史已占用的 v1.4.8/v1.4.9 tag 段，详见 Releases 页。
+v1.4.3 ~ v1.4.10-workbench / v1.5.0 ~ v1.5.2-workbench 共 16 个发布版本，每次发版附签名 APK；版本号说明：跳过历史已占用的 v1.4.8/v1.4.9 tag 段，详见 Releases 页。
 
 完整版本列表 ➡️ [Releases 页](../../releases)
 
