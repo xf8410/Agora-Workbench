@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="images" path="images/" />
+    <files-path name="html_artifacts" path="html_artifacts/" />
     <files-path name="sandbox-home" path="sandbox-home/" />
     <cache-path name="shared" path="shared/" />
 </paths>

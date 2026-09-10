@@ -211,6 +211,10 @@ class GenerationManager(
         // Forward to the ViewModel-provided gate at call time (read the var lazily).
         stp.confirm = { server, summary -> onConfirmShellCommand?.invoke(server, summary) ?: true }
     }
+    private val roadmapToolProvider = com.newoether.agora.tool.RoadmapToolProvider(
+        com.newoether.agora.data.RoadmapStore(app.filesDir)
+    )
+    private val htmlArtifactToolProvider = com.newoether.agora.tool.HtmlArtifactToolProvider(app)
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
@@ -218,7 +222,7 @@ class GenerationManager(
         githubBranchMutationToolProvider, githubCloneToolProvider,
         publicContributionTraceToolProvider, phoneFileToolProvider,
         binaryAuditToolProvider, netDownloadToolProvider, umaToolProvider, shellToolProvider,
-        roadmapToolProvider
+        roadmapToolProvider, htmlArtifactToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
