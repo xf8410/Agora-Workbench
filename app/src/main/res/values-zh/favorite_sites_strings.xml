@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_sites">常用网站</string>
+    <string name="settings_sites_desc">常用链接速开列表，点击即开，可随时添加——也可以让 AI 帮你加</string>
+    <string name="sites_add">新增网站</string>
+    <string name="sites_edit">编辑网站</string>
+    <string name="sites_open">打开网站</string>
+    <string name="sites_filter_all">全部</string>
+    <string name="sites_cat_mine">我的</string>
+    <string name="sites_cat_external">外部</string>
+    <string name="sites_cat_other">其他</string>
+    <string name="sites_title_hint">网站名称</string>
+    <string name="sites_url_hint">网址（https://…）</string>
+    <string name="sites_note_hint">备注（可选）</string>
+    <string name="sites_empty">还没有常用网站。在这里添加，或者直接把链接发给 AI 让它帮你记下来。</string>
+    <string name="sites_open_failed">无法打开该链接——没有可用的应用处理。</string>
+    <string name="sites_save">保存</string>
+    <string name="sites_delete">删除</string>
+    <string name="sites_cancel">取消</string>
+</resources>

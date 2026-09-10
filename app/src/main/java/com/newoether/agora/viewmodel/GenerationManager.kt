@@ -214,6 +214,9 @@ class GenerationManager(
     private val roadmapToolProvider = com.newoether.agora.tool.RoadmapToolProvider(
         com.newoether.agora.data.RoadmapStore(app.filesDir)
     )
+    private val favoriteSitesToolProvider = com.newoether.agora.tool.FavoriteSitesToolProvider(
+        com.newoether.agora.data.FavoriteSitesStore(app.filesDir)
+    )
     private val htmlArtifactToolProvider = com.newoether.agora.tool.HtmlArtifactToolProvider(app)
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
@@ -222,7 +225,7 @@ class GenerationManager(
         githubBranchMutationToolProvider, githubCloneToolProvider,
         publicContributionTraceToolProvider, phoneFileToolProvider,
         binaryAuditToolProvider, netDownloadToolProvider, umaToolProvider, shellToolProvider,
-        roadmapToolProvider, htmlArtifactToolProvider
+        roadmapToolProvider, favoriteSitesToolProvider, htmlArtifactToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 

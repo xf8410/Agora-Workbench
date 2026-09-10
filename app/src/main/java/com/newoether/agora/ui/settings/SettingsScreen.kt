@@ -183,6 +183,8 @@ private val settingsGroups = listOf(
         SettingsCategory("search", R.string.search_title, R.string.search_desc, Icons.Default.Search),
         SettingsCategory("shell", R.string.shell_title, R.string.shell_desc, Icons.Default.Terminal),
         SettingsCategory("github", R.string.settings_github, R.string.settings_github_desc, Icons.Default.Code),
+        SettingsCategory("sites", R.string.settings_sites, R.string.settings_sites_desc, Icons.Default.Bookmark),
+        SettingsCategory("roadmap", R.string.settings_roadmap, R.string.settings_roadmap_desc, Icons.Default.Lightbulb),
         SettingsCategory("agents", icon = Icons.Default.Groups, title = "多智能体接力", description = "为对话配置多个 AI，按顺序接力生成一条回复"),
         SettingsCategory("uma", R.string.settings_uma, R.string.settings_uma_desc, Icons.Default.Sports),
         SettingsCategory("automation", R.string.settings_automation, R.string.settings_automation_desc, Icons.Default.Repeat),

@@ -103,6 +103,7 @@ class ToolProviderRegistrationTest {
             "UmaToolProvider",
             "ShellToolProvider",
             "RoadmapToolProvider",
+            "FavoriteSitesToolProvider",
             "HtmlArtifactToolProvider",
         )
         assertEquals(

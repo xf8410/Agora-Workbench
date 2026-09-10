@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_sites">Favorite sites</string>
+    <string name="settings_sites_desc">Quick-launch list of your links; tap to open, always extendable — the assistant can add entries for you</string>
+    <string name="sites_add">New site</string>
+    <string name="sites_edit">Edit site</string>
+    <string name="sites_open">Open site</string>
+    <string name="sites_filter_all">All</string>
+    <string name="sites_cat_mine">Mine</string>
+    <string name="sites_cat_external">External</string>
+    <string name="sites_cat_other">Other</string>
+    <string name="sites_title_hint">Site name</string>
+    <string name="sites_url_hint">URL (https://…)</string>
+    <string name="sites_note_hint">Note (optional)</string>
+    <string name="sites_empty">No favorite sites yet. Add one here or just send the link to the assistant and ask it to keep it.</string>
+    <string name="sites_open_failed">Could not open this link — no app available to handle it.</string>
+    <string name="sites_save">Save</string>
+    <string name="sites_delete">Delete</string>
+    <string name="sites_cancel">Cancel</string>
+</resources>
