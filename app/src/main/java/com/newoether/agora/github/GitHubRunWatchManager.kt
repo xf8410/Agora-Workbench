@@ -124,11 +124,23 @@ class GitHubRunWatchManager(private val context: Context) {
         val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "GitHub Actions watches", NotificationManager.IMPORTANCE_DEFAULT))
         val result = watch.conclusion ?: watch.status
+        // Red/green verdict goes FIRST in the title: phone notification trays collapse long
+        // bodies, so the run id/sha shown later is exactly what the user can never see (#62).
+        val (verdict, color) = when (watch.conclusion) {
+            "success" -> "🟢 绿 CI 通过" to 0xFF2E7D32
+            "failure", "timed_out", "action_required", "startup_failure" -> "🔴 红 CI 失败" to 0xFFC62828
+            "cancelled" -> "🟡 CI 已取消" to 0xFFF9A825
+            null -> "⚪ CI ${watch.status}" to 0xFF616161
+            else -> "⚪ CI $result" to 0xFF616161
+        }
+        val repoShort = watch.repo.substringAfterLast('/')
         val notification = NotificationCompat.Builder(app, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("GitHub Actions: $result")
-            .setContentText("${watch.repo} · Run ${watch.runId} · ${watch.expectedHeadSha.take(12)}")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("${watch.repo}\nRun ${watch.runId}, attempt ${watch.runAttempt}\nCommit ${watch.expectedHeadSha}\nConclusion: $result"))
+            .setContentTitle("$verdict · $repoShort")
+            .setContentText("$verdict · ${watch.repo} · Run ${watch.runId} · ${watch.expectedHeadSha.take(7)}")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$verdict\n${watch.repo}\nRun ${watch.runId}, attempt ${watch.runAttempt}\nCommit ${watch.expectedHeadSha}\nConclusion: $result"))
+            .setColor(color.toInt())
+            .setColorized(true)
             .setAutoCancel(true)
             .build()
         manager.notify(watch.id.hashCode(), notification)

@@ -179,17 +179,31 @@ class MemoryToolProvider(
             }
 
             "read_memory_file" -> {
+                val available = memoryManager.listFiles().map { it.name }
+                fun notFound(name: String): String =
+                    "Error: Memory file \"$name\" does not exist. Available files: " +
+                        (if (available.isEmpty()) "(none yet)" else available.joinToString(", ")) +
+                        ". Call list_memory_files to confirm exact names, or create_memory_file to create \"$name\" if it should exist."
                 val singleName = arg("name")
                 val namesArray = args["names"] as? JsonArray
                 if (namesArray != null && namesArray.isNotEmpty()) {
                     val names = namesArray.map {
                         (it as? JsonPrimitive)?.content ?: ""
                     }.filter { it.isNotEmpty() }
-                    names.joinToString("\n\n") { name ->
+                    // Missing files no longer abort the whole multi-read: existing content is
+                    // returned alongside an explicit per-file miss list the model can act on.
+                    val (present, missing) = names.partition { it in available }
+                    val body = present.joinToString("\n\n") { name ->
                         "--- $name ---\n${boundedRead(name)}"
                     }
+                    when {
+                        missing.isEmpty() -> body
+                        present.isEmpty() -> notFound(missing.first()) +
+                            if (missing.size > 1) "\n(Also missing: ${missing.drop(1).joinToString(", ")})" else ""
+                        else -> body + "\n\n" + missing.joinToString("\n") { notFound(it) }
+                    }
                 } else if (singleName.isNotEmpty()) {
-                    boundedRead(singleName)
+                    if (singleName in available) boundedRead(singleName) else notFound(singleName)
                 } else {
                     "Error: No file name provided. Use 'name' for a single file or 'names' for multiple files."
                 }

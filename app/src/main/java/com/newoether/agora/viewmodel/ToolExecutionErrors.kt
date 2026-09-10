@@ -32,6 +32,12 @@ internal object ToolExecutionErrors {
         return when {
             evidence.containsAny("unknown tool", "unknown github tool", "unknown uma tool") ->
                 unknownTool(name)
+            evidence.containsAny("file not found", "no such file", "does not exist", "cannot find the file") ->
+                message(
+                    "T010",
+                    "文件不存在",
+                    "工具“${safeName(name)}”要访问的文件不存在。先用列表类工具确认可用的文件名，再重试；如确需新建，改用创建类工具。",
+                )
             evidence.containsAny("invalid tool arguments", "invalid argument", "must be positive", "invalid owner/name", "invalid repository", "invalid file", "invalid ref") ->
                 message("T002", "工具参数不正确", "工具“${safeName(name)}”收到的参数格式或取值不正确。请检查参数后重试。")
             evidence.containsAny("required", "missing", "must not be blank", "cannot be blank") ->
