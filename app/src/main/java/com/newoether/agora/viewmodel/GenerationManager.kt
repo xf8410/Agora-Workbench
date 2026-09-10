@@ -434,8 +434,8 @@ class GenerationManager(
             }
 
         val allTools = toolProviders.flatMap { it.definitions(ctx) }
-        val conversationBriefing = if (ctx.contextCompaction && config.maxContextWindow > 0 && path.size > config.maxContextWindow) {
-            com.newoether.agora.util.ConversationBriefing.build(path.dropLast(config.maxContextWindow))
+        val conversationBriefing = if (ctx.contextCompaction && config.maxContextWindow > 0 && currentPath.size > config.maxContextWindow) {
+            com.newoether.agora.util.ConversationBriefing.build(currentPath.dropLast(config.maxContextWindow))
         } else null
         val effectiveSystemPromptWithBriefing = if (conversationBriefing != null) {
             config.effectiveSystemPrompt + "\n\n## 早期对话简报（窗口外旧消息摘录）\n" + conversationBriefing
