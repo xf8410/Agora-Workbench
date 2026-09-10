@@ -1,6 +1,6 @@
 # Remote Shell (Conch)
 
-Agora kann Befehle auf entfernten Rechnern über das [Conch](https://github.com/newo-ether/conch)-Protokoll ausführen — eine Ende-zu-Ende-verschlüsselte, sichere Shell, die für KI-Agenten entwickelt wurde.
+Agora kann Befehle auf entfernten Rechnern über das [Conch](https://github.com/xf8410/conch)-Protokoll ausführen — eine Ende-zu-Ende-verschlüsselte, sichere Shell, die für KI-Agenten entwickelt wurde.
 
 ## Wie es funktioniert
 
@@ -34,7 +34,7 @@ Conch verwendet starke Verschlüsselung und Anti-Missbrauch-Schutz:
 
 ### Schritt 1: Conch-Server bereitstellen
 
-Stellen Sie den Conch-Server auf Ihrem Zielrechner bereit. Siehe das [Conch-Repository](https://github.com/newo-ether/conch) für Einrichtungsanweisungen.
+Stellen Sie den Conch-Server auf Ihrem Zielrechner bereit. Siehe das [Conch-Repository](https://github.com/xf8410/conch) für Einrichtungsanweisungen.
 
 ### Schritt 2: Gerät in Agora hinzufügen
 
@@ -109,7 +109,7 @@ Alle Dateioperationen gehen durch den verschlüsselten Conch-Kanal.
 
 Conch kann auch als **Claude Desktop MCP-Server** dienen. Wenn Sie Claude Code oder einen anderen MCP-Client verwenden, können Sie Conch als Tool-Provider für entfernten Datei- und Shell-Zugriff von Ihrem Desktop aus konfigurieren.
 
-Siehe die [Conch-Dokumentation](https://github.com/newo-ether/conch) für MCP-Einrichtungsanweisungen.
+Siehe die [Conch-Dokumentation](https://github.com/xf8410/conch) für MCP-Einrichtungsanweisungen.
 
 ---
 

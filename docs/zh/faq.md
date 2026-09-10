@@ -79,7 +79,7 @@ Agora 支持 GGUF 格式的聊天和嵌入模型。聊天模型需要能装入�
 
 ### 如何设置远程 Shell 访问？
 
-在目标机器上部署 [Conch](https://github.com/newo-ether/conch) 服务器，然后在 设置 → Shell 中添加设备，填入 URL 和 API 密钥。详见 [远程 Shell](shell.md)。
+在目标机器上部署 [Conch](https://github.com/xf8410/conch) 服务器，然后在 设置 → Shell 中添加设备，填入 URL 和 API 密钥。详见 [远程 Shell](shell.md)。
 
 ### 可以不用 API 密钥搜索网络吗？
 
@@ -119,4 +119,4 @@ Agora 支持 GGUF 格式的聊天和嵌入模型。聊天模型需要能装入�
 
 ### 如何反馈问题或请求功能？
 
-在 [GitHub](https://github.com/newo-ether/Agora/issues) 上提交 issue。贡献方式见 README 的 [Contributing](https://github.com/newo-ether/Agora#contributing) 部分。
+在 [GitHub](https://github.com/xf8410/Agora-Workbench/issues) 上提交 issue。贡献方式见 README 的 [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) 部分。

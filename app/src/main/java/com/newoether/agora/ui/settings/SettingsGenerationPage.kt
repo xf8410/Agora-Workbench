@@ -46,6 +46,7 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
     val thinkingBudgetEnabled by viewModel.settings.thinkingBudgetEnabled.collectAsState()
     val thinkingBudgetTokens by viewModel.settings.thinkingBudgetTokens.collectAsState()
     val showDocFab by viewModel.settings.showDocumentationFab.collectAsState()
+    val contextCompaction by viewModel.settings.contextCompaction.collectAsState()
 
     CollapsingSettingsScaffold(
         title = stringResource(R.string.generation_title),
@@ -121,6 +122,19 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                     Switch(checked = visualizeContextRollout, onCheckedChange = { viewModel.settings.setVisualizeContextRollout(it) })
                                 },
                                 modifier = Modifier.clickable { viewModel.settings.setVisualizeContextRollout(!visualizeContextRollout) }
+                            )
+                        },
+                        {
+                            SettingsItem(
+                                headlineContent = { Text(stringResource(R.string.context_compaction)) },
+                                supportingContent = { Text(stringResource(R.string.context_compaction_desc)) },
+                                leadingContent = {
+                                    Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                },
+                                trailingContent = {
+                                    Switch(checked = contextCompaction, onCheckedChange = { viewModel.settings.setContextCompaction(it) })
+                                },
+                                modifier = Modifier.clickable { viewModel.settings.setContextCompaction(!contextCompaction) }
                             )
                         }
                     )
@@ -223,6 +237,22 @@ fun SettingsGenerationPage(viewModel: ChatViewModel, onBack: () -> Unit) {
                                 onValueChange = { viewModel.settings.setDefaultPresencePenalty(it) },
                                 onReset = { viewModel.settings.setDefaultPresencePenalty(null) }
                             )
+                        },
+                        {
+                            SettingsItem(
+                                headlineContent = { Text(stringResource(R.string.gen_reset_all)) },
+                                supportingContent = { Text(stringResource(R.string.gen_reset_all_desc)) },
+                                leadingContent = {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                },
+                                modifier = Modifier.clickable {
+                                    viewModel.settings.setDefaultTemperature(null)
+                                    viewModel.settings.setDefaultMaxTokens(null)
+                                    viewModel.settings.setDefaultTopP(null)
+                                    viewModel.settings.setDefaultFrequencyPenalty(null)
+                                    viewModel.settings.setDefaultPresencePenalty(null)
+                                }
+                            )
                         }
                     )
                 )
@@ -286,7 +316,7 @@ private fun GenParamSlider(
                     )
                     if (!hasExplicitOrDraftValue) {
                         Text(
-                            text = stringResource(R.string.gen_not_specified),
+                            text = stringResource(R.string.gen_default_value, format(defaultSliderPos)),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier.padding(end = 6.dp)
@@ -388,7 +418,7 @@ private fun GenParamSlider(
                     )
                     if (!hasExplicitOrDraftValue) {
                         Text(
-                            text = stringResource(R.string.gen_not_specified),
+                            text = stringResource(R.string.gen_default_value, format(presets[defaultIndex])),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier.padding(end = 6.dp)

@@ -14,7 +14,7 @@ Agora は、オープンソースの Android アプリストアである F-Droid
 
 ### GitHub リリースから
 
-1. [リリースページ](https://github.com/newo-ether/Agora/releases) にアクセスします
+1. [リリースページ](https://github.com/xf8410/Agora-Workbench/releases) にアクセスします
 2. 最新の `.apk` ファイルをダウンロードします
 3. デバイスでファイルを開き、表示されるプロンプトでインストールを確認します
 
@@ -24,7 +24,7 @@ Agora は、オープンソースの Android アプリストアである F-Droid
 
 1. リポジトリをクローンします：
    ```
-   git clone https://github.com/newo-ether/Agora.git
+   git clone https://github.com/xf8410/Agora-Workbench.git
    ```
 2. [Android Studio](https://developer.android.com/studio)（Ladybug 以降）でプロジェクトを開きます
 3. Gradle を同期してビルドします

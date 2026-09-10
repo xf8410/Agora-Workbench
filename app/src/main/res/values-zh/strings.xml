@@ -155,7 +155,7 @@
     <string name="settings_models">模型</string>
     <string name="settings_models_desc">启用、禁用和配置 AI 模型</string>
     <string name="settings_generation">生成</string>
-    <string name="settings_generation_desc">LLM 参数和上下文窗口</string>
+    <string name="settings_generation_desc">模型参数与对话上下文</string>
     <string name="settings_web_search">网页搜索</string>
     <string name="settings_web_search_desc">为所有提供商配置网页搜索工具</string>
     <string name="settings_title_gen">标题生成</string>
@@ -272,16 +272,21 @@
 
     <!-- Settings - Generation Page -->
     <string name="generation_title">生成</string>
-    <string name="context_window">上下文窗口</string>
-    <string name="context_window_default">默认上下文窗口</string>
+    <string name="context_window">对话历史保留条数</string>
+    <string name="context_window_default">默认对话历史保留条数</string>
     <string name="context_retain">保留最近 %1$d 条消息</string>
     <string name="context_visualize">可视化上下文滚动</string>
-    <string name="context_visualize_desc">将上下文窗口外的消息变暗</string>
+    <string name="context_visualize_desc">将不参与请求的较早消息变暗</string>
+    <string name="context_compaction">自动携带早期对话简报</string>
+    <string name="context_compaction_desc">把滑出窗口的较早消息整理成简报随请求发送，长对话不丢上下文</string>
     <string name="gen_temperature">温度</string>
     <string name="gen_temperature_desc">控制随机性（0.0 = 确定性，2.0 = 创造性）</string>
     <string name="gen_max_tokens">最大输出 Token</string>
     <string name="gen_max_tokens_desc">响应中的最大 token 数</string>
     <string name="gen_not_specified">未指定</string>
+    <string name="gen_default_value">默认 %1$s</string>
+    <string name="gen_reset_all">恢复全部默认参数</string>
+    <string name="gen_reset_all_desc">温度、最大输出 Token、Top P、频率惩罚、存在惩罚全部恢复为默认</string>
     <string name="gen_top_p">Top P</string>
     <string name="gen_top_p_desc">核采样阈值（0.0-1.0）</string>
     <string name="gen_frequency_penalty">频率惩罚</string>
@@ -898,7 +903,7 @@
     <string name="no_api_key_configured">未配置 API 密钥。</string>
     <string name="no_api_key_for_provider">未配置 %s 的凭证，请在设置中添加 API 密钥或 Base URL。</string>
     <string name="local_model_not_found">本地模型文件不存在，请重新导入模型。</string>
-    <string name="local_context_exceeded">这段对话需要 %1$d 个提示词元，但本地模型上下文只有 %2$d 个词元。请减少上下文窗口，或调高模型上下文大小。</string>
+    <string name="local_context_exceeded">这段对话需要 %1$d 个提示词元，但本地模型上下文只有 %2$d 个词元。请减少历史保留条数，或在模型设置中调大模型上下文大小。</string>
     <string name="all_messages_cached">已缓存全部 %1$d 条消息。</string>
     <string name="cached_partial_failed">已缓存 %1$d / %2$d 条，%3$d 条失败。</string>
     <string name="retry">重试</string>

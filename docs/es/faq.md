@@ -79,7 +79,7 @@ Sí, si habilitas **Acceder a Memorias Guardadas** y/o **Acceder a Memoria Activ
 
 ### ¿Cómo configuro el acceso a shell remoto?
 
-Despliega el servidor [Conch](https://github.com/newo-ether/conch) en tu máquina de destino, luego añade el dispositivo en Configuración → Shell con su URL y clave API. Consulta [Shell Remoto](shell.md).
+Despliega el servidor [Conch](https://github.com/xf8410/conch) en tu máquina de destino, luego añade el dispositivo en Configuración → Shell con su URL y clave API. Consulta [Shell Remoto](shell.md).
 
 ### ¿Puedo buscar en la web sin una clave API?
 
@@ -119,4 +119,4 @@ Sí. La interfaz de la aplicación admite **English**, **中文 (Chino)** y **�
 
 ### ¿Cómo reporto un error o solicito una función?
 
-Abre un issue en [GitHub](https://github.com/newo-ether/Agora/issues). Para contribuciones, consulta la sección [Contributing](https://github.com/newo-ether/Agora#contributing) del README.
+Abre un issue en [GitHub](https://github.com/xf8410/Agora-Workbench/issues). Para contribuciones, consulta la sección [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) del README.

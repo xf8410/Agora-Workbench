@@ -53,4 +53,4 @@ Agora는 AI 파워 유저를 위한 BYOK Android 클라이언트입니다:
 - **비선형 대화**: 과거 메시지를 편집하고 대체 분기를 탐색하세요
 - **기본 에이전트**: 웹 검색, 이미지 생성, 코드 실행, 셸, 파일 작업, 메모리를 포함한 다중 라운드 도구 호출
 - **원격 제어**: 암호화된 Conch 프로토콜을 통해 서버 관리
-- **오픈 소스**: MIT 라이선스, [GitHub 소스](https://github.com/newo-ether/Agora)
+- **오픈 소스**: MIT 라이선스, [GitHub 소스](https://github.com/xf8410/Agora-Workbench)

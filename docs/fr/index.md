@@ -53,4 +53,4 @@ Agora est un client Android BYOK pour les utilisateurs avancés d'IA :
 - **Conversations non linéaires** : Modifiez n'importe quel message passé et explorez des branches alternatives
 - **Agentique par défaut** : Appels d'outils multi-tours avec recherche web, génération d'images, exécution de code, shell, opérations sur fichiers et mémoire
 - **Contrôle à distance** : Gérez des serveurs via le protocole chiffré Conch
-- **Open source** : Licence MIT, [code source sur GitHub](https://github.com/newo-ether/Agora)
+- **Open source** : Licence MIT, [code source sur GitHub](https://github.com/xf8410/Agora-Workbench)

@@ -57,13 +57,13 @@ v1.4.3 ~ v1.4.10-workbench / v1.5.0-workbench 共 14 个发布版本，每次发
 
 # Agora Workbench 已验证补丁与功能说明
 
-> 本节是仓库当前的权威说明，按源码、提交和 GitHub Actions 结果编写。下方原有项目介绍完整保留，用于延续既有说明。未经成功构建验证的修改不会写成“已修复”。
+> 本节是仓库当前的权威说明，按源码、提交和 GitHub Actions 结果编写。未经成功构建验证的修改不会写成“已修复”。
 
 ## 当前版本与验证基线
 
 - Android applicationId：`com.newoether.agora.workbench`
-- 版本代码：`33`
-- 版本名称：`1.4.5-workbench`
+- 版本代码：`37`
+- 版本名称：`1.4.11-workbench`
 - 当前修复分支：`workbench/fix-reply-disappears-on-next-send`
 - 已验证的上一阶段会话修复基线：`workbench/root-fix-conversation-loss-v5-phase5-tests-scroll-anchor`
 - 上一阶段成功构建：GitHub Actions Run `30874322459`
@@ -71,6 +71,19 @@ v1.4.3 ~ v1.4.10-workbench / v1.5.0-workbench 共 14 个发布版本，每次发
 - 上述最新修复的构建验证：进行中；在对应 Actions 成功前不标记为已完成修复，也不作为正式发布依据。
 
 ## 补丁修复记录
+
+### 2026-09-11：上下文超限错误识别补全 + 对话简报 + 生成设置页修正——验证中
+
+- `HttpGenerationErrorPolicy` 补下划线连写错误码正则（`context_length_exceeded` 等 8 类），此前漏网的超限错误会落到兜底分支显示为"模型服务拒绝了这次请求"；
+- `GenerationError.apiMessage` 在兜底分支前新增上下文超限证据分支（SSE 流中错误同样可识别）；
+- 新增 `ConversationBriefing`：开启"自动携带早期对话简报"后，滑出历史窗口的较早消息按时间序整理为简报注入 system prompt，不占用消息窗口名额，最新条目优先保留；
+- 设置链路：`SettingsManager`/`SettingsRepository`/`GenerationContext`/`GenerationRequestBuilder`/`DataExporter`/`DataImporter` 全链透传，默认关闭；
+- 生成设置页文案修正：设置项"上下文窗口"实为对话历史保留条数，与模型上下文长度区分（中英同步）；参数滑条未指定态改为显示默认值徽标；新增"恢复全部默认参数"；新增"自动携带早期对话简报"开关；
+- 单元测试：`ConversationBriefingTest`（空输入/时序/预算截断/文本规整）。
+
+状态：源码提交已生成；CI 尚未完成，因此本项只标记为"验证中"。
+
+## 补丁修复记录（此前）
 
 ### 2026-08-04：发送下一条消息后上一条模型回复消失——验证中
 

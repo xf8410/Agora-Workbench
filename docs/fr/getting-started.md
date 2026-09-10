@@ -14,7 +14,7 @@ Agora est disponible sur F-Droid, le magasin d'applications Android open source.
 
 ### Depuis les Versions GitHub
 
-1. Visitez la [page des Versions](https://github.com/newo-ether/Agora/releases)
+1. Visitez la [page des Versions](https://github.com/xf8410/Agora-Workbench/releases)
 2. Téléchargez le dernier fichier `.apk`
 3. Ouvrez le fichier sur votre appareil et confirmez l'installation quand demandé
 
@@ -24,7 +24,7 @@ Si vous préférez compiler vous-même :
 
 1. Clonez le dépôt :
    ```
-   git clone https://github.com/newo-ether/Agora.git
+   git clone https://github.com/xf8410/Agora-Workbench.git
    ```
 2. Ouvrez le projet dans [Android Studio](https://developer.android.com/studio) (Ladybug ou plus récent)
 3. Synchronisez Gradle et compilez

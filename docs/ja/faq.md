@@ -79,7 +79,7 @@ Agora はチャットと埋め込みの両方で GGUF 形式をサポートし�
 
 ### リモートシェルアクセスを設定するには？
 
-ターゲットマシンに [Conch](https://github.com/newo-ether/conch) サーバーをデプロイし、設定 → シェルで URL と API キーを使ってデバイスを追加します。[リモートシェル](shell.md) を参照してください。
+ターゲットマシンに [Conch](https://github.com/xf8410/conch) サーバーをデプロイし、設定 → シェルで URL と API キーを使ってデバイスを追加します。[リモートシェル](shell.md) を参照してください。
 
 ### API キーなしでウェブ検索はできますか？
 
@@ -119,4 +119,4 @@ Agora はチャットと埋め込みの両方で GGUF 形式をサポートし�
 
 ### バグの報告や機能のリクエストはどうすればいいですか？
 
-[GitHub](https://github.com/newo-ether/Agora/issues) で Issue を作成してください。貢献については、README の [Contributing](https://github.com/newo-ether/Agora#contributing) セクションを参照してください。
+[GitHub](https://github.com/xf8410/Agora-Workbench/issues) で Issue を作成してください。貢献については、README の [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) セクションを参照してください。

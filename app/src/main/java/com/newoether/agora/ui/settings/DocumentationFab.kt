@@ -47,7 +47,7 @@ private fun documentationUri(docPath: String): Uri {
         }
     }
     val page = docPath.removeSuffix(".md") + "/"
-    return Uri.parse("https://newo-ether.github.io/Agora/$langPrefix$page")
+    return Uri.parse("https://newoether.space/docs/$langPrefix$page")
 }
 
 private fun openDocumentation(context: android.content.Context, docPath: String) {

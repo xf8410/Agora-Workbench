@@ -79,7 +79,7 @@ Ja, wenn Sie **Zugriff auf Gespeicherte Erinnerungen** und/oder **Zugriff auf Ak
 
 ### Wie richte ich Remote-Shell-Zugriff ein?
 
-Stellen Sie den [Conch](https://github.com/newo-ether/conch)-Server auf Ihrem Zielrechner bereit und fügen Sie dann das Gerät in Einstellungen → Shell mit URL und API-Key hinzu. Siehe [Remote Shell](shell.md).
+Stellen Sie den [Conch](https://github.com/xf8410/conch)-Server auf Ihrem Zielrechner bereit und fügen Sie dann das Gerät in Einstellungen → Shell mit URL und API-Key hinzu. Siehe [Remote Shell](shell.md).
 
 ### Kann ich ohne API-Key im Web suchen?
 
@@ -119,4 +119,4 @@ Ja. Die App-Benutzeroberfläche unterstützt **English**, **中文 (Chinesisch)*
 
 ### Wie melde ich einen Fehler oder wünsche eine Funktion?
 
-Eröffnen Sie ein Issue auf [GitHub](https://github.com/newo-ether/Agora/issues). Für Beiträge siehe den [Contributing](https://github.com/newo-ether/Agora#contributing)-Abschnitt der README.
+Eröffnen Sie ein Issue auf [GitHub](https://github.com/xf8410/Agora-Workbench/issues). Für Beiträge siehe den [Contributing](https://github.com/xf8410/Agora-Workbench#contributing)-Abschnitt der README.

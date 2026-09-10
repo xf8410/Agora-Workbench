@@ -79,7 +79,7 @@
 
 ### كيف أعدّ الوصول للطرفية البعيدة؟
 
-انشر خادم [Conch](https://github.com/newo-ether/conch) على جهازك المستهدف، ثم أضف الجهاز في الإعدادات → الطرفية مع URL ومفتاح API. راجع [الطرفية البعيدة](shell.md).
+انشر خادم [Conch](https://github.com/xf8410/conch) على جهازك المستهدف، ثم أضف الجهاز في الإعدادات → الطرفية مع URL ومفتاح API. راجع [الطرفية البعيدة](shell.md).
 
 ### هل يمكنني البحث على الويب بدون مفتاح API؟
 
@@ -119,4 +119,4 @@
 
 ### كيف أبلغ عن خطأ أو أطلب ميزة؟
 
-افتح مشكلة على [GitHub](https://github.com/newo-ether/Agora/issues). للمساهمات، راجع قسم [المساهمة](https://github.com/newo-ether/Agora#contributing) في README.
+افتح مشكلة على [GitHub](https://github.com/xf8410/Agora-Workbench/issues). للمساهمات، راجع قسم [المساهمة](https://github.com/xf8410/Agora-Workbench#contributing) في README.

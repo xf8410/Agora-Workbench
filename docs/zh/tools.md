@@ -40,7 +40,7 @@ Agora 的模型可以自主使用工具——它们决定搜索什么、执行�
 
 ### 远程 Shell
 
-通过 [Conch](https://github.com/newo-ether/conch) 协议在远程机器上执行命令。模型可以检查服务器状态、管理文件或运行脚本。
+通过 [Conch](https://github.com/xf8410/conch) 协议在远程机器上执行命令。模型可以检查服务器状态、管理文件或运行脚本。
 
 - **协议**：端到端加密（ECDH + AES-256-GCM）
 - **配置**：设置 → Shell

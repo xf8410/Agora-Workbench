@@ -79,7 +79,7 @@ Agora는 채팅 및 임베딩 모두에 GGUF 형식을 지원합니다. 채팅 �
 
 ### 원격 셸 접근은 어떻게 설정하나요?
 
-대상 머신에 [Conch](https://github.com/newo-ether/conch) 서버를 배포한 후, 설정 → 셸에서 URL과 API 키로 기기를 추가하세요. [원격 셸](shell.ko.md)을 참조하세요.
+대상 머신에 [Conch](https://github.com/xf8410/conch) 서버를 배포한 후, 설정 → 셸에서 URL과 API 키로 기기를 추가하세요. [원격 셸](shell.ko.md)을 참조하세요.
 
 ### API 키 없이 웹 검색을 할 수 있나요?
 
@@ -119,4 +119,4 @@ Agora는 채팅 및 임베딩 모두에 GGUF 형식을 지원합니다. 채팅 �
 
 ### 버그 신고나 기능 요청은 어떻게 하나요?
 
-[GitHub](https://github.com/newo-ether/Agora/issues)에서 이슈를 열어주세요. 기여에 관해서는 README의 [Contributing](https://github.com/newo-ether/Agora#contributing) 섹션을 참조하세요.
+[GitHub](https://github.com/xf8410/Agora-Workbench/issues)에서 이슈를 열어주세요. 기여에 관해서는 README의 [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) 섹션을 참조하세요.

@@ -163,7 +163,7 @@
     <string name="settings_models">Models</string>
     <string name="settings_models_desc">Enable, disable, and configure AI models</string>
     <string name="settings_generation">Generation</string>
-    <string name="settings_generation_desc">LLM parameters and context window</string>
+    <string name="settings_generation_desc">Model parameters and conversation context</string>
     <string name="settings_web_search">Web Search</string>
     <string name="settings_web_search_desc">Configure web search tool for all providers</string>
     <string name="settings_title_gen">Title Generation</string>
@@ -280,16 +280,21 @@
 
     <!-- Settings - Generation Page -->
     <string name="generation_title">Generation</string>
-    <string name="context_window">Context Window</string>
-    <string name="context_window_default">Default Context Window</string>
+    <string name="context_window">Conversation History Limit</string>
+    <string name="context_window_default">Default Conversation History Limit</string>
     <string name="context_retain">Retain %1$d recent messages</string>
     <string name="context_visualize">Visualize Context Roll-Out</string>
-    <string name="context_visualize_desc">Dim messages outside the context window</string>
+    <string name="context_visualize_desc">Dim older messages excluded from requests</string>
+    <string name="context_compaction">Auto conversation briefing</string>
+    <string name="context_compaction_desc">Summarize older messages outside the history window and send them with each request</string>
     <string name="gen_temperature">Temperature</string>
     <string name="gen_temperature_desc">Controls randomness (0.0 = deterministic, 2.0 = creative)</string>
     <string name="gen_max_tokens">Max Output Tokens</string>
     <string name="gen_max_tokens_desc">Maximum tokens in response</string>
     <string name="gen_not_specified">Not specified</string>
+    <string name="gen_default_value">Default %1$s</string>
+    <string name="gen_reset_all">Reset all parameters</string>
+    <string name="gen_reset_all_desc">Restore temperature, max tokens, Top P and penalties to defaults</string>
     <string name="gen_top_p">Top P</string>
     <string name="gen_top_p_desc">Nucleus sampling threshold (0.0-1.0)</string>
     <string name="gen_frequency_penalty">Frequency Penalty</string>
@@ -823,7 +828,7 @@
     <string name="no_api_key_configured">No API key configured.</string>
     <string name="no_api_key_for_provider">No credentials configured for %s. Please add API key or base URL in Settings.</string>
     <string name="local_model_not_found">Local model file not found. Please re-import the model.</string>
-    <string name="local_context_exceeded">This conversation needs %1$d prompt tokens, but the local model context is %2$d tokens. Reduce the context window or increase the model context size.</string>
+    <string name="local_context_exceeded">This conversation needs %1$d prompt tokens, but the local model context is %2$d tokens. Reduce the conversation history limit or increase the model context size.</string>
     <string name="all_messages_cached">All %1$d messages cached.</string>
     <string name="cached_partial_failed">Cached %1$d of %2$d. %3$d failed.</string>
     <string name="retry">Retry</string>

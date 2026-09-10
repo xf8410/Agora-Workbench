@@ -79,7 +79,7 @@ Yes, if you enable **Access Saved Memories** and/or **Access Active Memory** in 
 
 ### How do I set up remote shell access?
 
-Deploy the [Conch](https://github.com/newo-ether/conch) server on your target machine, then add the device in Settings → Shell with its URL and API key. Both Conch and SSH devices are supported. See [Remote Shell](shell.md).
+Deploy the [Conch](https://github.com/xf8410/conch) server on your target machine, then add the device in Settings → Shell with its URL and API key. Both Conch and SSH devices are supported. See [Remote Shell](shell.md).
 
 ### Can I search the web without an API key?
 
@@ -119,4 +119,4 @@ Yes. The app UI supports **English**, **中文 (Chinese)**, and **繁體中文 (
 
 ### How do I report a bug or request a feature?
 
-Open an issue on [GitHub](https://github.com/newo-ether/Agora/issues). For contributions, see the [Contributing](https://github.com/newo-ether/Agora#contributing) section of the README.
+Open an issue on [GitHub](https://github.com/xf8410/Agora-Workbench/issues). For contributions, see the [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) section of the README.

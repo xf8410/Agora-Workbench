@@ -79,7 +79,7 @@ Oui, si vous activez **Accéder aux Mémoires Sauvegardées** et/ou **Accéder �
 
 ### Comment configurer l'accès shell distant ?
 
-Déployez le serveur [Conch](https://github.com/newo-ether/conch) sur votre machine cible, puis ajoutez l'appareil dans Paramètres → Shell avec son URL et sa clé API. Voir [Shell Distant](shell.md).
+Déployez le serveur [Conch](https://github.com/xf8410/conch) sur votre machine cible, puis ajoutez l'appareil dans Paramètres → Shell avec son URL et sa clé API. Voir [Shell Distant](shell.md).
 
 ### Puis-je rechercher sur le web sans clé API ?
 
@@ -119,4 +119,4 @@ Oui. L'interface de l'application prend en charge **l'anglais**, **le chinois (�
 
 ### Comment signaler un bug ou demander une fonctionnalité ?
 
-Ouvrez une issue sur [GitHub](https://github.com/newo-ether/Agora/issues). Pour les contributions, consultez la section [Contributing](https://github.com/newo-ether/Agora#contributing) du README.
+Ouvrez une issue sur [GitHub](https://github.com/xf8410/Agora-Workbench/issues). Pour les contributions, consultez la section [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) du README.

@@ -79,7 +79,7 @@ Agora поддерживает формат GGUF как для чата, так 
 
 ### Как настроить удалённый доступ к оболочке?
 
-Разверните сервер [Conch](https://github.com/newo-ether/conch) на целевой машине, затем добавьте устройство в Настройки → Оболочка, указав его URL и API-ключ. См. [Удалённая оболочка](shell.ru.md).
+Разверните сервер [Conch](https://github.com/xf8410/conch) на целевой машине, затем добавьте устройство в Настройки → Оболочка, указав его URL и API-ключ. См. [Удалённая оболочка](shell.ru.md).
 
 ### Можно ли искать в интернете без API-ключа?
 
@@ -119,4 +119,4 @@ Agora поддерживает формат GGUF как для чата, так 
 
 ### Как сообщить об ошибке или запросить функцию?
 
-Создайте issue на [GitHub](https://github.com/newo-ether/Agora/issues). Для участия в разработке см. раздел [Contributing](https://github.com/newo-ether/Agora#contributing) в README.
+Создайте issue на [GitHub](https://github.com/xf8410/Agora-Workbench/issues). Для участия в разработке см. раздел [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) в README.

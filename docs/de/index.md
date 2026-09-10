@@ -53,4 +53,4 @@ Agora ist ein BYOK Android-Client für KI-Power-User:
 - **Nicht-lineare Konversationen**: Jede vergangene Nachricht bearbeiten und alternative Zweige erkunden
 - **Standardmäßig agentisch**: Mehrstufige Tool-Aufrufe mit Websuche, Bildgenerierung, Code-Ausführung, Shell, Dateioperationen und Speicher
 - **Fernsteuerung**: Server über das verschlüsselte Conch-Protokoll verwalten
-- **Open Source**: MIT-lizenziert, [Quellcode auf GitHub](https://github.com/newo-ether/Agora)
+- **Open Source**: MIT-lizenziert, [Quellcode auf GitHub](https://github.com/xf8410/Agora-Workbench)

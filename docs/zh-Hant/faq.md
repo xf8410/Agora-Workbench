@@ -79,7 +79,7 @@ Agora 支援用於聊天和嵌入的 GGUF 格式。聊天模型應能放入裝�
 
 ### 如何設定遠端 Shell 存取？
 
-在您的目標機器上部署 [Conch](https://github.com/newo-ether/conch) 伺服器，然後在設定 → Shell 中使用其 URL 和 API 金鑰新增裝置。請參閱 [遠端 Shell](shell.md)。
+在您的目標機器上部署 [Conch](https://github.com/xf8410/conch) 伺服器，然後在設定 → Shell 中使用其 URL 和 API 金鑰新增裝置。請參閱 [遠端 Shell](shell.md)。
 
 ### 我可以不使用 API 金鑰來搜尋網頁嗎？
 
@@ -119,4 +119,4 @@ Agora 支援用於聊天和嵌入的 GGUF 格式。聊天模型應能放入裝�
 
 ### 如何回報錯誤或請求功能？
 
-在 [GitHub](https://github.com/newo-ether/Agora/issues) 上開啟 Issue。如需貢獻，請參閱 README 的 [Contributing](https://github.com/newo-ether/Agora#contributing) 章節。
+在 [GitHub](https://github.com/xf8410/Agora-Workbench/issues) 上開啟 Issue。如需貢獻，請參閱 README 的 [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) 章節。

@@ -79,7 +79,7 @@ Sim, se você ativar **Acessar Memórias Salvas** e/ou **Acessar Memória Ativa*
 
 ### Como configuro o acesso ao shell remoto?
 
-Implante o servidor [Conch](https://github.com/newo-ether/conch) na máquina de destino e adicione o dispositivo em Configurações → Shell com sua URL e chave de API. Consulte [Shell Remoto](shell.md).
+Implante o servidor [Conch](https://github.com/xf8410/conch) na máquina de destino e adicione o dispositivo em Configurações → Shell com sua URL e chave de API. Consulte [Shell Remoto](shell.md).
 
 ### A conexão do shell é criptografada?
 
@@ -115,4 +115,4 @@ Sim. A interface do aplicativo suporta **English** e **中文 (Chinês)**. Confi
 
 ### Como relato um bug ou solicito uma funcionalidade?
 
-Abra uma issue no [GitHub](https://github.com/newo-ether/Agora/issues). Para contribuições, consulte a seção [Contributing](https://github.com/newo-ether/Agora#contributing) do README.
+Abra uma issue no [GitHub](https://github.com/xf8410/Agora-Workbench/issues). Para contribuições, consulte a seção [Contributing](https://github.com/xf8410/Agora-Workbench#contributing) do README.

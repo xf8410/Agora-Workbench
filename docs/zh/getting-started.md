@@ -14,7 +14,7 @@ Agora 已上架 F-Droid 开源应用商店。
 
 ### 通过 GitHub Releases
 
-1. 访问 [Releases 页面](https://github.com/newo-ether/Agora/releases)
+1. 访问 [Releases 页面](https://github.com/xf8410/Agora-Workbench/releases)
 2. 下载最新的 `.apk` 文件
 3. 在设备上打开文件，按提示确认安装
 
@@ -24,7 +24,7 @@ Agora 已上架 F-Droid 开源应用商店。
 
 1. 克隆仓库：
    ```
-   git clone https://github.com/newo-ether/Agora.git
+   git clone https://github.com/xf8410/Agora-Workbench.git
    ```
 2. 在 [Android Studio](https://developer.android.com/studio)（Ladybug 或更新版本）中打开项目
 3. 同步 Gradle 并构建

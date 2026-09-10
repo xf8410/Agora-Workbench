@@ -14,7 +14,7 @@ O Agora está disponível no F-Droid, a loja de aplicativos Android de código a
 
 ### Pelas Releases do GitHub
 
-1. Visite a [página de Releases](https://github.com/newo-ether/Agora/releases)
+1. Visite a [página de Releases](https://github.com/xf8410/Agora-Workbench/releases)
 2. Baixe o arquivo `.apk` mais recente
 3. Abra o arquivo no seu dispositivo e confirme a instalação quando solicitado
 
@@ -24,7 +24,7 @@ Se preferir compilar você mesmo:
 
 1. Clone o repositório:
    ```
-   git clone https://github.com/newo-ether/Agora.git
+   git clone https://github.com/xf8410/Agora-Workbench.git
    ```
 2. Abra o projeto no [Android Studio](https://developer.android.com/studio) (Ladybug ou mais recente)
 3. Sincronize o Gradle e compile

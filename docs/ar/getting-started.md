@@ -14,7 +14,7 @@ Agora متاح على F-Droid، متجر تطبيقات Android مفتوح ال�
 
 ### من إصدارات GitHub
 
-1. زر صفحة [الإصدارات](https://github.com/newo-ether/Agora/releases)
+1. زر صفحة [الإصدارات](https://github.com/xf8410/Agora-Workbench/releases)
 2. حمّل أحدث ملف `.apk`
 3. افتح الملف على جهازك وأكد التثبيت عند الطلب
 
@@ -24,7 +24,7 @@ Agora متاح على F-Droid، متجر تطبيقات Android مفتوح ال�
 
 1. استنسخ المستودع:
    ```
-   git clone https://github.com/newo-ether/Agora.git
+   git clone https://github.com/xf8410/Agora-Workbench.git
    ```
 2. افتح المشروع في [Android Studio](https://developer.android.com/studio) (Ladybug أو أحدث)
 3. زامن Gradle وابني

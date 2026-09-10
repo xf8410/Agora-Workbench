@@ -14,7 +14,7 @@ Agora доступна в F-Droid, магазине приложений с от
 
 ### Из релизов GitHub
 
-1. Посетите [страницу релизов](https://github.com/newo-ether/Agora/releases)
+1. Посетите [страницу релизов](https://github.com/xf8410/Agora-Workbench/releases)
 2. Скачайте последний файл `.apk`
 3. Откройте файл на устройстве и подтвердите установку при запросе
 
@@ -24,7 +24,7 @@ Agora доступна в F-Droid, магазине приложений с от
 
 1. Клонируйте репозиторий:
    ```
-   git clone https://github.com/newo-ether/Agora.git
+   git clone https://github.com/xf8410/Agora-Workbench.git
    ```
 2. Откройте проект в [Android Studio](https://developer.android.com/studio) (Ladybug или новее)
 3. Синхронизируйте Gradle и выполните сборку

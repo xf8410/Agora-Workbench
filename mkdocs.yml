@@ -1,8 +1,8 @@
 site_name: Agora User Manual
 site_description: Guide for configuring and using Agora
-site_url: https://newo-ether.github.io/Agora/
-repo_url: https://github.com/newo-ether/Agora
-repo_name: newo-ether/Agora
+site_url: https://newoether.space/docs/
+repo_url: https://github.com/xf8410/Agora-Workbench
+repo_name: xf8410/Agora-Workbench
 
 theme:
   name: material
