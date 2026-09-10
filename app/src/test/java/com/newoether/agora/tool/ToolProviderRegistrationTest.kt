@@ -102,6 +102,8 @@ class ToolProviderRegistrationTest {
             "NetDownloadToolProvider",
             "UmaToolProvider",
             "ShellToolProvider",
+            "RoadmapToolProvider",
+            "HtmlArtifactToolProvider",
         )
         assertEquals(
             "GenerationManager.builtInToolProviders lost or gained a provider — " +
