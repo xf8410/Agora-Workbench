@@ -533,6 +533,7 @@ class DataImporter(
                         settingsManager.saveAccessPastConversations(s.accessPastConversations)
                         settingsManager.saveAccessSavedMemories(s.accessSavedMemories)
                         settingsManager.saveAccessActiveMemory(s.accessActiveMemory)
+                        s.contextCompaction?.let { settingsManager.saveContextCompaction(it) }
                         settingsManager.saveRagSearchEnabled(s.ragSearchEnabled)
                         settingsManager.saveModelSearchMethod(s.modelSearchMethod)
                         settingsManager.saveManualSearchMethod(s.manualSearchMethod)
@@ -752,6 +753,7 @@ class DataImporter(
         val accessPastConversations: Boolean = true,
         val accessSavedMemories: Boolean = true,
         val accessActiveMemory: Boolean = true,
+        val contextCompaction: Boolean? = null,
         val ragSearchEnabled: Boolean = false,
         val modelSearchMethod: String = "keyword",
         val manualSearchMethod: String = "keyword",

@@ -135,6 +135,7 @@ class GenerationRequestBuilder(
             conversationId = currentId,
             accessSavedMemories = settings.accessSavedMemories.value,
             accessActiveMemory = settings.accessActiveMemory.value,
+            contextCompaction = settings.contextCompaction.value,
             accessPastConversations = settings.accessPastConversations.value,
             modelSearchMethod = settings.modelSearchMethod.value,
             activeEmbeddingConfig = ragManager.activeEmbeddingModel.value,

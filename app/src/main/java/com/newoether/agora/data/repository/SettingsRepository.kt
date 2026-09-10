@@ -102,6 +102,7 @@ class SettingsRepository(
     val accessSavedMemories: StateFlow<Boolean> = hot(settingsManager.accessSavedMemories, true)
     val accessActiveMemory: StateFlow<Boolean> = hot(settingsManager.accessActiveMemory, true)
     val autoSessionHandoff: StateFlow<Boolean> = hot(settingsManager.autoSessionHandoff, true)
+    val contextCompaction: StateFlow<Boolean> = hot(settingsManager.contextCompaction, false)
     val ragSearchEnabled: StateFlow<Boolean> = hot(settingsManager.ragSearchEnabled, false)
     val autoCacheEnabled: StateFlow<Boolean> = hot(settingsManager.autoCacheEnabled, true)
     val modelSearchMethod: StateFlow<String> = hot(settingsManager.modelSearchMethod, "keyword")
@@ -347,6 +348,7 @@ class SettingsRepository(
     fun setAccessSavedMemories(enabled: Boolean) = scope.launch { settingsManager.saveAccessSavedMemories(enabled) }
     fun setAccessActiveMemory(enabled: Boolean) = scope.launch { settingsManager.saveAccessActiveMemory(enabled) }
     fun setAutoSessionHandoff(enabled: Boolean) = scope.launch { settingsManager.saveAutoSessionHandoff(enabled) }
+    fun setContextCompaction(enabled: Boolean) = scope.launch { settingsManager.saveContextCompaction(enabled) }
     fun setRagSearchEnabled(enabled: Boolean) = scope.launch { settingsManager.saveRagSearchEnabled(enabled) }
     fun setAutoCacheEnabled(enabled: Boolean) = scope.launch { settingsManager.saveAutoCacheEnabled(enabled) }
     fun setModelSearchMethod(method: String) = scope.launch { settingsManager.saveModelSearchMethod(method) }
