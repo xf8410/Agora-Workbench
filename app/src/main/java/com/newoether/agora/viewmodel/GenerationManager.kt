@@ -217,7 +217,8 @@ class GenerationManager(
         githubWorkspaceToolProvider, githubRepositoryMutationToolProvider,
         githubBranchMutationToolProvider, githubCloneToolProvider,
         publicContributionTraceToolProvider, phoneFileToolProvider,
-        binaryAuditToolProvider, netDownloadToolProvider, umaToolProvider, shellToolProvider
+        binaryAuditToolProvider, netDownloadToolProvider, umaToolProvider, shellToolProvider,
+        roadmapToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_roadmap">待开发任务</string>
+    <string name="settings_roadmap_desc">记录要实装的功能想法并跟踪进度，也可以让 AI 帮你添加</string>
+    <string name="roadmap_add">新增任务</string>
+    <string name="roadmap_edit">编辑任务</string>
+    <string name="roadmap_filter_all">全部</string>
+    <string name="roadmap_status_todo">待办</string>
+    <string name="roadmap_status_doing">进行中</string>
+    <string name="roadmap_status_done">已完成</string>
+    <string name="roadmap_priority_high">高</string>
+    <string name="roadmap_priority_normal">普通</string>
+    <string name="roadmap_priority_low">低</string>
+    <string name="roadmap_title_hint">功能名称</string>
+    <string name="roadmap_detail_hint">详细说明（可选）</string>
+    <string name="roadmap_empty">还没有待开发任务。想到什么功能随时记下来，也可以直接告诉 AI。</string>
+    <string name="roadmap_save">保存</string>
+    <string name="roadmap_delete">删除</string>
+    <string name="roadmap_cancel">取消</string>
+</resources>

@@ -242,6 +242,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 "agents" -> SettingsAgentsPage(viewModel, onBack = { selectedCategory = null })
                 "uma" -> SettingsUmaPage(viewModel, onBack = { selectedCategory = null })
                 "automation" -> SettingsAutomationPage(viewModel, onBack = { selectedCategory = null })
+                "roadmap" -> SettingsRoadmapPage(viewModel, onBack = { selectedCategory = null })
                 "proxy" -> SettingsProxyPage(viewModel, onBack = { selectedCategory = null })
                 "language" -> SettingsLanguagePage(viewModel, onBack = { selectedCategory = null })
                 "titlegen" -> SettingsTitleGenPage(viewModel, onBack = { selectedCategory = null })

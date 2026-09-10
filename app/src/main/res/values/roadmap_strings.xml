@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_roadmap">Planned features</string>
+    <string name="settings_roadmap_desc">Capture feature ideas and track them to done; the assistant can add entries for you</string>
+    <string name="roadmap_add">New entry</string>
+    <string name="roadmap_edit">Edit entry</string>
+    <string name="roadmap_filter_all">All</string>
+    <string name="roadmap_status_todo">To do</string>
+    <string name="roadmap_status_doing">In progress</string>
+    <string name="roadmap_status_done">Done</string>
+    <string name="roadmap_priority_high">High</string>
+    <string name="roadmap_priority_normal">Normal</string>
+    <string name="roadmap_priority_low">Low</string>
+    <string name="roadmap_title_hint">Feature title</string>
+    <string name="roadmap_detail_hint">Details (optional)</string>
+    <string name="roadmap_empty">No planned features yet. Capture an idea whenever one comes to mind — you can also just tell the assistant.</string>
+    <string name="roadmap_save">Save</string>
+    <string name="roadmap_delete">Delete</string>
+    <string name="roadmap_cancel">Cancel</string>
+</resources>
