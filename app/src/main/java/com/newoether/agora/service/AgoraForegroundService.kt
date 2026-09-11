@@ -18,6 +18,8 @@ import com.newoether.agora.MainActivity
 import com.newoether.agora.R
 import com.newoether.agora.util.CrashReporter
 import com.newoether.agora.util.DebugLog
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Thread-safe owner set for the shared generation foreground service. The transition callbacks
@@ -58,6 +60,11 @@ class AgoraForegroundService : Service() {
         private const val TAG = "AgoraForegroundService"
         private var instance: AgoraForegroundService? = null
         private val ownerLeases = ForegroundOwnerLeases()
+
+        /** Dedicated daemon thread: observes the post-start window even when main is stalled. */
+        private val startWatchdog = Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "fgs-start-watchdog").apply { isDaemon = true }
+        }
 
         /** Acquires this generation's lease; returns false for a duplicate owner/start failure. */
         fun acquire(context: Context, owner: String): Boolean {
@@ -100,11 +107,35 @@ class AgoraForegroundService : Service() {
                     appContext.startService(intent)
                 }
                 CrashReporter.note("FGS.startForegroundService ok")
+                scheduleStartWatchdog()
                 true
             } catch (e: RuntimeException) {
                 CrashReporter.note("FGS.startForegroundService threw ${e.javaClass.simpleName}")
                 DebugLog.w(TAG, "Failed to start foreground service", e)
                 false
+            }
+        }
+
+        /**
+         * Post-start observation only (#60). The 5s startForeground deadline is enforced by the
+         * system against the MAIN thread actually reaching onCreate/startForeground. When a crash
+         * is coming, this note — written from a daemon thread that keeps running even while the
+         * main thread is stalled — is the evidence of whether the service was ever created in
+         * time: no note + crash = create was never dispatched/executed on main in time.
+         */
+        private fun scheduleStartWatchdog() {
+            try {
+                startWatchdog.schedule({
+                    val service = instance
+                    if (service == null || !service.foregroundStarted) {
+                        CrashReporter.note(
+                            "FGS.watchdog no-startForeground within 3500ms of startForegroundService " +
+                                "(service create stalled or never dispatched on main)"
+                        )
+                    }
+                }, 3_500L, TimeUnit.MILLISECONDS)
+            } catch (e: RuntimeException) {
+                CrashReporter.note("FGS.watchdog schedule threw ${e.javaClass.simpleName}")
             }
         }
 
@@ -224,7 +255,27 @@ class AgoraForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // startForeground() already called in onCreate(); no re-promote needed.
+        // Belt-and-braces re-promote (residual #60 window): onCreate() promotes first, but some
+        // OEM skins re-deliver a start or rebuild the ServiceRecord without the promote having
+        // landed. startForeground() is idempotent once already foreground; promote here only if
+        // onCreate's promote has not landed yet. If promote still fails here we cannot legally
+        // stay started — stop immediately so the system's 5s deadline never converts this into a
+        // process-killing ForegroundServiceDidNotStartInTimeException.
+        if (!foregroundStarted) {
+            try {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    buildGenerationNotification(currentText),
+                    foregroundServiceType()
+                )
+                foregroundStarted = true
+                CrashReporter.note("FGS.startForeground ok (onStartCommand re-promote)")
+            } catch (e: RuntimeException) {
+                CrashReporter.note("FGS.startForeground(onStartCommand) threw ${e.javaClass.simpleName}")
+                stopSelf()
+            }
+        }
         return START_NOT_STICKY
     }
 
