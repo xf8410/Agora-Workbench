@@ -100,19 +100,20 @@ object DiagnosticParsers {
 
     private fun parseKotlin(text: String): List<LspDiagnostic> = text.lineSequence().mapNotNull { raw ->
         val line = raw.trim()
-        kotlinClassic.matchEntire(line)?.let { m ->
-            val (file, ln, col, sev, msg) = m.destructured
-            LspDiagnostic(
+        val classic = kotlinClassic.matchEntire(line)
+        if (classic != null) {
+            val (file, ln, col, sev, msg) = classic.destructured
+            return@mapNotNull LspDiagnostic(
                 file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
                 severity = normalizeSeverity(sev), code = "", message = msg.trim(),
             )
-            ?: kotlinK2.matchEntire(line)?.let { m ->
-            val (sev, file, ln, col, msg) = m.destructured
-            LspDiagnostic(
-                file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
-                severity = if (sev == "w") "warning" else "error", code = "", message = msg.trim(),
-            )
         }
+        val k2 = kotlinK2.matchEntire(line) ?: return@mapNotNull null
+        val (sev, file, ln, col, msg) = k2.destructured
+        LspDiagnostic(
+            file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
+            severity = if (sev == "w") "warning" else "error", code = "", message = msg.trim(),
+        )
     }.toList()
 
     // gofmt -e / go vet: x.go:5:11: expected declaration, found 'package'
