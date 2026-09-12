@@ -63,12 +63,12 @@ object DiagnosticParsers {
                 continue
             }
             val arrow = rustArrow.matchEntire(line)
-            if (arrow != null && pending != null) {
+            val p = pending
+            if (arrow != null && p != null) {
                 val (file, ln, col) = arrow.destructured
                 out += LspDiagnostic(
                     file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
-                    severity = normalizeSeverity(pending!!.first), code = pending!!.second,
-                    message = pending!!.third,
+                    severity = normalizeSeverity(p.first), code = p.second, message = p.third,
                 )
                 pending = null
             }
@@ -118,16 +118,16 @@ object DiagnosticParsers {
             }
         }.toList()
 
-    // nim / fpc: /tmp/x.nim(5, 7) Error: type mismatch
-    private val nimFpc = Regex("^(.+?)\\((\\d+), ?(\\d+)\\) (Error|Warning|Fatal): (.*)$")
+    // shared dialect: path(line, col) Error: msg  /  path(line,col): error CS1002: msg (mcs)
+    private val nimFpc = Regex("^(.+?)\\((\\d+), ?(\\d+)\\):? (Error|Warning|Fatal|error|warning)(?: ([A-Z]+\\d+))?[:,]? ?(.*)$")
 
     private fun parseNimFpc(text: String): List<LspDiagnostic> =
         text.lineSequence().mapNotNull { line ->
             nimFpc.matchEntire(line.trim())?.let { m ->
-                val (file, ln, col, sev, msg) = m.destructured
+                val (file, ln, col, sev, code, msg) = m.destructured
                 LspDiagnostic(
                     file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
-                    severity = normalizeSeverity(sev), code = "", message = msg.trim(),
+                    severity = normalizeSeverity(sev), code = code, message = msg.trim(),
                 )
             }
         }.toList()
@@ -172,8 +172,8 @@ object DiagnosticParsers {
     }
 
     /** gcc/clang style trailing warning flag, e.g. "… [-Wunused-variable]" -> "-Wunused-variable". */
-    private val trailingFlag = Regex("\\[(#[^\\]]+|-\\w[\\w+-]*)]\\s*$")
+    private val trailingFlagRegex = Regex("\\[(#[^\\]]+|-\\w[\\w+-]*)]\\s*$")
 
     private fun trailingFlag(message: String): String =
-        trailingFlag.find(message)?.groupValues?.get(1).orEmpty()
+        trailingFlagRegex.find(message)?.groupValues?.get(1).orEmpty()
 }
