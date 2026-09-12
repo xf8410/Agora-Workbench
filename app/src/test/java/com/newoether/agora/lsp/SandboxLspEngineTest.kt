@@ -2,6 +2,7 @@ package com.newoether.agora.lsp
 
 import com.newoether.agora.sandbox.SandboxManager
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -30,7 +31,7 @@ class SandboxLspEngineTest {
         coEvery { manager.executeCommand(any(), any(), any()) } answers {
             val cmd = firstArg<String>()
             commands += cmd
-            val result = when {
+            when {
                 cmd.startsWith("for b in") ->
                     SandboxManager.SandboxResult(probeLine(), "", probeExit)
                 cmd.startsWith("mkdir") -> SandboxManager.SandboxResult("", "", 0)
@@ -38,7 +39,6 @@ class SandboxLspEngineTest {
                 cmd.contains("--version") -> SandboxManager.SandboxResult("1.0.0-test", "", 0)
                 else -> SandboxManager.SandboxResult(stepOutput, "", stepExit)
             }
-            result
         }
         coEvery { manager.fileWrite(any(), any()) } answers {
             writes[firstArg<String>()] = secondArg<String>()
@@ -62,7 +62,7 @@ class SandboxLspEngineTest {
         stepOutput = ""
         val outcome = runBlocking { engine().check(LanguageRegistry.byId["rust"]!!, "x.rs", "fn main(){}", null) }
         assertTrue("clean 应当为真，实际 ranSteps=${outcome.ranSteps}", outcome.clean)
-        assertEquals("", "/tmp/agora-lsp/x.rs", writes.keys.first())
+        assertEquals("/tmp/agora-lsp/x.rs", writes.keys.first())
         assertTrue("mkdir 必须先行", commands[0].startsWith("mkdir -p /tmp/agora-lsp"))
         assertTrue("探测在配方前", commands[1].startsWith("for b in"))
         assertTrue("配方被引用包裹", commands[2].contains("'/tmp/agora-lsp/x.rs'"))
