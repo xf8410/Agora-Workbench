@@ -92,10 +92,10 @@ object LanguageRegistry {
             id = "csharp", displayName = "C#",
             extensions = listOf("cs"),
             steps = listOf(
-                CheckStep("mcs -target:library -out:{dir}/agora-lsp-out.dll {file}", listOf("mcs"), ParseStyle.GCC_LIKE),
+                CheckStep("mcs -target:library -out:{dir}/agora-lsp-out.dll {file}", listOf("mcs"), ParseStyle.NIM_FPC),
             ),
             apkCandidates = listOf("mono"),
-            note = "mcs 报错形如 file(line,col): error CSxxxx，按 NIM_FPC 之外的宽松匹配解析。",
+            note = "mcs 输出 path(line,col): error CSxxxx: msg，由共享括号方言解析。",
         ),
         LanguageSpec(
             id = "fortran", displayName = "Fortran",
@@ -171,7 +171,7 @@ object LanguageRegistry {
         if (langId != null) {
             // Accept a few common aliases the model may try.
             val alias = when (langId) {
-                "c++", "cxx", "cxx20" -> "cpp"
+                "c++", "cxx", "cpp20" -> "cpp"
                 "cs", "c#", "mono" -> "csharp"
                 "kt" -> "kotlin"
                 "rs" -> "rust"
