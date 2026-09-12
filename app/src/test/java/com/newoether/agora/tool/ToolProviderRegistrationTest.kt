@@ -26,6 +26,8 @@ import org.junit.Test
  *  - PR #54 shipped BinaryAuditToolProvider but never registered it: all five audit_*
  *    tools were dead code on main until 2026-09-08.
  *  - PR #56 shipped NetDownloadToolProvider; registered in the same change as its merge.
+ *  - 2026-09-12 LspToolProvider (language-pack lsp_check/lsp_languages/lsp_install):
+ *    registration shipped in the same change as the files, locked here same day.
  *
  * The registration is a hand-maintained list inside GenerationManager with no compile-time
  * safety, so merges/rewrites drop entries silently. These tests turn any future drop into a
@@ -105,6 +107,7 @@ class ToolProviderRegistrationTest {
             "RoadmapToolProvider",
             "FavoriteSitesToolProvider",
             "HtmlArtifactToolProvider",
+            "LspToolProvider",
         )
         assertEquals(
             "GenerationManager.builtInToolProviders lost or gained a provider — " +
