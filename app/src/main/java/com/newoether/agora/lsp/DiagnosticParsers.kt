@@ -37,7 +37,10 @@ object DiagnosticParsers {
         }.toList()
 
     // rustc legacy one-liner: path:3:5: error[E0308]: message
-    private val rustOneLine = Regex("^(.+?):(\\d+):(\\d+): (error|warning)(?:\\[([EW]\\w+)\\])?(:\\s?(.*))?$")
+    // 冒号包裹层必须是非捕获组 (?::\s?(.*))?——若写成捕获组 (:...)?，组号整体后移，
+    // destructured 的 msg 会绑到带冒号的包裹组：编译照样绿，运行期 message 多 ": "
+    // （run 34695565344 实锤：expected <[]file...> but was <[: ]file...>）。
+    private val rustOneLine = Regex("^(.+?):(\\d+):(\\d+): (error|warning)(?:\\[([EW]\\w+)\\])?(?::\\s?(.*))?$")
 
     // modern rustc: "error[E0308]: msg" followed by "  --> path:3:5"
     private val rustHead = Regex("^(error|warning)(?:\\[([EW]\\w+)\\])?:\\s?(.*)$")
