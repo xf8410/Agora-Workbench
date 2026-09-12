@@ -20,8 +20,10 @@ object DiagnosticParsers {
         ParseStyle.OCAML -> parseOcaml(text)
     }
 
-    // path:3:5: error: message [-Wflag]
-    private val gccLike = Regex("^(.+?):(\\d+):(\\d+): (error|warning|note|fatal): (.*)$")
+    // path:3:5: error: message [-Wflag] — the message part may be empty (ghc prints
+    // "error:" on its own line and the body underneath; the location line is still
+    // a real anchor, so it must survive as a diagnostic).
+    private val gccLike = Regex("^(.+?):(\\d+):(\\d+): (error|warning|note|fatal)(?::\\s?(.*))?$")
 
     private fun parseGccLike(text: String): List<LspDiagnostic> =
         text.lineSequence().mapNotNull { line ->
@@ -35,10 +37,10 @@ object DiagnosticParsers {
         }.toList()
 
     // rustc legacy one-liner: path:3:5: error[E0308]: message
-    private val rustOneLine = Regex("^(.+?):(\\d+):(\\d+): (error|warning)(?:\\[([EW]\\w+)\\])?: (.*)$")
+    private val rustOneLine = Regex("^(.+?):(\\d+):(\\d+): (error|warning)(?:\\[([EW]\\w+)\\])?(:\\s?(.*))?$")
 
     // modern rustc: "error[E0308]: msg" followed by "  --> path:3:5"
-    private val rustHead = Regex("^(error|warning)(?:\\[([EW]\\w+)\\])?: (.*)$")
+    private val rustHead = Regex("^(error|warning)(?:\\[([EW]\\w+)\\])?:\\s?(.*)$")
     private val rustArrow = Regex("^--> (.+?):(\\d+):(\\d+)$")
 
     private fun parseRust(text: String): List<LspDiagnostic> {
@@ -90,19 +92,28 @@ object DiagnosticParsers {
             }
         }.toList()
 
-    // kotlinc: /tmp/x.kt: (3, 5): error: unresolved reference: foo
-    private val kotlin = Regex("^(.+?): \\((\\d+), ?(\\d+)\\): (error|warning): (.*)$")
+    // kotlinc 1.x: /tmp/x.kt: (3, 5): error: unresolved reference: foo
+    private val kotlinClassic = Regex("^(.+?): \\((\\d+), ?(\\d+)\\): (error|warning): (.*)$")
 
-    private fun parseKotlin(text: String): List<LspDiagnostic> =
-        text.lineSequence().mapNotNull { line ->
-            kotlin.matchEntire(line.trim())?.let { m ->
-                val (file, ln, col, sev, msg) = m.destructured
-                LspDiagnostic(
-                    file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
-                    severity = normalizeSeverity(sev), code = "", message = msg.trim(),
-                )
-            }
-        }.toList()
+    // kotlinc 2.x: "e: /tmp/x.kt:4:9: Unresolved reference 'foo'." / "w: …"
+    private val kotlinK2 = Regex("^([ew]): (.+?):(\\d+):(\\d+): (.*)$")
+
+    private fun parseKotlin(text: String): List<LspDiagnostic> = text.lineSequence().mapNotNull { raw ->
+        val line = raw.trim()
+        kotlinClassic.matchEntire(line)?.let { m ->
+            val (file, ln, col, sev, msg) = m.destructured
+            LspDiagnostic(
+                file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
+                severity = normalizeSeverity(sev), code = "", message = msg.trim(),
+            )
+            ?: kotlinK2.matchEntire(line)?.let { m ->
+            val (sev, file, ln, col, msg) = m.destructured
+            LspDiagnostic(
+                file = file, line = ln.toIntOrNull() ?: 0, column = col.toIntOrNull() ?: 1,
+                severity = if (sev == "w") "warning" else "error", code = "", message = msg.trim(),
+            )
+        }
+    }.toList()
 
     // gofmt -e / go vet: x.go:5:11: expected declaration, found 'package'
     private val goColon = Regex("^(.+?):(\\d+):(\\d+): (.+)$")
@@ -119,7 +130,7 @@ object DiagnosticParsers {
         }.toList()
 
     // shared dialect: path(line, col) Error: msg  /  path(line,col): error CS1002: msg (mcs)
-    private val nimFpc = Regex("^(.+?)\\((\\d+), ?(\\d+)\\):? (Error|Warning|Fatal|error|warning)(?: ([A-Z]+\\d+))?[:,]? ?(.*)$")
+    private val nimFpc = Regex("^(.+?)\\((\\d+), ?(\\d+)\\):? (Error|Warning|Fatal|error|warning)(?: ([A-Z]+\\d+))?(?::\\s?| ?)(.*)$")
 
     private fun parseNimFpc(text: String): List<LspDiagnostic> =
         text.lineSequence().mapNotNull { line ->
