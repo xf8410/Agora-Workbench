@@ -60,6 +60,12 @@ jobs:
             > ci-logs/unit-test-console.log 2>&1
           gradle_rc=$?
           tail -n 200 ci-logs/unit-test-console.log || true
+          # 让红色开口说话：把关键错误行单独成卷（e: 编译错误 / 测试失败 / gradle 病因），
+          # 200 行 tail 会被日志视图的采样跳过，这一卷必须短到不会被跳过。
+          grep -nE "^e: |^Caused by:|FAILURE:|What went wrong|> Task .*FAILED| FAILED$|tests completed|BUILD (FAILED|SUCCESSFUL)" \
+            ci-logs/unit-test-console.log | tail -n 60 > ci-logs/unit-test-errors.txt || true
+          echo "===== 关键错误行（单测）====="
+          cat ci-logs/unit-test-errors.txt || true
           # 清掉可能残留的 daemon/编译器子进程，防止持有句柄把 step 拖死
           pkill -f KotlinCompileDaemon 2>/dev/null || true
           pkill -f GradleDaemon 2>/dev/null || true
@@ -74,6 +80,10 @@ jobs:
             > ci-logs/apk-build-console.log 2>&1
           gradle_rc=$?
           tail -n 100 ci-logs/apk-build-console.log || true
+          grep -nE "^e: |^Caused by:|FAILURE:|What went wrong|> Task .*FAILED|BUILD (FAILED|SUCCESSFUL)" \
+            ci-logs/apk-build-console.log | tail -n 60 > ci-logs/apk-errors.txt || true
+          echo "===== 关键错误行（打包）====="
+          cat ci-logs/apk-errors.txt || true
           pkill -f GradleDaemon 2>/dev/null || true
           exit $gradle_rc
 
@@ -103,6 +113,7 @@ jobs:
           cp -R app/build/reports/tests ci-logs/test-reports 2>/dev/null || true
           cp -R app/build/test-results ci-logs/test-results 2>/dev/null || true
           cat ci-logs/conclusion.txt >> "$GITHUB_STEP_SUMMARY"
+          cat ci-logs/unit-test-errors.txt ci-logs/apk-errors.txt 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
 
       - name: Upload durable CI logs
         if: always()
@@ -129,6 +140,10 @@ jobs:
           BUILD_OUTCOME: ${{ steps.build_apk.outcome }}
           VERIFY_OUTCOME: ${{ steps.verify_apk.outcome }}
         run: |
+          # 最后一步先把错误卷再打一遍——保证作业日志的结尾就是错误本身，
+          # 日志采样视图再怎么跳也跳不过去（让红色开口说话）。
+          echo "===== 错误卷（作业日志结尾回放）====="
+          cat ci-logs/unit-test-errors.txt ci-logs/apk-errors.txt 2>/dev/null || true
           test "$UNIT_OUTCOME" = success
           test "$BUILD_OUTCOME" = success
           test "$VERIFY_OUTCOME" = success
