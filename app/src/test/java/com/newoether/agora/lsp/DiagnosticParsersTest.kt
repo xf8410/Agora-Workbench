@@ -7,6 +7,10 @@ import org.junit.Test
  * 对照表：每一行都是某个真实编译器/工具链的**原样输出片段**（含格式细节），
  * 断言精确到 file/line/column/severity/code/message 六个字段。
  * 改解析器 = 必须先在这张表里改期望值，防止"看着像对了"。
+ *
+ * 纪律（run 34694981648 实锤复发）：反引号测试名**不许出现点号**——
+ * Kotlin 直接 "Name contains illegal characters: ." 编译红，
+ * M0 踩过一次，本文件 123 行又踩一次，规矩写在这里。
  */
 class DiagnosticParsersTest {
 
@@ -120,7 +124,7 @@ class DiagnosticParsersTest {
     }
 
     @Test
-    fun `kotlinc 2.x e冒号形态`() {
+    fun `kotlinc 二代e冒号形态`() {
         check(
             ParseStyle.KOTLIN,
             "e: /tmp/agora-lsp/x.kt:4:9: Unresolved reference 'printlnn'.\n" +
