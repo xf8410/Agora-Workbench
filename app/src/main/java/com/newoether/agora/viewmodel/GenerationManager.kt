@@ -218,6 +218,7 @@ class GenerationManager(
         com.newoether.agora.data.FavoriteSitesStore(app.filesDir)
     )
     private val htmlArtifactToolProvider = com.newoether.agora.tool.HtmlArtifactToolProvider(app)
+    private val lspToolProvider = com.newoether.agora.tool.LspToolProvider(sandboxFactory)
     private val builtInToolProviders: List<ToolProvider> = listOf(
         memoryToolProvider, webSearchToolProvider, ragToolProvider, imageGenToolProvider,
         githubToolProvider, githubWatchToolProvider, githubActionsLogToolProvider,
@@ -225,7 +226,8 @@ class GenerationManager(
         githubBranchMutationToolProvider, githubCloneToolProvider,
         publicContributionTraceToolProvider, phoneFileToolProvider,
         binaryAuditToolProvider, netDownloadToolProvider, umaToolProvider, shellToolProvider,
-        roadmapToolProvider, favoriteSitesToolProvider, htmlArtifactToolProvider
+        roadmapToolProvider, favoriteSitesToolProvider, htmlArtifactToolProvider,
+        lspToolProvider
     )
     private val toolProviders: List<ToolProvider> = builtInToolProviders + additionalToolProviders
 
