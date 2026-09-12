@@ -36,7 +36,7 @@ class SandboxLspEngine(
             }.joinToString("")
             val noLeadingDots = cleaned.trimStart('.')
             val clipped = noLeadingDots.take(64).ifEmpty { "snippet" }
-            // Never allow an empty extensionless weirdness like "..": dots only as separators.
+            // A name that is only dots ("..", ".") would be a traversal or noise — force snippet.
             return if (clipped.replace(".", "").isEmpty()) "snippet" else clipped
         }
 
@@ -44,17 +44,20 @@ class SandboxLspEngine(
             name.substringAfterLast('.', "").lowercase().takeIf { it.isNotEmpty() && it.length <= 8 }.orEmpty()
     }
 
-    /** One probe run answers every recipe binary at once; result cached per manager instance. */
+    /**
+     * One probe run answers every recipe binary at once; result cached per provider
+     * instance. A failing probe THROWS instead of pretending "all missing" —
+     * the difference between "not installed" and "sandbox is broken" must survive.
+     */
     suspend fun probeTools(force: Boolean = false): Map<String, Boolean> {
         if (!force && probeCache.isNotEmpty()) return probeCache.toMap()
         val bins = LanguageRegistry.allBinaries
         if (bins.isEmpty()) return emptyMap()
         val list = bins.joinToString(" ")
         val cmd = "for b in $list; do if command -v \$b >/dev/null 2>&1; then echo \"\$b=ok\"; else echo \"\$b=no\"; fi; done"
-        val r = try {
-            manager.executeCommand(cmd, timeoutMs = 20_000)
-        } catch (e: Exception) {
-            return emptyMap().also { probeCache.clear() }
+        val r = manager.executeCommand(cmd, timeoutMs = 20_000)
+        if (r.exitCode != 0) {
+            throw IllegalStateException("probe failed (exit=${r.exitCode}): ${(r.stdout + r.stderr).take(200)}")
         }
         val out = r.stdout + "\n" + r.stderr
         probeCache.clear()
@@ -121,7 +124,7 @@ class SandboxLspEngine(
         val skipped = mutableListOf<String>()
         var stop = false
         for (step in spec.steps) {
-            if (step !in runnable) { skipped += step.command; continue }
+            if (!runnable.contains(step)) { skipped += step.command; continue }
             if (stop) { skipped += step.command; continue }
             val cmd = step.command.replace("{file}", quoteSh(target)).replace("{dir}", quoteSh(dir))
             val r = try {
@@ -152,24 +155,26 @@ class SandboxLspEngine(
 
     /** apk install candidates, then VERIFY binaries — the apk boolean is never trusted. */
     suspend fun install(spec: LanguageSpec): InstallOutcome {
-        if (!manager.isAvailableSync() && !manager.isAvailable()) {
+        val ready = manager.isAvailableSync() || manager.isAvailable()
+        if (!ready) {
             return InstallOutcome(spec.id, false, emptyList(), emptyMap(),
                 "沙盒未安装：先在 设置→沙盒 完成 rootfs 安装")
         }
         val attempts = mutableListOf<String>()
         for (candidate in spec.apkCandidates) {
             attempts += "apk add $candidate"
-            val flag = try {
-                manager.apkInstall(candidate)
+            try {
+                val flag = manager.apkInstall(candidate)
+                attempts += "apkInstall($candidate) 返回 $flag（仅作记录，不作为判据）"
             } catch (e: Exception) {
-                attempts += "异常: ${e.message}"
+                attempts += "$candidate 安装异常: ${e.message}"
                 continue
             }
             val verified = verifyBinaries(spec)
             if (verified.isNotEmpty()) {
                 return InstallOutcome(spec.id, true, attempts, verified, null)
             }
-            attempts += "$candidate 装完仍无可执行文件(apk 返回 $flag)，继续试下一个候选"
+            attempts += "$candidate 装完仍无可执行文件，继续试下一个候选"
         }
         return InstallOutcome(spec.id, false, attempts, emptyMap(),
             "所有 apk 候选都没能带来可运行的检查器: ${spec.apkCandidates}")
@@ -177,14 +182,17 @@ class SandboxLspEngine(
 
     /** Binaries of this spec that now resolve, mapped to a version line. */
     suspend fun verifyBinaries(spec: LanguageSpec): Map<String, String> {
-        val needed = spec.steps.flatMap { it.needs }.distinct()
-        val present = needed.filter { neededAll -> manager.executeCommand("command -v $neededAll", timeoutMs = 10_000).exitCode == 0 }
-        return present.associateWith { versionLine(it) }
-    }
-
-    private suspend fun List<String>.filter(p: suspend (String) -> Boolean): List<String> {
-        val out = mutableListOf<String>()
-        for (item in this) if (p(item)) out += item
+        val present = mutableListOf<String>()
+        for (bin in spec.steps.flatMap { it.needs }.distinct()) {
+            val r = try {
+                manager.executeCommand("command -v $bin", timeoutMs = 10_000)
+            } catch (e: Exception) {
+                null
+            }
+            if (r != null && r.exitCode == 0) present += bin
+        }
+        val out = LinkedHashMap<String, String>()
+        for (bin in present) out[bin] = versionLine(bin)
         return out
     }
 
