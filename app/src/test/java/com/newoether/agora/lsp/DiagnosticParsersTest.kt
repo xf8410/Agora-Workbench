@@ -53,12 +53,12 @@ class DiagnosticParsersTest {
     }
 
     @Test
-    fun `ghc 方言同 gcc`() {
+    fun `ghc 方言允许锚点行空消息`() {
         check(
             ParseStyle.GCC_LIKE,
             "/tmp/X.hs:12:5: error:\n    • Non type-variable argument\n",
             listOf(LspDiagnostic("/tmp/X.hs", 12, 5, "error", "", "")),
-            "ghc（首行只有位置，正文在后续行——首行仍必须是可定位条目）",
+            "ghc（位置行本身必须是可定位条目，正文在后续行）",
         )
     }
 
@@ -95,7 +95,7 @@ class DiagnosticParsersTest {
         check(
             ParseStyle.JAVAC,
             "/tmp/A.java:3: error: cannot find symbol\n" +
-                "  警告: [options] bootstrap class path not set\n" +
+                "Note: some input files use unchecked operations\n" +
                 "/tmp/A.java:10: warning: [serial] serializable class A has no definition of serialVersionUID\n",
             listOf(
                 LspDiagnostic("/tmp/A.java", 3, 1, "error", "", "cannot find symbol"),
@@ -106,7 +106,7 @@ class DiagnosticParsersTest {
     }
 
     @Test
-    fun `kotlinc 括号逗号形态`() {
+    fun `kotlinc 经典括号形态`() {
         check(
             ParseStyle.KOTLIN,
             "/tmp/agora-lsp/x.kt: (4, 9): error: unresolved reference: printlnn\n" +
@@ -115,7 +115,21 @@ class DiagnosticParsersTest {
                 LspDiagnostic("/tmp/agora-lsp/x.kt", 4, 9, "error", "", "unresolved reference: printlnn"),
                 LspDiagnostic("/tmp/agora-lsp/x.kt", 6, 13, "warning", "", "'x' is deprecated"),
             ),
-            "kotlinc",
+            "kotlinc 1.x",
+        )
+    }
+
+    @Test
+    fun `kotlinc 2.x e冒号形态`() {
+        check(
+            ParseStyle.KOTLIN,
+            "e: /tmp/agora-lsp/x.kt:4:9: Unresolved reference 'printlnn'.\n" +
+                "w: /tmp/agora-lsp/x.kt:6:13: 'x' is deprecated.\n",
+            listOf(
+                LspDiagnostic("/tmp/agora-lsp/x.kt", 4, 9, "error", "", "Unresolved reference 'printlnn'."),
+                LspDiagnostic("/tmp/agora-lsp/x.kt", 6, 13, "warning", "", "'x' is deprecated."),
+            ),
+            "kotlinc 2.x",
         )
     }
 
@@ -167,16 +181,13 @@ class DiagnosticParsersTest {
 
     @Test
     fun `噪声行不产出诊断（宁缺勿猜）`() {
-        val junk = "make: *** [Makefile:2: all] Error 1\nsome random text 1:2\nab:cd:3: error: x\n"
+        // 三行都是"看着有点像"但没有任何方言该吃的：make 汇总行、无位置文本、
+        // 以及缺双数字锚点的残缺行。路径里带冒号的真实歧义不在这里锁
+        // （那是 javac 方言的固有代价，靠 exit code 兜底而不是靠猜）。
+        val junk = "make: *** [Makefile:2: all] Error 1\nsome random text 1:2\n/tmp/x: error: nope\n"
         for (style in ParseStyle.values()) {
             val diags = DiagnosticParsers.parse(style, junk)
-            when (style) {
-                // GO_COLON 形态最宽，"ab:cd:3: error: x" 这种它按位置匹配吃不吃？不吃：它要求
-                // 末段前是 数字:数字: 且整行首是路径含冒号亦可——ab:cd:3: error: x 会匹配成
-                // file=ab:cd line=3 col=... 这正是宽形态的代价，其他风格不受影响。
-                ParseStyle.GO_COLON -> assertEquals("$style 宽形态预期吃 1 条", 1, diags.size)
-                else -> assertEquals("$style 不该吃噪声行", emptyList<LspDiagnostic>(), diags)
-            }
+            assertEquals("$style 不该吃噪声行：$diags", emptyList<LspDiagnostic>(), diags)
         }
     }
 }
