@@ -154,7 +154,7 @@ class GitHubApiClient(context: Context) {
     }
 
     /** 仓库默认分支（进程内缓存）。readContent 的 404 自愈与空 ref 兜底共用。 */
-    private suspend fun defaultBranch(safeRepo: String): String? {
+    internal suspend fun defaultBranch(safeRepo: String): String? {
         defaultBranchCache[safeRepo]?.let { return it }
         val obj = runCatching { repository(safeRepo)["default_branch"]?.jsonPrimitive?.content }.getOrNull()
         if (!obj.isNullOrBlank()) defaultBranchCache[safeRepo] = obj
