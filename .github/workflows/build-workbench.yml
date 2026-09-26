@@ -29,6 +29,10 @@ jobs:
           java-version: '21'
           cache: gradle
       - uses: android-actions/setup-android@v3
+        with:
+          # 默认 packages 里的 'tools' 已被 Android SDK 废弃（sdkmanager 找不到即 exit 1，
+          # 2026-09 下旬 runner 镜像更新后该步必挂，#786/#788 连红同因）——显式只要 platform-tools
+          packages: platform-tools
       - name: Install Android NDK
         run: sdkmanager 'ndk;28.2.13676358'
 
