@@ -135,11 +135,33 @@ class GitHubApiClient(context: Context) {
     /** Contents API returns an object for a file and an array for a directory. */
     suspend fun readContent(repo: String, path: String, ref: String): JsonElement {
         val safeRepo = validateRepo(repo)
-        val effectiveRef = ref.ifBlank { repository(safeRepo)["default_branch"]?.jsonPrimitive?.content ?: "main" }
-        val response = publicRequest("GET", "/repos/$safeRepo/contents/${encodePath(path)}?ref=${encodeSegment(effectiveRef)}")
+        val effectiveRef = ref.ifBlank { defaultBranch(safeRepo) ?: "main" }
+        val url = "/repos/$safeRepo/contents/${encodePath(path)}?ref=${encodeSegment(effectiveRef)}"
+        val response = publicRequest("GET", url)
+        if (response.code == 404 && ref.isNotBlank()) {
+            // 404 自愈：给的 ref 可能不存在（调用方习惯传 main，撞上 master 仓）——
+            // 探默认分支重试一次，不让上层来回试错烧轮次
+            val db = defaultBranch(safeRepo)
+            if (!db.isNullOrBlank() && db != effectiveRef) {
+                val retry = publicRequest("GET", "/repos/$safeRepo/contents/${encodePath(path)}?ref=${encodeSegment(db)}")
+                if (retry.code in 200..299) return json.parseToJsonElement(retry.body)
+            }
+            val hint = db?.takeIf { it != effectiveRef }?.let { "; this repo's default branch is $db (you passed ref="$effectiveRef")" }.orEmpty()
+            error("No such file or branch (HTTP 404)$hint")
+        }
         requireSuccess(response)
         return json.parseToJsonElement(response.body)
     }
+
+    /** 仓库默认分支（进程内缓存）。readContent 的 404 自愈与空 ref 兜底共用。 */
+    private suspend fun defaultBranch(safeRepo: String): String? {
+        defaultBranchCache[safeRepo]?.let { return it }
+        val obj = runCatching { repository(safeRepo)["default_branch"]?.jsonPrimitive?.content }.getOrNull()
+        if (!obj.isNullOrBlank()) defaultBranchCache[safeRepo] = obj
+        return obj
+    }
+
+    private val defaultBranchCache = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     suspend fun readFile(repo: String, path: String, ref: String): JsonObject =
         readContent(repo, path, ref) as? JsonObject ?: error("Expected a GitHub file response, but path is a directory")
