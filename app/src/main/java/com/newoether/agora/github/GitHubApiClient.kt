@@ -146,7 +146,7 @@ class GitHubApiClient(context: Context) {
                 val retry = publicRequest("GET", "/repos/$safeRepo/contents/${encodePath(path)}?ref=${encodeSegment(db)}")
                 if (retry.code in 200..299) return json.parseToJsonElement(retry.body)
             }
-            val hint = db?.takeIf { it != effectiveRef }?.let { "; this repo's default branch is $db (you passed ref="$effectiveRef")" }.orEmpty()
+            val hint = db?.takeIf { it != effectiveRef }?.let { "; this repo's default branch is $db (you passed ref=\"$effectiveRef\")" }.orEmpty()
             error("No such file or branch (HTTP 404)$hint")
         }
         requireSuccess(response)
