@@ -83,10 +83,10 @@ class DuckDuckGoScraper(
         private val CAPTCHA_REGEX = Regex("""anomaly-modal|challenge-form|Unfortunately.*bots""")
 
         /** Extracts the vqd session token from the Next Page form. */
-        private val VQD_REGEX = Regex("""name="vqd"\s+value="([^"]*)"""")
+        private val VQD_REGEX = Regex("""name="vqd"\s+value="([^"]*)${'"'}""")
 
         /** Offset value from the Next Page form (e.g. `name="s" value="10"`). */
-        private val OFFSET_REGEX = Regex("""name="s"\s+value="(\d+)"""")
+        private val OFFSET_REGEX = Regex("""name="s"\s+value="(\d+)${'"'}""")
     }
 
     // -- public API ----------------------------------------------------------------

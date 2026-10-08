@@ -268,7 +268,7 @@ class DuckDuckGoScraperTest {
             </form>
         """.trimIndent()
 
-        val vqdRegex = Regex("""name="vqd"\s+value="([^"]*)"""")
+        val vqdRegex = Regex("""name="vqd"\s+value="([^"]*)${'"'}""")
         val match = vqdRegex.find(html)
         assertNotNull("vqd token should be found", match)
         assertEquals("4-303532065876549868505813218373180541363", match!!.groupValues[1])
@@ -277,7 +277,7 @@ class DuckDuckGoScraperTest {
     @Test
     fun vqdRegex_noNextPage_returnsNull() {
         val html = "<html><body>No pagination here.</body></html>"
-        val vqdRegex = Regex("""name="vqd"\s+value="([^"]*)"""")
+        val vqdRegex = Regex("""name="vqd"\s+value="([^"]*)${'"'}""")
         assertNull(vqdRegex.find(html))
     }
 
@@ -289,7 +289,7 @@ class DuckDuckGoScraperTest {
             </form>
         """.trimIndent()
 
-        val offsetRegex = Regex("""name="s"\s+value="(\d+)"""")
+        val offsetRegex = Regex("""name="s"\s+value="(\d+)${'"'}""")
         val match = offsetRegex.find(html)
         assertNotNull("offset should be found", match)
         assertEquals("20", match!!.groupValues[1])
