@@ -149,20 +149,29 @@ class UmaWorkbenchService : Service() {
     private fun startMonitor() {
         if (monitorJob?.isActive == true) return
         monitorJob = scope.launch {
+            // 断连退避：游戏切后台 SO 必断，2s 硬轮询只会刷屏+耗电。
+            // 连续失败按 2→4→8→16→30s（封顶）退避；一旦连上立刻回 2s 快速档。
+            var backoffMs = 2_000L
             while (isActive) {
-                pollOnce(false)
-                delay(2_000)
+                val ok = pollOnce(false)
+                if (!ok) {
+                    backoffMs = minOf(backoffMs * 2, 30_000L)
+                } else {
+                    backoffMs = 2_000L
+                }
+                delay(backoffMs)
             }
         }
     }
 
-    private suspend fun pollOnce(force: Boolean) {
-        val raw = runCatching { httpGet("/summary", 128 * 1024) }.getOrElse {
+    /** 返回本次轮询是否成功（退避节奏用；实现内部的 UI 更新语义不变）。 */
+    private suspend fun pollOnce(force: Boolean): Boolean {
+        val raw = runCatching { httpGet("/summary", 512 * 1024) }.getOrElse {
             soConnected = false
             captureEnabledForConnection = false
             refreshCaptureUi()
             updateStatus("SO 未连接\n${it.message ?: "18765 无响应"}", "SO 未连接")
-            return
+            return false
         }
         soConnected = true
         if (prefs.getBoolean(KEY_CAPTURE_DESIRED, false) && !captureEnabledForConnection) {
@@ -170,8 +179,10 @@ class UmaWorkbenchService : Service() {
         }
         refreshCaptureUi()
         val changes = runCatching { UmaRuntimeState.update(raw) }.getOrElse {
+            // ③ 竞态修复：解析失败不算连上——回滚状态，让 ARMED 恢复链下轮重走
+            soConnected = false
             updateStatus("SO 响应解析失败\n${it.message}", "响应解析失败")
-            return
+            return false
         }
         val summary = JSONObject(raw)
         val signature = listOf(
@@ -179,7 +190,7 @@ class UmaWorkbenchService : Service() {
             summary.optString("scenario", ""), summary.optJSONObject("stats")?.toString().orEmpty(),
             summary.optJSONArray("trainings")?.toString().orEmpty(),
         ).joinToString("|")
-        if (!force && signature == lastSignature) return
+        if (!force && signature == lastSignature) return true
         lastSignature = signature
         latestDisplay = formatSummary(summary)
         updateStatus(latestDisplay, notificationLabel())
@@ -196,6 +207,7 @@ class UmaWorkbenchService : Service() {
             System.currentTimeMillis() - lastAnalysisAt >= MIN_ANALYSIS_INTERVAL_MS) {
             analyzeNow(manual = false)
         }
+        return true
     }
 
     private fun formatSummary(summary: JSONObject): String {
