@@ -495,12 +495,11 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
         val indexUrl = "$alpineMirror/aarch64/APKINDEX.tar.gz"
         val indexFile = File(context.filesDir, "APKINDEX.tar.gz")
         try {
-            val conn = URL(indexUrl).openConnection() as HttpURLConnection
-            onProgress("Connecting to ${conn.url.host}...")
-            val code = conn.responseCode
-            onProgress("HTTP $code (${conn.contentLength} bytes)")
-            if (code != 200) { onProgress("FAIL: HTTP $code"); lastError = "HTTP $code from $indexUrl"; return@withContext false }
-            conn.inputStream.use { i -> indexFile.outputStream().use { o -> i.copyTo(o) } }
+            onProgress("Connecting to ${URL(indexUrl).host}...")
+            if (!downloadHttpFile(indexUrl, indexFile)) {
+                onProgress("FAIL: ${lastError ?: "package index download failed"}"); return@withContext false
+            }
+            onProgress("Package index downloaded (${indexFile.length()} bytes)")
         }
         catch (e: Throwable) { onProgress("FAIL: ${e.javaClass.simpleName}: ${e.message}"); lastError = "${e.javaClass.simpleName}: ${e.message}"; return@withContext false }
 
@@ -558,11 +557,9 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
             val fn = "$name-$ver.apk"; val f = File(context.filesDir, fn)
             if (!f.exists() || f.length() == 0L) {
                 onProgress("Downloading $fn...")
-                try {
-                    val conn = URL("$alpineMirror/aarch64/$fn").openConnection() as HttpURLConnection
-                    if (conn.responseCode != 200) { onProgress("HTTP ${conn.responseCode}"); lastError = "HTTP ${conn.responseCode}: $fn"; tmpDir.listFiles()?.forEach { it.delete() }; return@withContext false }
-                    conn.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
-                } catch (ex: Throwable) { onProgress("FAIL: ${ex.message}"); lastError = "Download: ${ex.message}"; tmpDir.listFiles()?.forEach { it.delete() }; return@withContext false }
+                if (!downloadHttpFile("$alpineMirror/aarch64/$fn", f)) {
+                    onProgress("FAIL: ${lastError ?: "download failed"}"); tmpDir.listFiles()?.forEach { it.delete() }; return@withContext false
+                }
             }
             val dst = File(tmpDir, fn); f.copyTo(dst, true); f.delete(); paths.add("/tmp/$fn")
         }
@@ -672,9 +669,9 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
         val indexUrl = "$alpineMirror/aarch64/APKINDEX.tar.gz"
         val indexFile = File(context.filesDir, "APKINDEX_UPGRADE.tar.gz")
         try {
-            val conn = URL(indexUrl).openConnection() as HttpURLConnection
-            if (conn.responseCode != 200) { onProgress("HTTP ${conn.responseCode}"); lastError = "HTTP ${conn.responseCode} from $indexUrl"; return@withContext 0 }
-            conn.inputStream.use { i -> indexFile.outputStream().use { o -> i.copyTo(o) } }
+            if (!downloadHttpFile(indexUrl, indexFile)) {
+                onProgress("FAIL: ${lastError ?: "package index download failed"}"); return@withContext 0
+            }
         } catch (e: Throwable) { onProgress("FAIL: ${e.message}"); lastError = e.message; return@withContext 0 }
 
         val repoPkgs: Map<String, FullPkgEntry>
@@ -725,14 +722,11 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
             if (!f.exists() || f.length() == 0L) {
                 onProgress("Downloading $fn...")
                 try {
-                    val conn = URL("$alpineMirror/aarch64/$fn").openConnection() as HttpURLConnection
-                    if (conn.responseCode != 200) {
-                        onProgress("HTTP ${conn.responseCode}")
-                        lastError = "HTTP ${conn.responseCode}: $fn"
+                    if (!downloadHttpFile("$alpineMirror/aarch64/$fn", f)) {
+                        onProgress("FAIL: ${lastError ?: "download failed"}")
                         tmpDir.listFiles()?.forEach { it.delete() }
                         return@withContext 0
                     }
-                    conn.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
                 } catch (ex: Throwable) { onProgress("FAIL: ${ex.message}"); lastError = "Download: ${ex.message}"; tmpDir.listFiles()?.forEach { it.delete() }; return@withContext 0 }
             }
             val dst = File(tmpDir, fn); f.copyTo(dst, true); f.delete(); paths.add("/tmp/$fn")
