@@ -17,11 +17,13 @@ object UmaProtocolCapture {
         get("/api/sniff/clear")
     }
 
-    suspend fun readMetadata(): String = withContext(Dispatchers.IO) {
-        get("/api/sniff/metadata")
+    /** 读协议观测。maxChars 上限防大缓冲 OOM（SO 侧每条含完整 body_hex，满缓冲可达数 MB）——
+     *  超限不截断尾巴（半条 JSON 比没有更危险），整帧拒绝并提示分批清理。 */
+    suspend fun readMetadata(maxChars: Int = 2 * 1024 * 1024): String = withContext(Dispatchers.IO) {
+        get("/api/sniff/metadata", maxChars)
     }
 
-    private fun get(path: String): String {
+    private fun get(path: String, maxChars: Int = Int.MAX_VALUE): String {
         val c = URL(BASE + path).openConnection() as HttpURLConnection
         try {
             c.requestMethod = "GET"
@@ -38,6 +40,10 @@ object UmaProtocolCapture {
                 while (true) {
                     val n = it.read(buf)
                     if (n < 0) break
+                    if (out.length + n > maxChars) {
+                        error("hlpatch 响应超过上限 ${maxChars / 1024} KiB（连接观测缓冲很大）：" +
+                            "先 uma_sniff_clear 清旧观测再读，或让 SO 侧调小缓冲上限")
+                    }
                     out.append(buf, 0, n)
                 }
                 if (code !in 200..299) error("hlpatch HTTP $code: ${out.take(300)}")
