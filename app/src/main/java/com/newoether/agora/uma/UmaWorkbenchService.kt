@@ -190,7 +190,7 @@ class UmaWorkbenchService : Service() {
             summary.optString("scenario", ""), summary.optJSONObject("stats")?.toString().orEmpty(),
             summary.optJSONArray("trainings")?.toString().orEmpty(),
         ).joinToString("|")
-        if (!force && signature == lastSignature) return
+        if (!force && signature == lastSignature) return true
         lastSignature = signature
         latestDisplay = formatSummary(summary)
         updateStatus(latestDisplay, notificationLabel())

@@ -193,6 +193,62 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
         }
     }
 
+    /**
+     * Downloads a package/index to a temporary file and atomically publishes it.
+     * A non-zero partial file is never reused. Transient CDN/mobile-network failures
+     * are retried with backoff, and Content-Length is checked when available.
+     * （2026-08-28 沙箱修复补丁重放到 main——原 apply-sandbox-fix 只在分支跑过从未合并。）
+     */
+    private fun downloadHttpFile(url: String, dest: File, attempts: Int = 3): Boolean {
+        var lastFailure: Throwable? = null
+        repeat(attempts.coerceAtLeast(1)) { attempt ->
+            val part = File(dest.absolutePath + ".part")
+            try {
+                part.delete()
+                val conn = URL(url).openConnection() as HttpURLConnection
+                try {
+                    conn.connectTimeout = 30_000
+                    conn.readTimeout = 120_000
+                    conn.instanceFollowRedirects = true
+                    conn.setRequestProperty("Accept", "application/octet-stream")
+                    conn.connect()
+                    val code = conn.responseCode
+                    if (code !in 200..299) error("HTTP $code from $url")
+                    val expected = conn.contentLengthLong
+                    var copied = 0L
+                    conn.inputStream.use { input ->
+                        part.outputStream().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = input.read(buffer)
+                                if (n < 0) break
+                                if (n == 0) continue
+                                output.write(buffer, 0, n)
+                                copied += n
+                            }
+                        }
+                    }
+                    if (copied == 0L || (expected > 0L && copied != expected)) {
+                        error("incomplete download ($copied/$expected bytes)")
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+                if (!part.renameTo(dest)) {
+                    dest.delete()
+                    if (!part.renameTo(dest)) error("cannot publish downloaded file")
+                }
+                return true
+            } catch (failure: Throwable) {
+                lastFailure = failure
+                part.delete()
+                if (attempt + 1 < attempts) Thread.sleep((500L shl attempt).coerceAtMost(4_000L))
+            }
+        }
+        lastError = "Download failed after $attempts attempts: ${lastFailure?.message ?: url}"
+        return false
+    }
+
     /** Download [url] to [dest], streaming SHA-256 + progress, then verify against [rootfsSha256]. */
     private fun downloadRootfs(url: String, dest: File) {
         val conn = URL(url).openConnection() as HttpURLConnection
