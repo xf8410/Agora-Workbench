@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Repository wrapping DataStore-backed SettingsManager.
@@ -192,11 +194,19 @@ class SettingsRepository(
     }
 
     // API keys
+    //
+    // Read-modify-write works on the persisted list, not apiKeys.value: that StateFlow is
+    // emptyList() until DataStore's first emission, so adding early would wipe stored keys.
+    // [apiKeyMutex] serializes these writes so concurrent calls cannot lose each other's update.
+    private val apiKeyMutex = Mutex()
+
     fun addApiKey(name: String, key: String, provider: String) {
         scope.launch {
-            val entry = ApiKeyEntry(name = name, key = key, provider = provider)
-            settingsManager.saveApiKeys(apiKeys.value + entry)
-            settingsManager.setActiveApiKeyId(provider, entry.id)
+            apiKeyMutex.withLock {
+                val entry = ApiKeyEntry(name = name, key = key, provider = provider)
+                settingsManager.saveApiKeys(settingsManager.apiKeys.first() + entry)
+                settingsManager.setActiveApiKeyId(provider, entry.id)
+            }
         }
     }
 
@@ -207,30 +217,36 @@ class SettingsRepository(
      */
     fun upsertApiKey(name: String, key: String, provider: String) {
         scope.launch {
-            val current = apiKeys.value
-            val existing = current.firstOrNull { it.provider == provider }
-            val entry = existing?.copy(name = name, key = key) ?: ApiKeyEntry(name = name, key = key, provider = provider)
-            settingsManager.saveApiKeys(current.filter { it.provider != provider } + entry)
-            settingsManager.setActiveApiKeyId(provider, entry.id)
+            apiKeyMutex.withLock {
+                val current = settingsManager.apiKeys.first()
+                val existing = current.firstOrNull { it.provider == provider }
+                val entry = existing?.copy(name = name, key = key) ?: ApiKeyEntry(name = name, key = key, provider = provider)
+                settingsManager.saveApiKeys(current.filter { it.provider != provider } + entry)
+                settingsManager.setActiveApiKeyId(provider, entry.id)
+            }
         }
     }
 
     fun deleteApiKey(id: String) {
         scope.launch {
-            val current = apiKeys.value
-            val entry = current.find { it.id == id } ?: return@launch
-            val newList = current.filter { it.id != id }
-            if (activeApiKeyIds.value[entry.provider] == id) {
-                val other = newList.firstOrNull { it.provider == entry.provider }
-                settingsManager.setActiveApiKeyId(entry.provider, other?.id)
+            apiKeyMutex.withLock {
+                val current = settingsManager.apiKeys.first()
+                val entry = current.find { it.id == id } ?: return@withLock
+                val newList = current.filter { it.id != id }
+                if (activeApiKeyIds.value[entry.provider] == id) {
+                    val other = newList.firstOrNull { it.provider == entry.provider }
+                    settingsManager.setActiveApiKeyId(entry.provider, other?.id)
+                }
+                settingsManager.saveApiKeys(newList)
             }
-            settingsManager.saveApiKeys(newList)
         }
     }
 
     fun updateApiKey(id: String, name: String, key: String) {
         scope.launch {
-            settingsManager.saveApiKeys(apiKeys.value.map { if (it.id == id) it.copy(name = name, key = key) else it })
+            apiKeyMutex.withLock {
+                settingsManager.saveApiKeys(settingsManager.apiKeys.first().map { if (it.id == id) it.copy(name = name, key = key) else it })
+            }
         }
     }
 
@@ -304,8 +320,10 @@ class SettingsRepository(
                 val newAliases = modelAliases.value.mapKeys { if (it.key.startsWith("$oldName:")) it.key.replace("$oldName:", "$newName:") else it.key }
                 settingsManager.saveModelAliases(newAliases)
                 settingsManager.setActiveApiKeyId(oldName, null)
-                val newKeys = apiKeys.value.map { if (it.provider == oldName) it.copy(provider = newName) else it }
-                settingsManager.saveApiKeys(newKeys)
+                apiKeyMutex.withLock {
+                    val newKeys = settingsManager.apiKeys.first().map { if (it.provider == oldName) it.copy(provider = newName) else it }
+                    settingsManager.saveApiKeys(newKeys)
+                }
                 activeApiKeyIds.value[oldName]?.let { settingsManager.setActiveApiKeyId(newName, it) }
             }
             onProviderAdd(newName, CustomOpenAiProvider(newName, url))
@@ -320,7 +338,9 @@ class SettingsRepository(
             settingsManager.saveEnabledModels(enabledModels.value.filter { !it.startsWith("$name:") }.toSet())
             settingsManager.saveModelAliases(modelAliases.value.filterKeys { !it.startsWith("$name:") })
             settingsManager.saveProviderBaseUrl(name, "")
-            settingsManager.saveApiKeys(apiKeys.value.filter { it.provider != name })
+            apiKeyMutex.withLock {
+                settingsManager.saveApiKeys(settingsManager.apiKeys.first().filter { it.provider != name })
+            }
             settingsManager.setActiveApiKeyId(name, null)
         }
     }

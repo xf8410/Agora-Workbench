@@ -17,6 +17,7 @@ class HttpClientTimeoutPolicyTest {
     @Test
     fun ordinaryRequests_remainBounded() {
         assertTrue(HttpClient.client.connectTimeoutMillis > 0)
+        assertTrue(HttpClient.client.readTimeoutMillis > 0)
         assertTrue(HttpClient.client.writeTimeoutMillis > 0)
     }
 }

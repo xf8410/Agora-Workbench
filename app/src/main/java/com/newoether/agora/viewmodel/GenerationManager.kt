@@ -496,6 +496,9 @@ class GenerationManager(
         var cumulativeThoughtMs: Long = 0
         var currentThoughtStartMs: Long? = null
         var currentThoughtDurationMs: Long = 0
+        // Per-generation: a shared (file-level) status leaked one generation's ERROR into every
+        // later generation, which then skipped the provider call and failed immediately.
+        var currentStatus = MessageStatus.SENDING
         var retryText: String? = null
         val segments = mutableListOf(MessageSegment(type = "answer"))
         val generatedImages = mutableListOf<String>()
@@ -547,8 +550,10 @@ class GenerationManager(
                 .find { it.id == modelMessageId }
             parentId = placeholder?.parentId
             if (!ctx.foregroundServiceManagedExternally) {
-                foregroundLeaseAcquired = withContext(Dispatchers.Main) {
-                    AgoraForegroundService.acquire(app, modelMessageId)
+                // Assign inside the block: if Stop cancels this coroutine during the Main hop,
+                // withContext drops its result, and the acquired lease would never be released.
+                withContext(Dispatchers.Main) {
+                    foregroundLeaseAcquired = AgoraForegroundService.acquire(app, modelMessageId)
                 }
             }
 

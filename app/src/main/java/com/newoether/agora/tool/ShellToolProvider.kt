@@ -7,6 +7,7 @@ import com.newoether.agora.api.ToolParameters
 import com.newoether.agora.api.ToolProperty
 import com.newoether.agora.data.ShellDeviceConfig
 import com.newoether.agora.sandbox.SandboxManagerFactory
+import com.newoether.agora.util.Constants
 import com.newoether.agora.util.ShellClient
 import com.newoether.agora.util.SshClient
 import com.newoether.agora.viewmodel.GenerationContext
@@ -28,6 +29,8 @@ class ShellToolProvider(
         const val MAX_INLINE_SHELL_OUTPUT_CHARS = 8 * 1024
         const val DEFAULT_FILE_READ_BYTES = 8 * 1024L
         const val MAX_FILE_READ_BYTES = 32 * 1024L
+        // ShellClient.fileRead's default when the caller passes limit 0.
+        const val CONCH_FULL_READ_CAP_BYTES = 1_048_576L
         const val OUTPUT_TRUNCATION_MARKER = "\n…[output truncated; redirect command output to a workspace file]"
     }
 
@@ -103,6 +106,8 @@ class ShellToolProvider(
     private sealed interface Backend {
         suspend fun executeCommand(cmd: String, workdir: String, timeoutMs: Int): String
         suspend fun fileRead(path: String, offset: Long, limit: Long): String
+        /** Byte cap at which a limit-0 [fileRead] may truncate, or null when it always returns the whole file. */
+        val fullReadCapBytes: Long? get() = null
         suspend fun fileWrite(path: String, content: String): String?
         suspend fun fileGlob(pattern: String, basePath: String, depth: Int?): Result<List<String>>
         suspend fun fileGrep(pattern: String, basePath: String, fileGlob: String): Result<List<ShellClient.GrepMatch>>
@@ -116,6 +121,8 @@ class ShellToolProvider(
         private val deviceName = device.name
 
         private val client: ShellClient by lazy { ShellClient(url, apiKey, pubKey) }
+
+        override val fullReadCapBytes: Long? get() = CONCH_FULL_READ_CAP_BYTES
 
         override suspend fun executeCommand(cmd: String, workdir: String, timeoutMs: Int): String {
             if (url.isBlank()) return jsonError("execute_shell_command", "Server \"$deviceName\" has no URL configured.")
@@ -243,6 +250,8 @@ class ShellToolProvider(
 
     private inner class SandboxBackend : Backend {
         private val mgr = sandbox ?: throw IllegalStateException("Sandbox not available")
+
+        override val fullReadCapBytes: Long? get() = Constants.MAX_TOOL_RESULT_LENGTH.toLong()
 
         override suspend fun executeCommand(cmd: String, workdir: String, timeoutMs: Int): String {
             if (!mgr.isAvailable()) return jsonError("execute_shell_command", "Local Sandbox is not installed.")
@@ -563,10 +572,18 @@ class ShellToolProvider(
                 return jsonError("file_edit", "read error: ${e.message}")
             }
             // Extract actual content (Conch wraps it in JSON, others return raw text)
-            val actualContent = try {
-                val obj = Json.parseToJsonElement(rawContent).jsonObject
-                (obj["content"] as? JsonPrimitive)?.content ?: rawContent
-            } catch (_: Exception) { rawContent }
+            val readJson = try { Json.parseToJsonElement(rawContent).jsonObject } catch (_: Exception) { null }
+            // A failed read comes back as a JSON error object; never write that text back over the file.
+            if (readJson != null && readJson["error"] != null) {
+                val readError = (readJson["message"] as? JsonPrimitive)?.content ?: "unknown error"
+                return jsonError("file_edit", "read error: $readError")
+            }
+            val actualContent = (readJson?.get("content") as? JsonPrimitive)?.content ?: rawContent
+            // A read that reached the backend's cap may be only a prefix of the file; writing it back would truncate the file.
+            val fullReadCap = backend.fullReadCapBytes
+            if (fullReadCap != null && actualContent.toByteArray(Charsets.UTF_8).size >= fullReadCap) {
+                return jsonError("file_edit", "file is too large for file_edit to read completely (limit $fullReadCap bytes); use a shell command such as sed to edit it instead")
+            }
 
             val count = actualContent.split(oldStr).size - 1
             if (count == 0) {

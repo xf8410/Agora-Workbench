@@ -61,7 +61,7 @@ class GitHubBinaryUploader(private val client: GitHubApiClient) {
         value.trim('/').split('/').filter { it.isNotEmpty() }.joinToString("/") { client.encodeSegment(it) }
 
     private companion object {
-        const val BRANCH_PREFIX = "workbench" + "/*"
+        const val BRANCH_PREFIX = "workbench/"
         const val MAX_BINARY_BYTES = 900_000
     }
 }

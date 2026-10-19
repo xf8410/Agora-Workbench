@@ -92,8 +92,7 @@ class UmaSessionUploadTaskStore(
             output.write(json.encodeToString(record).toByteArray(Charsets.UTF_8))
             output.fd.sync()
         }
-        if (target.exists()) require(target.delete()) { "cannot replace upload task checkpoint" }
-        require(temporary.renameTo(target)) { "cannot commit upload task checkpoint" }
+        require(replaceFileAtomically(temporary, target)) { "cannot commit upload task checkpoint" }
     }
 
     companion object {
@@ -102,4 +101,15 @@ class UmaSessionUploadTaskStore(
         private const val TEMP_SUFFIX = ".tmp"
         private val TASK_ID = Regex("[A-Za-z0-9._-]{1,240}")
     }
+}
+
+/**
+ * Replaces [target] with [source] in one rename(2), which overwrites atomically on Android's
+ * filesystems. Unlike delete-then-rename, a crash cannot leave the checkpoint missing.
+ * (java.nio.file is unavailable below API 26 and this app has no desugaring, so File.renameTo.)
+ */
+internal fun replaceFileAtomically(source: File, target: File): Boolean {
+    if (source.renameTo(target)) return true
+    // Only reached on hosts whose rename cannot overwrite (Windows JVM unit tests); never on Android.
+    return target.exists() && target.delete() && source.renameTo(target)
 }

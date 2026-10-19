@@ -23,9 +23,16 @@ import com.newoether.agora.util.DebugLog
  * Thread-safe owner set for the shared generation foreground service. The transition callbacks
  * run under the same lock as the set mutation, preventing a last-release stop from racing past a
  * new first-acquire start. Duplicate acquires/releases are deliberately idempotent.
+ *
+ * It also tracks whether the started service has reached startForeground(). Stopping a service
+ * that was started with startForegroundService() before it calls startForeground() makes the
+ * system crash the app immediately with ForegroundServiceDidNotStartInTimeException — which is
+ * what a generation that fails within milliseconds did (release ran before onCreate). So the
+ * last release only stops a promoted service; otherwise the stop is deferred to [onPromoted].
  */
 internal class ForegroundOwnerLeases {
     private val owners = linkedSetOf<String>()
+    private var promoted = false
 
     fun acquire(owner: String, onFirstAcquire: () -> Boolean): Boolean = synchronized(owners) {
         if (!owners.add(owner)) return@synchronized false
@@ -36,10 +43,27 @@ internal class ForegroundOwnerLeases {
         true
     }
 
-    fun release(owner: String, onLastRelease: () -> Unit): Boolean = synchronized(owners) {
+    /** [onLastRelease] receives false when the stop must wait for the service's startForeground(). */
+    fun release(owner: String, onLastRelease: (stopNow: Boolean) -> Unit): Boolean = synchronized(owners) {
         if (!owners.remove(owner)) return@synchronized false
-        if (owners.isEmpty()) onLastRelease()
+        if (owners.isEmpty()) {
+            val stopNow = promoted
+            promoted = false
+            onLastRelease(stopNow)
+        }
         true
+    }
+
+    /**
+     * Called by the service right after startForeground(). Runs [stopSelf] under the lock when
+     * every owner already released while the service was still starting.
+     */
+    fun onPromoted(stopSelf: () -> Unit) = synchronized(owners) {
+        if (owners.isEmpty()) {
+            stopSelf()
+        } else {
+            promoted = true
+        }
     }
 
     fun size(): Int = synchronized(owners) { owners.size }
@@ -114,10 +138,16 @@ class AgoraForegroundService : Service() {
 
         /** Releases only [owner]'s lease. The service stops after the final distinct owner. */
         fun release(context: Context, owner: String) {
-            val released = ownerLeases.release(owner) {
-                CrashReporter.note("FGS.stop foregroundStarted=${instance?.foregroundStarted}")
-                val appContext = context.applicationContext
-                appContext.stopService(Intent(appContext, AgoraForegroundService::class.java))
+            val released = ownerLeases.release(owner) { stopNow ->
+                if (stopNow) {
+                    CrashReporter.note("FGS.stop")
+                    val appContext = context.applicationContext
+                    appContext.stopService(Intent(appContext, AgoraForegroundService::class.java))
+                } else {
+                    // Still between startForegroundService() and startForeground(): stopping now
+                    // would crash the app. onCreate stops it right after promotion instead.
+                    CrashReporter.note("FGS.stop deferred until startForeground")
+                }
             }
             CrashReporter.note("FGS.release released=$released owners=${ownerLeases.size()}")
         }
@@ -221,6 +251,10 @@ class AgoraForegroundService : Service() {
         )
         foregroundStarted = true
         CrashReporter.note("FGS.startForeground ok")
+        ownerLeases.onPromoted {
+            CrashReporter.note("FGS.stop after deferred release")
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

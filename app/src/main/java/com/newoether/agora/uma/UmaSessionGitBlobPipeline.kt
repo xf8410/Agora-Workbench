@@ -147,8 +147,7 @@ class UmaSessionGitBlobPipeline(
             output.write(json.encodeToString(checkpoint).toByteArray(Charsets.UTF_8))
             output.fd.sync()
         }
-        if (file.exists()) require(file.delete()) { "cannot replace Git blob checkpoint" }
-        require(temporary.renameTo(file)) { "cannot commit Git blob checkpoint" }
+        require(replaceFileAtomically(temporary, file)) { "cannot commit Git blob checkpoint" }
     }
 
     private fun resolveUmaSessionFile(root: File, relativePath: String): File {

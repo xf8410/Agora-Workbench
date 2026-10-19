@@ -473,7 +473,8 @@ class ProotSandboxManager(private val context: Context) : SandboxManager {
                 else minOf(s + max, fileSize)
         val len = e - s
         val buf = ByteArray(len)
-        f.inputStream().use { it.skip(s.toLong()); it.read(buf) }
+        // A single read() may return fewer bytes than asked for; readFully fills the buffer or throws on EOF.
+        java.io.RandomAccessFile(f, "r").use { it.seek(s.toLong()); it.readFully(buf) }
         String(buf, Charsets.UTF_8)
     }
 

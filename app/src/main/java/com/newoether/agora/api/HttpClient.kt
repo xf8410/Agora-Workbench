@@ -14,8 +14,9 @@ import okio.BufferedSource
 /** Timeout policy is explicit so long-running requests are not cut off by an elapsed-time limit. */
 internal object HttpTimeoutPolicy {
     const val CONNECT_SECONDS = 45L
-    // OkHttp treats zero as no read timeout. Calls remain cancellable via Call.cancel().
-    const val ORDINARY_READ_MINUTES = 0L
+    // OkHttp readTimeout is per read (inactivity), not a total deadline. Long enough for a slow
+    // non-streaming reply, but a server that accepts the connection and then goes silent cannot hang a tool call.
+    const val ORDINARY_READ_MINUTES = 5L
     const val STREAM_READ_MINUTES = 0L
     const val STREAM_WRITE_MINUTES = 5L
 }
@@ -143,7 +144,7 @@ object HttpClient {
         .proxySelector(proxySelector)
         .proxyAuthenticator(proxyAuthenticator)
 
-    /** Ordinary requests have no elapsed read deadline and remain explicitly cancellable. */
+    /** Ordinary requests fail after a period of read inactivity so a stalled server cannot block a tool call forever. */
     val client: OkHttpClient = baseBuilder()
         .readTimeout(HttpTimeoutPolicy.ORDINARY_READ_MINUTES, TimeUnit.MINUTES)
         .writeTimeout(30, TimeUnit.SECONDS)

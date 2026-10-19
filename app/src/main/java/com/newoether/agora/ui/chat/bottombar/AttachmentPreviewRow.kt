@@ -10,7 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,8 +61,7 @@ internal fun AttachmentPreviewRow(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(composer.selectedAttachments.size) { index ->
-            val attachment = composer.selectedAttachments[index]
+        itemsIndexed(composer.selectedAttachments) { index, attachment ->
             val uriStr = attachment.uri
             val isVideo = attachment.type == "video"
             val isPdf = attachment.type == "pdf"

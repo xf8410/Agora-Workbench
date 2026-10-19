@@ -165,8 +165,7 @@ class UmaSessionDerivedJsonGenerator(
             output.write(content.toByteArray(Charsets.UTF_8))
             output.fd.sync()
         }
-        if (target.exists()) require(target.delete()) { "cannot replace derived file" }
-        require(temporary.renameTo(target)) { "cannot commit derived file" }
+        require(replaceFileAtomically(temporary, target)) { "cannot commit derived file" }
     }
 
     companion object {

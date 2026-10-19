@@ -153,8 +153,7 @@ class UmaSessionDerivedBlobBatchExecutor(
             output.write(json.encodeToString(checkpoint).toByteArray(Charsets.UTF_8))
             output.fd.sync()
         }
-        if (file.exists()) require(file.delete()) { "cannot replace derived Blob checkpoint" }
-        require(temporary.renameTo(file)) { "cannot commit derived Blob checkpoint" }
+        require(replaceFileAtomically(temporary, file)) { "cannot commit derived Blob checkpoint" }
     }
 
     companion object {

@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.newoether.agora.AgoraApplication
 import com.newoether.agora.api.EmbeddingClient
 import com.newoether.agora.api.LlamaEngine
 import com.newoether.agora.api.ProviderDefaults
@@ -12,7 +13,6 @@ import com.newoether.agora.data.EmbeddingIndexer
 import com.newoether.agora.data.EmbeddingModelConfig
 import com.newoether.agora.data.EmbeddingModelType
 import com.newoether.agora.data.SettingsManager
-import com.newoether.agora.data.local.ChatDatabase
 import com.newoether.agora.data.local.EmbeddingEntity
 import com.newoether.agora.util.Constants
 import com.newoether.agora.util.DebugLog
@@ -53,8 +53,8 @@ class EmbeddingCacheWorker(
             return@withContext Result.failure()
         }
 
-        val db = ChatDatabase.build(applicationContext)
-        val chatDao = db.chatDao()
+        // Shared process-wide database: a per-run Room instance was never closed and leaked hourly.
+        val chatDao = (applicationContext as AgoraApplication).container.chatDao
         val settingsManager = SettingsManager(applicationContext)
         val models = settingsManager.embeddingModels.first()
         val model = models.find { it.id == modelId }

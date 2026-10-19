@@ -52,6 +52,53 @@ class AgoraForegroundServiceLeaseTest {
     }
 
     @Test
+    fun releaseBeforePromotion_defersStopUntilServiceIsForeground() {
+        val leases = ForegroundOwnerLeases()
+        val stopNowFlags = mutableListOf<Boolean>()
+        var selfStops = 0
+
+        // A generation that fails within milliseconds releases before onCreate runs.
+        assertTrue(leases.acquire("message") { true })
+        assertTrue(leases.release("message") { stopNowFlags += it })
+        assertEquals(listOf(false), stopNowFlags)
+
+        // onCreate's startForeground() then completes and the service stops itself.
+        leases.onPromoted { selfStops++ }
+        assertEquals(1, selfStops)
+    }
+
+    @Test
+    fun reacquireBeforePromotion_keepsServiceRunning() {
+        val leases = ForegroundOwnerLeases()
+        val stopNowFlags = mutableListOf<Boolean>()
+        var selfStops = 0
+
+        assertTrue(leases.acquire("message-a") { true })
+        assertTrue(leases.release("message-a") { stopNowFlags += it })
+        assertTrue(leases.acquire("message-b") { true })
+
+        leases.onPromoted { selfStops++ }
+        assertEquals(0, selfStops)
+
+        assertTrue(leases.release("message-b") { stopNowFlags += it })
+        assertEquals(listOf(false, true), stopNowFlags)
+    }
+
+    @Test
+    fun promotedService_stopsImmediatelyOnLastRelease() {
+        val leases = ForegroundOwnerLeases()
+        val stopNowFlags = mutableListOf<Boolean>()
+        var selfStops = 0
+
+        assertTrue(leases.acquire("message") { true })
+        leases.onPromoted { selfStops++ }
+        assertTrue(leases.release("message") { stopNowFlags += it })
+
+        assertEquals(0, selfStops)
+        assertEquals(listOf(true), stopNowFlags)
+    }
+
+    @Test
     fun completionId_isStableAndHandlesIntMinHash() {
         val ordinary = "conversation-with-a-wide-hash"
 

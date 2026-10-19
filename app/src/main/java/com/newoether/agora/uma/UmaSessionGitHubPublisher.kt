@@ -148,8 +148,7 @@ class UmaSessionGitHubPublisher(
             output.write(json.encodeToString(checkpoint).toByteArray(Charsets.UTF_8))
             output.fd.sync()
         }
-        if (file.exists()) require(file.delete()) { "cannot replace publish checkpoint" }
-        require(temporary.renameTo(file)) { "cannot commit publish checkpoint" }
+        require(replaceFileAtomically(temporary, file)) { "cannot commit publish checkpoint" }
     }
 
     companion object { const val CHECKPOINT_FILE_NAME = ".uma-session-publish.json" }

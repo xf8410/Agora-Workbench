@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.FileOutputStream
 
 /** Small JSON codec + file-backed repository for agents and per-conversation teams. */
 object AgentCodec {
@@ -24,6 +25,9 @@ object AgentCodec {
             emptyList()
         }
 
+    /** True when [raw] parses; decodeAgents maps corrupt input to empty, so callers need this. */
+    fun isValidAgents(raw: String): Boolean = runCatching { json.decodeFromString<List<Agent>>(raw) }.isSuccess
+
     fun encodeTeams(teams: Map<String, List<String>>): String = json.encodeToString(teams)
 
     fun decodeTeams(raw: String?): Map<String, List<String>> =
@@ -33,6 +37,9 @@ object AgentCodec {
         } catch (_: Exception) {
             emptyMap()
         }
+
+    fun isValidTeams(raw: String): Boolean =
+        runCatching { json.decodeFromString<Map<String, List<String>>>(raw) }.isSuccess
 }
 
 /**
@@ -75,7 +82,8 @@ class AgentRepository(context: Context) {
 
     @Synchronized
     fun saveAgents(agents: List<Agent>) {
-        agentsFile.writeText(AgentCodec.encodeAgents(agents))
+        preserveIfCorrupt(agentsFile) { AgentCodec.isValidAgents(it) }
+        writeAtomic(agentsFile, AgentCodec.encodeAgents(agents))
         _agents.value = agents.toList()
     }
 
@@ -88,7 +96,8 @@ class AgentRepository(context: Context) {
 
     @Synchronized
     fun saveTeams(teams: Map<String, List<String>>) {
-        teamsFile.writeText(AgentCodec.encodeTeams(teams))
+        preserveIfCorrupt(teamsFile) { AgentCodec.isValidTeams(it) }
+        writeAtomic(teamsFile, AgentCodec.encodeTeams(teams))
         _teams.value = teams.toMap()
     }
 
@@ -132,4 +141,31 @@ class AgentRepository(context: Context) {
 
     private fun File.readTextSafe(): String? =
         if (exists() && length() > 0L) readText() else null
+
+    /**
+     * Writes to a sibling temp file, fsyncs it, then renames it over [target], so a crash
+     * mid-write leaves the old file or the new one, never a truncated file.
+     */
+    private fun writeAtomic(target: File, content: String) {
+        val temporary = File(target.parentFile, target.name + ".tmp")
+        FileOutputStream(temporary, false).use { output ->
+            output.write(content.toByteArray(Charsets.UTF_8))
+            output.fd.sync()
+        }
+        // rename(2) replaces the target atomically; java.nio.file needs API 26 (minSdk is 24).
+        // The delete fallback is only for hosts whose rename cannot overwrite (Windows JVM tests).
+        val committed = temporary.renameTo(target) ||
+            (target.exists() && target.delete() && temporary.renameTo(target))
+        check(committed) { "cannot commit ${target.name}" }
+    }
+
+    /**
+     * decode*() reads an undecodable file as empty, so the next save would silently destroy it.
+     * Copy such a file aside first so the data stays recoverable.
+     */
+    private fun preserveIfCorrupt(file: File, isValid: (String) -> Boolean) {
+        val raw = file.readTextSafe() ?: return
+        if (isValid(raw)) return
+        file.copyTo(File(file.parentFile, "${file.name}.corrupt-${System.currentTimeMillis()}"), overwrite = true)
+    }
 }

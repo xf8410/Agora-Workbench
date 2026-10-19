@@ -117,13 +117,31 @@ class UmaSessionUploadWorker(
                 appendNext(applicationContext, taskId)
                 throw kotlinx.coroutines.CancellationException(message)
             }
-            Result.retry()
+            if (shouldRetry(runAttemptCount)) {
+                Result.retry()
+            } else {
+                // Permanent failures (revoked sign-in, deleted repository) never clear on their own.
+                // FAILED stops the retry loop; uma_session_upload_resume can reopen the task later.
+                runCatching {
+                    store.update(taskId) { current ->
+                        if (current.progress.terminal || current.progress.phase == UmaSessionUploadPhase.PAUSED) current else
+                            current.copy(progress = current.progress.copy(
+                                phase = UmaSessionUploadPhase.FAILED,
+                                checkpointUpdatedAtMs = System.currentTimeMillis(),
+                            ))
+                    }
+                }
+                Result.failure(errorData(message))
+            }
         }
     }
 
     companion object {
         const val KEY_TASK_ID = "uma_upload_task_id"
         private const val UNIQUE_PREFIX = "uma-session-upload-"
+        internal const val MAX_RETRIES = 8
+
+        internal fun shouldRetry(runAttemptCount: Int): Boolean = runAttemptCount < MAX_RETRIES
 
         fun enqueue(context: Context, taskId: String, replace: Boolean = false) {
             WorkManager.getInstance(context).enqueueUniqueWork(

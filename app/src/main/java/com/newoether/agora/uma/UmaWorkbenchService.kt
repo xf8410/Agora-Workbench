@@ -181,6 +181,8 @@ class UmaWorkbenchService : Service() {
         val changes = runCatching { UmaRuntimeState.update(raw) }.getOrElse {
             // ③ 竞态修复：解析失败不算连上——回滚状态，让 ARMED 恢复链下轮重走
             soConnected = false
+            captureEnabledForConnection = false
+            refreshCaptureUi()
             updateStatus("SO 响应解析失败\n${it.message}", "响应解析失败")
             return false
         }

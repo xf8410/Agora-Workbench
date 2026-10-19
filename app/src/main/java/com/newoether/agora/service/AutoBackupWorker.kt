@@ -9,11 +9,11 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.newoether.agora.AgoraApplication
 import com.newoether.agora.data.AutoBackupManager
 import com.newoether.agora.data.BackupResult
 import com.newoether.agora.data.MemoryManager
 import com.newoether.agora.data.SettingsManager
-import com.newoether.agora.data.local.ChatDatabase
 import com.newoether.agora.util.DebugLog
 import java.util.concurrent.TimeUnit
 
@@ -25,7 +25,8 @@ class AutoBackupWorker(
     override suspend fun doWork(): Result {
         DebugLog.d("AutoBackup", "Worker: checking backup")
         val settingsManager = SettingsManager(applicationContext)
-        val db = ChatDatabase.build(applicationContext)
+        // Reuse the process-wide database; building a new Room instance per hourly run leaked one.
+        val db = (applicationContext as AgoraApplication).container.database
         val memoryManager = MemoryManager(applicationContext)
         val manager = AutoBackupManager(
             applicationContext,

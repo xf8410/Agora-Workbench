@@ -159,8 +159,7 @@ class UmaSessionResumeDownloader(
             output.write(json.encodeToString(checkpoint).toByteArray(Charsets.UTF_8))
             output.fd.sync()
         }
-        if (file.exists()) require(file.delete()) { "cannot replace checkpoint" }
-        require(temporary.renameTo(file)) { "cannot commit checkpoint" }
+        require(replaceFileAtomically(temporary, file)) { "cannot commit checkpoint" }
     }
 
     private fun resolveUnderRoot(root: File, relativePath: String): File {
